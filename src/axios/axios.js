@@ -30,7 +30,7 @@ axiosInstance.interceptors.response.use(
       originalRequest._retry = true;
       try {
         const { data } = await axios.post(
-          "http://localhost:3000/api/v1/refresh-token",
+          "https://nh-foods-erp-dev-backend.onrender.com/api/v1/refresh-token",
           {},
           { withCredentials: true }
         );
@@ -46,7 +46,7 @@ axiosInstance.interceptors.response.use(
         console.error("Token refresh failed:", refreshError);
         sessionStorage.removeItem("accessToken"); // Clear from sessionStorage
         // Redirect to login on refresh failure
-        window.location.href = "/login";
+        window.location.href = "/";
         return Promise.reject(refreshError);
       }
     }
