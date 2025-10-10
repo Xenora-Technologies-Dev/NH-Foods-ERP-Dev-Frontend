@@ -1,65 +1,41 @@
 import React, { useState } from "react";
 import { ArrowLeft, Download, Send, Loader2, Printer } from "lucide-react";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 
-const SaleInvoiceView = ({
-  selectedSO,
-  createdSO,
-  customers,
-  calculateTotals,
+const InvoiceView = ({
+  selectedInvoice,
+  parties,
   setActiveView,
-  setSelectedSO,
-  setCreatedSO,
+  setSelectedInvoice,
+  voucherType = "sale",
+  calculateTotals = (entries) => ({
+    subtotal: entries.reduce(
+      (sum, e) => sum + (e.debitAmount || e.creditAmount || 0),
+      0
+    ),
+    tax: entries.reduce((sum, e) => sum + (e.taxAmount || 0), 0),
+    total: entries.reduce(
+      (sum, e) =>
+        sum + (e.debitAmount || e.creditAmount || 0) + (e.taxAmount || 0),
+      0
+    ),
+  }),
 }) => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  // Use createdSO if it exists, otherwise fall back to selectedSO
-  const so = createdSO || selectedSO;
+  if (!selectedInvoice) return null;
 
-  // Validate sales order data
-  if (!so || !so.items || !Array.isArray(so.items)) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
-          <h2 className="text-xl font-bold text-red-600 mb-4">Error</h2>
-          <p className="text-gray-600 mb-4">
-            Invalid sales order data. Please try again or contact support.
-          </p>
-          <button
-            onClick={() => setActiveView("list")}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to List</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Find customer details with fallback
-  const customer = customers?.find((c) => c._id === so.customerId) || {
-    customerName: "Unknown Customer",
-    address: "N/A",
-    phone: "N/A",
-    vatNumber: "N/A",
-  };
-
-  // Calculate totals safely
-  const totals = calculateTotals(so.items) || {
-    subtotal: "0.00",
-    tax: "0.00",
-    total: "0.00",
-  };
+  const party = parties.find((p) => p._id === selectedInvoice.partyId);
+  const totals = calculateTotals(selectedInvoice.entries || []);
 
   const handleDownloadPDF = async () => {
     try {
       setIsGeneratingPDF(true);
-      const html2canvas = (await import("html2canvas")).default;
-      const { jsPDF } = await import("jspdf");
-
       const input = document.getElementById("invoice-content");
       if (!input) {
-        throw new Error("Invoice content element not found");
+        alert("Invoice content not found!");
+        return;
       }
 
       const canvas = await html2canvas(input, {
@@ -70,23 +46,10 @@ const SaleInvoiceView = ({
         logging: false,
         width: input.scrollWidth,
         height: input.scrollHeight,
-        onclone: (clonedDoc) => {
-          const clonedElement = clonedDoc.getElementById("invoice-content");
-          if (clonedElement) {
-            clonedElement.style.display = "block";
-            clonedElement.style.visibility = "visible";
-            // Ensure logo is loaded in the cloned document
-            const img = clonedElement.querySelector("img");
-            if (img) {
-              img.src = img.src; // Force reload to ensure CORS compliance
-            }
-          }
-        },
       });
 
       const imgData = canvas.toDataURL("image/png", 1.0);
       const pdf = new jsPDF("p", "mm", "a4");
-
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = canvas.width;
@@ -95,26 +58,27 @@ const SaleInvoiceView = ({
         pdfWidth / (imgWidth * 0.264583),
         pdfHeight / (imgHeight * 0.264583)
       );
-
       const imgX = (pdfWidth - imgWidth * 0.264583 * ratio) / 2;
-      const imgY = 0;
 
       pdf.addImage(
         imgData,
         "PNG",
         imgX,
-        imgY,
+        0,
         imgWidth * 0.264583 * ratio,
         imgHeight * 0.264583 * ratio,
         undefined,
         "FAST"
       );
-
-      const filename = `SO_${so.transactionNo || "Unknown"}_${new Date().toISOString().split("T")[0]}.pdf`;
+      const filename = `${voucherType.toUpperCase()}_${
+        selectedInvoice.voucherNo
+      }_${new Date().toISOString().split("T")[0]}.pdf`;
       pdf.save(filename);
     } catch (error) {
       console.error("Error generating PDF:", error);
-      alert(`Failed to generate PDF: ${error.message}. Please try again or use the Print option.`);
+      alert(
+        "Failed to generate PDF. Please try again or use the Print option."
+      );
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -133,23 +97,15 @@ const SaleInvoiceView = ({
       <!DOCTYPE html>
       <html>
         <head>
-          <title>SO_${so.transactionNo || "Unknown"}</title>
+          <title>${voucherType.toUpperCase()}_${
+      selectedInvoice.voucherNo
+    }</title>
           <style>
             * { box-sizing: border-box; }
-            body { 
-              margin: 0; 
-              padding: 20px; 
-              font-family: Arial, sans-serif;
-              line-height: 1.4;
-              color: #000;
-            }
-            @media print { 
-              body { margin: 0; padding: 0; }
-              .no-print { display: none !important; }
-            }
+            body { margin: 0; padding: 20px; font-family: Arial, sans-serif; line-height: 1.4; color: #000; }
+            @media print { body { margin: 0; padding: 0; } .no-print { display: none !important; } }
             table { border-collapse: collapse; width: 100%; }
             th, td { padding: 8px; text-align: left; border: 1px solid #000; }
-            img { max-width: 80px; max-height: 80px; }
           </style>
         </head>
         <body>
@@ -166,21 +122,28 @@ const SaleInvoiceView = ({
     }, 250);
   };
 
-  const handleSendToCustomer = () => {
-    alert("Sales Order invoice sent to customer!");
-    // TODO: Implement actual email integration here
+  const handleSendToParty = () => {
+    alert(
+      `${
+        voucherType.charAt(0).toUpperCase() + voucherType.slice(1)
+      } Invoice sent to ${party?.customerName || party?.vendorName || "party"}!`
+    );
   };
 
   const handleBackClick = () => {
-    setSelectedSO(null);
-    setCreatedSO(null);
+    setSelectedInvoice(null);
     setActiveView("list");
   };
+
+  const isSale = voucherType === "sale";
+  const title = isSale ? "SALE INVOICE" : "PURCHASE INVOICE";
+  const partyName = party?.customerName || party?.vendorName || "Unknown";
+  const partyAddress = party?.address?.split("\n") || ["", ""];
+  const partyVatNumber = party?.vatNumber || "N/A";
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
-        {/* Action Buttons */}
         <div className="flex items-center justify-between mb-6">
           <button
             onClick={handleBackClick}
@@ -189,7 +152,6 @@ const SaleInvoiceView = ({
             <ArrowLeft className="w-4 h-4" />
             <span>Back to List</span>
           </button>
-
           <div className="flex space-x-3">
             <button
               onClick={handleDownloadPDF}
@@ -203,7 +165,6 @@ const SaleInvoiceView = ({
               )}
               <span>{isGeneratingPDF ? "Generating..." : "Download PDF"}</span>
             </button>
-
             <button
               onClick={handlePrintPDF}
               className="flex items-center space-x-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
@@ -211,18 +172,15 @@ const SaleInvoiceView = ({
               <Printer className="w-4 h-4" />
               <span>Print PDF</span>
             </button>
-
             <button
-              onClick={handleSendToCustomer}
+              onClick={handleSendToParty}
               className="flex items-center space-x-2 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
             >
               <Send className="w-4 h-4" />
-              <span>Send to Customer</span>
+              <span>Send to {isSale ? "Customer" : "Vendor"}</span>
             </button>
           </div>
         </div>
-
-        {/* Invoice Content */}
         <div
           id="invoice-content"
           className="bg-white shadow-lg"
@@ -237,7 +195,6 @@ const SaleInvoiceView = ({
             color: "#000",
           }}
         >
-          {/* Header Section */}
           <div
             style={{
               textAlign: "center",
@@ -266,7 +223,6 @@ const SaleInvoiceView = ({
             >
               NH FOODSTUFF TRADING LLC S.O.C.
             </h2>
-
             <div
               style={{
                 backgroundColor: "#c8a2c8",
@@ -276,12 +232,10 @@ const SaleInvoiceView = ({
               }}
             >
               <h3 style={{ fontSize: "16px", fontWeight: "bold", margin: "0" }}>
-                SALES INVOICE
+                {title}
               </h3>
             </div>
           </div>
-
-          {/* Company Details and Invoice Info */}
           <div
             style={{
               display: "flex",
@@ -293,30 +247,30 @@ const SaleInvoiceView = ({
             <div>
               <p style={{ margin: "2px 0" }}>Dubai, UAE</p>
               <p style={{ margin: "2px 0" }}>VAT Reg. No: 10503303</p>
-              <p style={{ margin: "2px 0" }}>Email: finance@nhfoods.com</p>
+              <p style={{ margin: "2px 0" }}>Email: finance@nhfo.com</p>
               <p style={{ margin: "2px 0" }}>Phone: +971 58 724 2111</p>
-              <p style={{ margin: "2px 0" }}>Web: www.nhfoodsglobal.com</p>
+              <p style={{ margin: "2px 0" }}>Web: www.nhfo.com</p>
             </div>
-
             <div style={{ textAlign: "center" }}>
               <img
                 src="https://res.cloudinary.com/dmkdrwpfp/image/upload/v1755452581/erp_Uploads/NH%20foods_1755452579855.jpg"
                 alt="NH Foods Logo"
                 style={{ width: "80px", height: "80px", objectFit: "contain" }}
-                onError={(e) => (e.target.src = "/path/to/fallback-logo.png")}
               />
             </div>
-
             <div style={{ textAlign: "right" }}>
               <p style={{ margin: "2px 0" }}>
-                Date: {new Date(so.date || Date.now()).toLocaleDateString("en-GB")}
+                Date:{" "}
+                {new Date(selectedInvoice.date).toLocaleDateString("en-GB")}
               </p>
-              <p style={{ margin: "2px 0" }}>Invoice: {so.transactionNo || "N/A"}</p>
-              <p style={{ margin: "2px 0" }}>SO: {so.transactionNo || "N/A"}</p>
+              <p style={{ margin: "2px 0" }}>
+                Invoice: {selectedInvoice.voucherNo}
+              </p>
+              <p style={{ margin: "2px 0" }}>
+                Status: {selectedInvoice.approvalStatus}
+              </p>
             </div>
           </div>
-
-          {/* Bill To Section */}
           <div
             style={{
               backgroundColor: "#e6d7e6",
@@ -337,29 +291,23 @@ const SaleInvoiceView = ({
                 </div>
                 <div style={{ fontSize: "10px" }}>
                   <p style={{ margin: "2px 0", fontWeight: "bold" }}>
-                    {customer.customerName || "N/A"}
+                    {partyName}
                   </p>
+                  <p style={{ margin: "2px 0" }}>{partyAddress[0]}</p>
+                  <p style={{ margin: "2px 0" }}>{partyAddress[1] || ""}</p>
                   <p style={{ margin: "2px 0" }}>
-                    {customer.address?.split("\n")[0] || "N/A"}
-                  </p>
-                  <p style={{ margin: "2px 0" }}>
-                    {customer.address?.split("\n")[1] || ""}
-                  </p>
-                  <p style={{ margin: "2px 0" }}>
-                    Tel: {customer.phone || "N/A"}
+                    Tel: {party?.phone || "N/A"}
                   </p>
                 </div>
               </div>
               <div style={{ fontSize: "10px" }}>
                 <p style={{ margin: "2px 0" }}>VAT Reg. No:</p>
                 <p style={{ margin: "2px 0", fontWeight: "bold" }}>
-                  {customer.vatNumber || "N/A"}
+                  {partyVatNumber}
                 </p>
               </div>
             </div>
           </div>
-
-          {/* Items Table */}
           <table
             style={{
               width: "100%",
@@ -388,17 +336,7 @@ const SaleInvoiceView = ({
                     fontWeight: "bold",
                   }}
                 >
-                  CODE
-                </th>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: "8px",
-                    textAlign: "left",
-                    fontWeight: "bold",
-                  }}
-                >
-                  Item Description
+                  Description
                 </th>
                 <th
                   style={{
@@ -408,7 +346,7 @@ const SaleInvoiceView = ({
                     fontWeight: "bold",
                   }}
                 >
-                  Qty
+                  Account
                 </th>
                 <th
                   style={{
@@ -418,7 +356,7 @@ const SaleInvoiceView = ({
                     fontWeight: "bold",
                   }}
                 >
-                  Unit Price
+                  Debit
                 </th>
                 <th
                   style={{
@@ -428,7 +366,7 @@ const SaleInvoiceView = ({
                     fontWeight: "bold",
                   }}
                 >
-                  Value
+                  Credit
                 </th>
                 <th
                   style={{
@@ -438,7 +376,7 @@ const SaleInvoiceView = ({
                     fontWeight: "bold",
                   }}
                 >
-                  VAT 5%
+                  Tax
                 </th>
                 <th
                   style={{
@@ -453,93 +391,70 @@ const SaleInvoiceView = ({
               </tr>
             </thead>
             <tbody>
-              {so.items.map((item, index) => {
-                const qty = parseFloat(item.qty) || 0;
-                const rate = parseFloat(item.rate) || 0;
-                const taxPercent = parseFloat(item.taxPercent) || 0;
-                const value = qty * rate;
-                const vat = (value * taxPercent) / 100;
-                const amount = value + vat; // Always calculate to ensure consistency
-                return (
-                  <tr key={index}>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {index + 1}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                      }}
-                    >
-                      {item.itemId || "N/A"}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                      }}
-                    >
-                      {item.description || "N/A"}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {qty.toFixed(2)}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {rate.toFixed(2)}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {value.toFixed(2)}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {vat.toFixed(2)}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                        textAlign: "center",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {amount.toFixed(2)}
-                    </td>
-                  </tr>
-                );
-              })}
+              {selectedInvoice.entries.map((entry, index) => (
+                <tr key={index}>
+                  <td
+                    style={{
+                      border: "1px solid #000",
+                      padding: "6px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {index + 1}
+                  </td>
+                  <td style={{ border: "1px solid #000", padding: "6px" }}>
+                    {entry.description}
+                  </td>
+                  <td
+                    style={{
+                      border: "1px solid #000",
+                      padding: "6px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {entry.accountName}
+                  </td>
+                  <td
+                    style={{
+                      border: "1px solid #000",
+                      padding: "6px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {entry.debitAmount.toFixed(2)}
+                  </td>
+                  <td
+                    style={{
+                      border: "1px solid #000",
+                      padding: "6px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {entry.creditAmount.toFixed(2)}
+                  </td>
+                  <td
+                    style={{
+                      border: "1px solid #000",
+                      padding: "6px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {entry.taxAmount.toFixed(2)}
+                  </td>
+                  <td
+                    style={{
+                      border: "1px solid #000",
+                      padding: "6px",
+                      textAlign: "center",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {(entry.debitAmount || entry.creditAmount).toFixed(2)}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
-
-          {/* Bank Details and Totals */}
           <div
             style={{
               display: "flex",
@@ -555,7 +470,7 @@ const SaleInvoiceView = ({
                   marginBottom: "10px",
                 }}
               >
-                BANK DETAILS:-
+                BANK DETAILS:
               </div>
               <div style={{ fontSize: "10px", lineHeight: "1.5" }}>
                 <p style={{ margin: "2px 0" }}>
@@ -566,7 +481,6 @@ const SaleInvoiceView = ({
                 </p>
               </div>
             </div>
-
             <div style={{ width: "40%" }}>
               <table
                 style={{
@@ -593,7 +507,7 @@ const SaleInvoiceView = ({
                       textAlign: "center",
                     }}
                   >
-                    {totals.subtotal}
+                    {totals.subtotal.toFixed(2)}
                   </td>
                 </tr>
                 <tr>
@@ -605,7 +519,7 @@ const SaleInvoiceView = ({
                       fontWeight: "bold",
                     }}
                   >
-                    VAT (5%)
+                    VAT
                   </td>
                   <td
                     style={{
@@ -614,14 +528,12 @@ const SaleInvoiceView = ({
                       textAlign: "center",
                     }}
                   >
-                    {totals.tax}
+                    {totals.tax.toFixed(2)}
                   </td>
                 </tr>
               </table>
             </div>
           </div>
-
-          {/* IBAN Details and Grand Total */}
           <div
             style={{
               display: "flex",
@@ -641,7 +553,6 @@ const SaleInvoiceView = ({
                 <strong>ACCOUNT NAME:</strong> NH FOODSTUFF TRADING LLC S.O.C
               </p>
             </div>
-
             <div
               style={{
                 border: "2px solid #000",
@@ -650,30 +561,24 @@ const SaleInvoiceView = ({
               }}
             >
               <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "15px",
-                }}
+                style={{ display: "flex", alignItems: "center", gap: "15px" }}
               >
                 <span style={{ fontSize: "12px", fontWeight: "bold" }}>
                   GRAND TOTAL
                 </span>
                 <span style={{ fontSize: "14px", fontWeight: "bold" }}>
-                  {totals.total}
+                  {totals.total.toFixed(2)}
                 </span>
               </div>
             </div>
           </div>
-
-          {/* Footer Section */}
           <div style={{ marginTop: "30px" }}>
             <div style={{ textAlign: "center", marginBottom: "30px" }}>
               <p style={{ fontSize: "11px", margin: "0" }}>
-                Received the above goods in good order and condition.
+                {isSale ? "Sale invoice issued" : "Returned goods"} in good
+                order and condition.
               </p>
             </div>
-
             <div
               style={{
                 display: "flex",
@@ -691,11 +596,7 @@ const SaleInvoiceView = ({
                 ></div>
               </div>
               <div
-                style={{
-                  fontSize: "11px",
-                  width: "45%",
-                  textAlign: "right",
-                }}
+                style={{ fontSize: "11px", width: "45%", textAlign: "right" }}
               >
                 <p style={{ margin: "0 0 30px 0" }}>Prepared by:</p>
                 <div
@@ -713,4 +614,4 @@ const SaleInvoiceView = ({
   );
 };
 
-export default SaleInvoiceView;
+export default InvoiceView;

@@ -1,65 +1,47 @@
-import React, { useState } from "react";
-import { ArrowLeft, Download, Send, Loader2, Printer } from "lucide-react";
+import React, { useState, useCallback } from "react";
+import { ArrowLeft, Download, Printer, Loader2 } from "lucide-react";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
+import DirhamIcon from "../../../assets/dirham.svg";
 
-const SaleInvoiceView = ({
-  selectedSO,
-  createdSO,
-  customers,
-  calculateTotals,
-  setActiveView,
-  setSelectedSO,
-  setCreatedSO,
+const JournalVoucherView = ({
+  selectedVoucher,
+  transactors,
+  setSelectedVoucher,
+  showToastMessage,
 }) => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  // Use createdSO if it exists, otherwise fall back to selectedSO
-  const so = createdSO || selectedSO;
+  if (!selectedVoucher) return null;
 
-  // Validate sales order data
-  if (!so || !so.items || !Array.isArray(so.items)) {
+  const formatCurrency = (amount, colorClass = "text-black") => {
+    const numAmount = Number(amount) || 0;
+    const absAmount = Math.abs(numAmount).toFixed(2);
+    const isNegative = numAmount < 0;
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
-          <h2 className="text-xl font-bold text-red-600 mb-4">Error</h2>
-          <p className="text-gray-600 mb-4">
-            Invalid sales order data. Please try again or contact support.
-          </p>
-          <button
-            onClick={() => setActiveView("list")}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to List</span>
-          </button>
-        </div>
-      </div>
+      <span className={`inline-flex items-center ${colorClass}`}>
+        {isNegative && "-"}
+        <img src={DirhamIcon} alt="AED" className="w-4 h-4 mr-1" />
+        {absAmount}
+      </span>
     );
-  }
-
-  // Find customer details with fallback
-  const customer = customers?.find((c) => c._id === so.customerId) || {
-    customerName: "Unknown Customer",
-    address: "N/A",
-    phone: "N/A",
-    vatNumber: "N/A",
   };
 
-  // Calculate totals safely
-  const totals = calculateTotals(so.items) || {
-    subtotal: "0.00",
-    tax: "0.00",
-    total: "0.00",
+  const displayAccount = (account) => {
+    if (typeof account === "object" && account) {
+      return account.accountName || "Unknown";
+    }
+    const trans = transactors.find((t) => t.accountCode === account);
+    return trans ? trans.accountName : account || "Unknown";
   };
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = useCallback(async () => {
     try {
       setIsGeneratingPDF(true);
-      const html2canvas = (await import("html2canvas")).default;
-      const { jsPDF } = await import("jspdf");
-
-      const input = document.getElementById("invoice-content");
+      const input = document.getElementById("journal-content");
       if (!input) {
-        throw new Error("Invoice content element not found");
+        showToastMessage("Journal content not found!", "error");
+        return;
       }
 
       const canvas = await html2canvas(input, {
@@ -71,15 +53,10 @@ const SaleInvoiceView = ({
         width: input.scrollWidth,
         height: input.scrollHeight,
         onclone: (clonedDoc) => {
-          const clonedElement = clonedDoc.getElementById("invoice-content");
+          const clonedElement = clonedDoc.getElementById("journal-content");
           if (clonedElement) {
             clonedElement.style.display = "block";
             clonedElement.style.visibility = "visible";
-            // Ensure logo is loaded in the cloned document
-            const img = clonedElement.querySelector("img");
-            if (img) {
-              img.src = img.src; // Force reload to ensure CORS compliance
-            }
           }
         },
       });
@@ -89,6 +66,7 @@ const SaleInvoiceView = ({
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
+
       const imgWidth = canvas.width;
       const imgHeight = canvas.height;
       const ratio = Math.min(
@@ -110,22 +88,27 @@ const SaleInvoiceView = ({
         "FAST"
       );
 
-      const filename = `SO_${so.transactionNo || "Unknown"}_${new Date().toISOString().split("T")[0]}.pdf`;
+      const filename = `Journal_${selectedVoucher.voucherNo}_${
+        new Date().toISOString().split("T")[0]
+      }.pdf`;
       pdf.save(filename);
     } catch (error) {
       console.error("Error generating PDF:", error);
-      alert(`Failed to generate PDF: ${error.message}. Please try again or use the Print option.`);
+      showToastMessage(
+        "Failed to generate PDF. Please try again or use the Print option.",
+        "error"
+      );
     } finally {
       setIsGeneratingPDF(false);
     }
-  };
+  }, [selectedVoucher, showToastMessage]);
 
-  const handlePrintPDF = () => {
+  const handlePrintPDF = useCallback(() => {
     const printWindow = window.open("", "_blank");
-    const invoiceContent = document.getElementById("invoice-content");
+    const journalContent = document.getElementById("journal-content");
 
-    if (!invoiceContent || !printWindow) {
-      alert("Unable to open print dialog");
+    if (!journalContent || !printWindow) {
+      showToastMessage("Unable to open print dialog", "error");
       return;
     }
 
@@ -133,7 +116,7 @@ const SaleInvoiceView = ({
       <!DOCTYPE html>
       <html>
         <head>
-          <title>SO_${so.transactionNo || "Unknown"}</title>
+          <title>Journal_${selectedVoucher.voucherNo}</title>
           <style>
             * { box-sizing: border-box; }
             body { 
@@ -149,11 +132,14 @@ const SaleInvoiceView = ({
             }
             table { border-collapse: collapse; width: 100%; }
             th, td { padding: 8px; text-align: left; border: 1px solid #000; }
-            img { max-width: 80px; max-height: 80px; }
+            .dirham-icon { width: 10px; height: 10px; vertical-align: middle; margin-right: 2px; }
           </style>
         </head>
         <body>
-          ${invoiceContent.innerHTML}
+          ${journalContent.innerHTML.replace(
+            /<img[^>]*src="${DirhamIcon}"[^>]*>/g,
+            `<img src="${DirhamIcon}" class="dirham-icon" alt="AED">`
+          )}
         </body>
       </html>
     `);
@@ -164,32 +150,28 @@ const SaleInvoiceView = ({
       printWindow.print();
       printWindow.close();
     }, 250);
+  }, [selectedVoucher, showToastMessage]);
+
+  const handleBackToList = () => {
+    setSelectedVoucher(null);
   };
 
-  const handleSendToCustomer = () => {
-    alert("Sales Order invoice sent to customer!");
-    // TODO: Implement actual email integration here
-  };
-
-  const handleBackClick = () => {
-    setSelectedSO(null);
-    setCreatedSO(null);
-    setActiveView("list");
+  const entries = Array.isArray(selectedVoucher.entries) ? selectedVoucher.entries : [];
+  const totals = {
+    total: Number(selectedVoucher.totalAmount || selectedVoucher.amount || 0),
   };
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
-        {/* Action Buttons */}
         <div className="flex items-center justify-between mb-6">
           <button
-            onClick={handleBackClick}
+            onClick={handleBackToList}
             className="flex items-center space-x-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Back to List</span>
           </button>
-
           <div className="flex space-x-3">
             <button
               onClick={handleDownloadPDF}
@@ -203,7 +185,6 @@ const SaleInvoiceView = ({
               )}
               <span>{isGeneratingPDF ? "Generating..." : "Download PDF"}</span>
             </button>
-
             <button
               onClick={handlePrintPDF}
               className="flex items-center space-x-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
@@ -211,20 +192,10 @@ const SaleInvoiceView = ({
               <Printer className="w-4 h-4" />
               <span>Print PDF</span>
             </button>
-
-            <button
-              onClick={handleSendToCustomer}
-              className="flex items-center space-x-2 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-              <Send className="w-4 h-4" />
-              <span>Send to Customer</span>
-            </button>
           </div>
         </div>
-
-        {/* Invoice Content */}
         <div
-          id="invoice-content"
+          id="journal-content"
           className="bg-white shadow-lg"
           style={{
             width: "210mm",
@@ -237,7 +208,6 @@ const SaleInvoiceView = ({
             color: "#000",
           }}
         >
-          {/* Header Section */}
           <div
             style={{
               textAlign: "center",
@@ -266,7 +236,6 @@ const SaleInvoiceView = ({
             >
               NH FOODSTUFF TRADING LLC S.O.C.
             </h2>
-
             <div
               style={{
                 backgroundColor: "#c8a2c8",
@@ -275,13 +244,13 @@ const SaleInvoiceView = ({
                 margin: "0 -20mm 20px -20mm",
               }}
             >
-              <h3 style={{ fontSize: "16px", fontWeight: "bold", margin: "0" }}>
-                SALES INVOICE
+              <h3
+                style={{ fontSize: "16px", fontWeight: "bold", margin: "0" }}
+              >
+                JOURNAL VOUCHER
               </h3>
             </div>
           </div>
-
-          {/* Company Details and Invoice Info */}
           <div
             style={{
               display: "flex",
@@ -293,30 +262,30 @@ const SaleInvoiceView = ({
             <div>
               <p style={{ margin: "2px 0" }}>Dubai, UAE</p>
               <p style={{ margin: "2px 0" }}>VAT Reg. No: 10503303</p>
-              <p style={{ margin: "2px 0" }}>Email: finance@nhfoods.com</p>
+              <p style={{ margin: "2px 0" }}>Email: finance@nhfo.com</p>
               <p style={{ margin: "2px 0" }}>Phone: +971 58 724 2111</p>
-              <p style={{ margin: "2px 0" }}>Web: www.nhfoodsglobal.com</p>
+              <p style={{ margin: "2px 0" }}>Web: www.nhfo.com</p>
             </div>
-
             <div style={{ textAlign: "center" }}>
               <img
                 src="https://res.cloudinary.com/dmkdrwpfp/image/upload/v1755452581/erp_Uploads/NH%20foods_1755452579855.jpg"
                 alt="NH Foods Logo"
-                style={{ width: "80px", height: "80px", objectFit: "contain" }}
-                onError={(e) => (e.target.src = "/path/to/fallback-logo.png")}
+                style={{
+                  width: "80px",
+                  height: "80px",
+                  objectFit: "contain",
+                }}
               />
             </div>
-
             <div style={{ textAlign: "right" }}>
               <p style={{ margin: "2px 0" }}>
-                Date: {new Date(so.date || Date.now()).toLocaleDateString("en-GB")}
+                Date: {new Date(selectedVoucher.date).toLocaleDateString("en-GB")}
               </p>
-              <p style={{ margin: "2px 0" }}>Invoice: {so.transactionNo || "N/A"}</p>
-              <p style={{ margin: "2px 0" }}>SO: {so.transactionNo || "N/A"}</p>
+              <p style={{ margin: "2px 0" }}>
+                Voucher No: {selectedVoucher.voucherNo}
+              </p>
             </div>
           </div>
-
-          {/* Bill To Section */}
           <div
             style={{
               backgroundColor: "#e6d7e6",
@@ -333,33 +302,25 @@ const SaleInvoiceView = ({
                     marginBottom: "5px",
                   }}
                 >
-                  Bill To:
+                  Journal Details:
                 </div>
                 <div style={{ fontSize: "10px" }}>
-                  <p style={{ margin: "2px 0", fontWeight: "bold" }}>
-                    {customer.customerName || "N/A"}
+                  <p style={{ margin: "2px 0" }}>
+                    <strong>Debit Account:</strong>{" "}
+                    {displayAccount(selectedVoucher.debitAccount)}
                   </p>
                   <p style={{ margin: "2px 0" }}>
-                    {customer.address?.split("\n")[0] || "N/A"}
+                    <strong>Credit Account:</strong>{" "}
+                    {displayAccount(selectedVoucher.creditAccount)}
                   </p>
                   <p style={{ margin: "2px 0" }}>
-                    {customer.address?.split("\n")[1] || ""}
-                  </p>
-                  <p style={{ margin: "2px 0" }}>
-                    Tel: {customer.phone || "N/A"}
+                    <strong>Narration:</strong>{" "}
+                    {selectedVoucher.narration || "-"}
                   </p>
                 </div>
-              </div>
-              <div style={{ fontSize: "10px" }}>
-                <p style={{ margin: "2px 0" }}>VAT Reg. No:</p>
-                <p style={{ margin: "2px 0", fontWeight: "bold" }}>
-                  {customer.vatNumber || "N/A"}
-                </p>
               </div>
             </div>
           </div>
-
-          {/* Items Table */}
           <table
             style={{
               width: "100%",
@@ -378,27 +339,7 @@ const SaleInvoiceView = ({
                     fontWeight: "bold",
                   }}
                 >
-                  Line
-                </th>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: "8px",
-                    textAlign: "left",
-                    fontWeight: "bold",
-                  }}
-                >
-                  CODE
-                </th>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: "8px",
-                    textAlign: "left",
-                    fontWeight: "bold",
-                  }}
-                >
-                  Item Description
+                  Account Code
                 </th>
                 <th
                   style={{
@@ -408,7 +349,7 @@ const SaleInvoiceView = ({
                     fontWeight: "bold",
                   }}
                 >
-                  Qty
+                  Account Name
                 </th>
                 <th
                   style={{
@@ -418,7 +359,7 @@ const SaleInvoiceView = ({
                     fontWeight: "bold",
                   }}
                 >
-                  Unit Price
+                  Debit Amount
                 </th>
                 <th
                   style={{
@@ -428,7 +369,7 @@ const SaleInvoiceView = ({
                     fontWeight: "bold",
                   }}
                 >
-                  Value
+                  Credit Amount
                 </th>
                 <th
                   style={{
@@ -438,108 +379,32 @@ const SaleInvoiceView = ({
                     fontWeight: "bold",
                   }}
                 >
-                  VAT 5%
-                </th>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: "8px",
-                    textAlign: "center",
-                    fontWeight: "bold",
-                  }}
-                >
-                  Amount
+                  Description
                 </th>
               </tr>
             </thead>
             <tbody>
-              {so.items.map((item, index) => {
-                const qty = parseFloat(item.qty) || 0;
-                const rate = parseFloat(item.rate) || 0;
-                const taxPercent = parseFloat(item.taxPercent) || 0;
-                const value = qty * rate;
-                const vat = (value * taxPercent) / 100;
-                const amount = value + vat; // Always calculate to ensure consistency
-                return (
-                  <tr key={index}>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {index + 1}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                      }}
-                    >
-                      {item.itemId || "N/A"}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                      }}
-                    >
-                      {item.description || "N/A"}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {qty.toFixed(2)}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {rate.toFixed(2)}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {value.toFixed(2)}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {vat.toFixed(2)}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: "6px",
-                        textAlign: "center",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {amount.toFixed(2)}
-                    </td>
-                  </tr>
-                );
-              })}
+              {entries.map((entry, index) => (
+                <tr key={entry._id || index}>
+                  <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center" }}>
+                    {entry.accountCode || "-"}
+                  </td>
+                  <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center" }}>
+                    {entry.accountName || "-"}
+                  </td>
+                  <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center" }}>
+                    {entry.debitAmount}
+                  </td>
+                  <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center" }}>
+                    {entry.creditAmount}
+                  </td>
+                  <td style={{ border: "1px solid #000", padding: "6px" }}>
+                    {entry.description || "-"}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
-
-          {/* Bank Details and Totals */}
           <div
             style={{
               display: "flex",
@@ -566,7 +431,6 @@ const SaleInvoiceView = ({
                 </p>
               </div>
             </div>
-
             <div style={{ width: "40%" }}>
               <table
                 style={{
@@ -584,7 +448,7 @@ const SaleInvoiceView = ({
                       fontWeight: "bold",
                     }}
                   >
-                    Sub Total
+                    Total
                   </td>
                   <td
                     style={{
@@ -593,35 +457,12 @@ const SaleInvoiceView = ({
                       textAlign: "center",
                     }}
                   >
-                    {totals.subtotal}
-                  </td>
-                </tr>
-                <tr>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "8px",
-                      textAlign: "right",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    VAT (5%)
-                  </td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "8px",
-                      textAlign: "center",
-                    }}
-                  >
-                    {totals.tax}
+                    {totals.total}
                   </td>
                 </tr>
               </table>
             </div>
           </div>
-
-          {/* IBAN Details and Grand Total */}
           <div
             style={{
               display: "flex",
@@ -641,7 +482,6 @@ const SaleInvoiceView = ({
                 <strong>ACCOUNT NAME:</strong> NH FOODSTUFF TRADING LLC S.O.C
               </p>
             </div>
-
             <div
               style={{
                 border: "2px solid #000",
@@ -650,11 +490,7 @@ const SaleInvoiceView = ({
               }}
             >
               <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "15px",
-                }}
+                style={{ display: "flex", alignItems: "center", gap: "15px" }}
               >
                 <span style={{ fontSize: "12px", fontWeight: "bold" }}>
                   GRAND TOTAL
@@ -665,15 +501,12 @@ const SaleInvoiceView = ({
               </div>
             </div>
           </div>
-
-          {/* Footer Section */}
           <div style={{ marginTop: "30px" }}>
             <div style={{ textAlign: "center", marginBottom: "30px" }}>
               <p style={{ fontSize: "11px", margin: "0" }}>
-                Received the above goods in good order and condition.
+                Journal entry issued in good order.
               </p>
             </div>
-
             <div
               style={{
                 display: "flex",
@@ -682,7 +515,7 @@ const SaleInvoiceView = ({
               }}
             >
               <div style={{ fontSize: "11px", width: "45%" }}>
-                <p style={{ margin: "0 0 30px 0" }}>Received by:</p>
+                <p style={{ margin: "0 0 30px 0" }}>Approved by:</p>
                 <div
                   style={{
                     borderBottom: "1px solid #000",
@@ -691,11 +524,7 @@ const SaleInvoiceView = ({
                 ></div>
               </div>
               <div
-                style={{
-                  fontSize: "11px",
-                  width: "45%",
-                  textAlign: "right",
-                }}
+                style={{ fontSize: "11px", width: "45%", textAlign: "right" }}
               >
                 <p style={{ margin: "0 0 30px 0" }}>Prepared by:</p>
                 <div
@@ -713,4 +542,4 @@ const SaleInvoiceView = ({
   );
 };
 
-export default SaleInvoiceView;
+export default JournalVoucherView;
