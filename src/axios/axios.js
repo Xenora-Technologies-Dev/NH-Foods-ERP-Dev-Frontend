@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const axiosInstance = axios.create({
-  baseURL: "http://localhost:3000/api/v1",
+  baseURL: "https://nh-foods-erp-dev-backend.onrender.com/api/v1",
   headers: {
     "Content-Type": "application/json",
   },
@@ -30,7 +30,7 @@ axiosInstance.interceptors.response.use(
       originalRequest._retry = true;
       try {
         const { data } = await axios.post(
-          "http://localhost:3000/api/v1/refresh-token",
+          "https://nh-foods-erp-dev-backend.onrender.com/api/v1/refresh-token",
           {},
           { withCredentials: true }
         );
