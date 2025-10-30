@@ -28,6 +28,7 @@ const TableView = ({
   confirmSO,
   deleteSO,
 }) => {
+  console.log(paginatedSOs)
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 shadow-lg overflow-hidden">
       <div className="overflow-x-auto">
@@ -120,9 +121,9 @@ const TableView = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {paginatedSOs.map((so) => (
+            {paginatedSOs.map((so,i) => (
               <tr
-                key={so.id}
+                key={i}
                 className="hover:bg-slate-50/50 transition-colors"
               >
                 <td className="px-4 py-4">
@@ -159,7 +160,7 @@ const TableView = ({
                 <td className="px-4 py-4">
                   <div>
                     <p className="font-medium text-slate-900">
-                      {so.customerName}
+                      {so?.customerName}
                     </p>
                   </div>
                 </td>
