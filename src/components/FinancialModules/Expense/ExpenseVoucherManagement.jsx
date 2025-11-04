@@ -28,10 +28,8 @@ import {
   Filter,
   Receipt,
   AlertTriangle,
-  LinkIcon,
   Loader2,
   Upload,
-  Eye,
   Download,
   Printer,
   ChevronDown,
@@ -67,15 +65,13 @@ const FormSelect = ({
   onAddNew,
   data,
   hierarchical = false,
-  selectedMainCategory,
-  onMainCategoryChange,
   ...props
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState({});
   const dropdownRef = useRef(null);
-  
+
   // Filter options based on search term
   const filteredOptions = useMemo(() => {
     if (!hierarchical) {
@@ -83,27 +79,26 @@ const FormSelect = ({
         option.label.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    
     const searchLower = searchTerm.toLowerCase();
     const filtered = [];
-    
     // Filter main categories
     options.forEach((mainCategory) => {
-      const matchingMain = mainCategory.label.toLowerCase().includes(searchLower);
-      const matchingSub = mainCategory.subCategories?.some(sub => 
+      const matchingMain = mainCategory.label
+        .toLowerCase()
+        .includes(searchLower);
+      const matchingSub = mainCategory.subCategories?.some((sub) =>
         sub.label.toLowerCase().includes(searchLower)
       );
-      
       if (matchingMain || matchingSub) {
         filtered.push({
           ...mainCategory,
-          subCategories: mainCategory.subCategories?.filter(sub => 
-            sub.label.toLowerCase().includes(searchLower)
-          ) || []
+          subCategories:
+            mainCategory.subCategories?.filter((sub) =>
+              sub.label.toLowerCase().includes(searchLower)
+            ) || [],
         });
       }
     });
-    
     return filtered;
   }, [options, searchTerm, hierarchical]);
 
@@ -117,40 +112,64 @@ const FormSelect = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Auto-expand parent category if selected value is a sub-category
+  useEffect(() => {
+    if (hierarchical && props.value) {
+      for (const mainCat of options) {
+        const subCat = mainCat.subCategories?.find(
+          (sub) => sub.value === props.value
+        );
+        if (subCat) {
+          setExpandedCategories((prev) => ({ ...prev, [mainCat.value]: true }));
+          break;
+        }
+      }
+    }
+  }, [props.value, options, hierarchical]);
+
   const toggleCategoryExpansion = (categoryId) => {
-    setExpandedCategories(prev => ({
+    setExpandedCategories((prev) => ({
       ...prev,
-      [categoryId]: !prev[categoryId]
+      [categoryId]: !prev[categoryId],
     }));
   };
 
-  const findSelectedLabel = useCallback((value) => {
-    if (!hierarchical) {
-      return options.find((opt) => opt.value === value)?.label || "Select an expense type";
-    }
-    
-    // Search in sub-categories first
-    for (const mainCat of options) {
-      const subCat = mainCat.subCategories?.find(sub => sub.value === value);
-      if (subCat) return subCat.label;
-    }
-    
-    // Then check main categories
-    return options.find((opt) => opt.value === value)?.label || "Select an expense type";
-  }, [options, hierarchical]);
+  const findSelectedLabel = useCallback(
+    (value) => {
+      if (!hierarchical) {
+        return (
+          options.find((opt) => opt.value === value)?.label ||
+          "Select an expense type"
+        );
+      }
+      // Search in sub-categories first
+      for (const mainCat of options) {
+        const subCat = mainCat.subCategories?.find(
+          (sub) => sub.value === value
+        );
+        if (subCat) return subCat.label;
+      }
+      // Then check main categories
+      return (
+        options.find((opt) => opt.value === value)?.label ||
+        "Select an expense type"
+      );
+    },
+    [options, hierarchical]
+  );
 
-  const handleCategorySelect = (value, isSubCategory = false, mainCategoryId = null) => {
-    if (hierarchical && isSubCategory) {
-      props.onChange({ 
-        target: { 
-          name: props.name, 
-          value,
-          mainCategoryId 
-        } 
-      });
-    } else {
-      props.onChange({ target: { name: props.name, value } });
-    }
+  const handleCategorySelect = (
+    value,
+    isSubCategory = false,
+    mainCategoryId = null
+  ) => {
+    props.onChange({
+      target: {
+        name: props.name,
+        value,
+        mainCategoryId,
+      },
+    });
     setIsOpen(false);
     setSearchTerm("");
   };
@@ -185,7 +204,6 @@ const FormSelect = ({
             </div>
           )}
         </div>
-        
         {isOpen && (
           <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-80 overflow-y-auto">
             {/* Search Input */}
@@ -204,7 +222,6 @@ const FormSelect = ({
                 />
               </div>
             </div>
-            
             {/* Categories List */}
             {filteredOptions.length === 0 ? (
               <p className="px-4 py-2 text-sm text-gray-500">
@@ -212,44 +229,61 @@ const FormSelect = ({
               </p>
             ) : (
               filteredOptions.map((category) => (
-                <div key={category.value} className="border-b border-gray-100 last:border-b-0">
+                <div
+                  key={category.value}
+                  className="border-b border-gray-100 last:border-b-0"
+                >
                   {/* Main Category */}
                   <div
                     className="px-4 py-3 text-sm text-gray-900 hover:bg-purple-50 cursor-pointer transition-all duration-200 flex items-center justify-between"
-                    onClick={() => handleCategorySelect(category.value)}
+                    onClick={() =>
+                      handleCategorySelect(
+                        category.value,
+                        false,
+                        category.value
+                      )
+                    }
                   >
                     <span className="font-medium">{category.label}</span>
-                    {category.subCategories && category.subCategories.length > 0 && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleCategoryExpansion(category.value);
-                        }}
-                        className="p-1 rounded hover:bg-gray-100 transition-colors"
-                      >
-                        {expandedCategories[category.value] ? (
-                          <ChevronDown size={16} />
-                        ) : (
-                          <ChevronRight size={16} />
-                        )}
-                      </button>
-                    )}
-                  </div>
-                  
-                  {/* Sub Categories */}
-                  {category.subCategories && category.subCategories.length > 0 && expandedCategories[category.value] && (
-                    <div className="pl-8 bg-gray-50">
-                      {category.subCategories.map((subCategory) => (
-                        <div
-                          key={subCategory.value}
-                          className="px-4 py-2 text-sm text-gray-700 hover:bg-purple-50 cursor-pointer transition-all duration-200"
-                          onClick={() => handleCategorySelect(subCategory.value, true, category.value)}
+                    {category.subCategories &&
+                      category.subCategories.length > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleCategoryExpansion(category.value);
+                          }}
+                          className="p-1 rounded hover:bg-gray-100 transition-colors"
                         >
-                          <span className="ml-2">└ {subCategory.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                          {expandedCategories[category.value] ? (
+                            <ChevronDown size={16} />
+                          ) : (
+                            <ChevronRight size={16} />
+                          )}
+                        </button>
+                      )}
+                  </div>
+                  {/* Sub Categories */}
+                  {category.subCategories &&
+                    category.subCategories.length > 0 &&
+                    expandedCategories[category.value] && (
+                      <div className="pl-8 bg-gray-50">
+                        {category.subCategories.map((subCategory) => (
+                          <div
+                            key={subCategory.value}
+                            className="px-4 py-2 text-sm text-gray-700 hover:bg-purple-50 cursor-pointer transition-all duration-200"
+                            onClick={() =>
+                              handleCategorySelect(
+                                subCategory.value,
+                                true,
+                                category.value
+                              )
+                            }
+                          >
+                            <span className="ml-2">└ {subCategory.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                 </div>
               ))
             )}
@@ -260,15 +294,6 @@ const FormSelect = ({
         <p className="mt-1 text-sm text-red-600 flex items-center">
           <AlertCircle size={12} className="mr-1" /> {error}
         </p>
-      )}
-      
-      {/* Additional Main Category Selector for Sub-Category Selection */}
-      {hierarchical && selectedMainCategory && (
-        <div className="mt-2 p-2 bg-blue-50 rounded-lg">
-          <p className="text-xs text-blue-700">
-            Selected Main Category: {selectedMainCategory}
-          </p>
-        </div>
       )}
     </div>
   );
@@ -386,6 +411,7 @@ const SessionManager = {
 };
 
 const asArray = (x) => (Array.isArray(x) ? x : []);
+
 const takeArray = (resp) => {
   if (!resp) return [];
   const d = resp.data;
@@ -418,25 +444,24 @@ const formatCurrency = (
 
 const ExpenseVoucherManagement = () => {
   const [vouchers, setVouchers] = useState([]);
-  const [expenseCategories, setExpenseCategories] = useState([]); // Changed from expenseTypes
-  console.log(expenseCategories)
+  const [expenseCategories, setExpenseCategories] = useState([]);
   const [transactors, setTransactors] = useState([]);
   const [showModal, setShowModal] = useState(false);
-  const [showCategoryModal, setShowCategoryModal] = useState(false); // Changed from showExpenseTypeModal
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState(
     SessionManager.get("searchTerm") || ""
   );
   const [editVoucherId, setEditVoucherId] = useState(null);
-  const [editCategoryId, setEditCategoryId] = useState(null); // Changed from editExpenseTypeId
-  const [categoryForm, setCategoryForm] = useState({ 
-    name: "", 
-    isSubCategory: false, 
-    parentCategory: "" 
-  }); // Changed from expenseTypeForm
-  const [categoryErrors, setCategoryErrors] = useState({}); // Changed from expenseTypeErrors
+  const [editCategoryId, setEditCategoryId] = useState(null);
+  const [categoryForm, setCategoryForm] = useState({
+    name: "",
+    isSubCategory: false,
+    parentCategory: "",
+  });
+  const [categoryErrors, setCategoryErrors] = useState({});
   const [formData, setFormData] = useState({
-    expenseCategory: "", // Changed from expenseType
-    mainExpenseCategory: "", // New field for main category
+    expenseCategory: "",
+    mainExpenseCategory: "",
     transactor: "",
     amount: "",
     description: "",
@@ -448,7 +473,7 @@ const ExpenseVoucherManagement = () => {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isCategorySubmitting, setIsCategorySubmitting] = useState(false); // Changed from isExpenseTypeSubmitting
+  const [isCategorySubmitting, setIsCategorySubmitting] = useState(false);
   const [showToast, setShowToast] = useState({
     visible: false,
     message: "",
@@ -464,7 +489,7 @@ const ExpenseVoucherManagement = () => {
     voucherNo: "",
     isDeleting: false,
   });
-  const [categoryDeleteConfirmation, setCategoryDeleteConfirmation] = useState({ // Changed from expenseTypeDeleteConfirmation
+  const [categoryDeleteConfirmation, setCategoryDeleteConfirmation] = useState({
     visible: false,
     categoryId: null,
     categoryName: "",
@@ -473,9 +498,6 @@ const ExpenseVoucherManagement = () => {
     errorMessage: "",
   });
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [showSubCategoryModal, setShowSubCategoryModal] = useState(false);
-  const [selectedMainCategoryForSub, setSelectedMainCategoryForSub] = useState(null);
-
   const formRef = useRef(null);
   const categoryFormRef = useRef(null);
 
@@ -485,7 +507,7 @@ const ExpenseVoucherManagement = () => {
       setFormData((prev) => ({ ...prev, ...savedFormData }));
     }
     fetchVouchers();
-    fetchExpenseCategories(); // Changed from fetchExpenseTypes
+    fetchExpenseCategories();
     fetchTransactors();
   }, []);
 
@@ -512,38 +534,32 @@ const ExpenseVoucherManagement = () => {
     );
   }, []);
 
-  // Updated to fetch hierarchical categories
   const fetchExpenseCategories = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const response = await axiosInstance.get("/expense/categories"); // Updated endpoint
-      console.log(response)
+      const response = await axiosInstance.get("/expense/categories");
       const categories = takeArray(response).map((category) => ({
         value: category._id,
         label: category.name,
-        subCategories: category.subCategories?.map(sub => ({
-          value: sub._id,
-          label: sub.name,
-          parentId: category._id
-        })) || [],
-        isMainCategory: true
+        subCategories:
+          category.subCategories?.map((sub) => ({
+            value: sub._id,
+            label: sub.name,
+            parentId: category._id,
+          })) || [],
+        isMainCategory: true,
       }));
       setExpenseCategories(categories);
-      
-      // Set default main category if none selected
-      if (!formData.expenseCategory && !formData.mainExpenseCategory && categories.length > 0) {
-        setFormData((prev) => ({ 
-          ...prev, 
-          mainExpenseCategory: categories[0].value 
-        }));
-      }
     } catch (err) {
       showToastMessage(
         err.response?.data?.message || "Failed to fetch expense categories.",
         "error"
       );
       setExpenseCategories([]);
+    } finally {
+      setIsLoading(false);
     }
-  }, [showToastMessage, formData.expenseCategory, formData.mainExpenseCategory]);
+  }, [showToastMessage]);
 
   const fetchVouchers = useCallback(
     async (showRefreshIndicator = false) => {
@@ -603,7 +619,7 @@ const ExpenseVoucherManagement = () => {
   const fetchAssociatedVouchers = useCallback(async (categoryId) => {
     try {
       const response = await axiosInstance.get("/vouchers/vouchers", {
-        params: { expenseCategory: categoryId }, // Updated param name
+        params: { expenseCategory: categoryId },
       });
       return takeArray(response);
     } catch (err) {
@@ -614,13 +630,12 @@ const ExpenseVoucherManagement = () => {
 
   const handleChange = useCallback((e) => {
     const { name, value, files } = e.target;
-    
     // Handle hierarchical category selection
-    if (name === "expenseCategory" && e.mainCategoryId) {
+    if (name === "expenseCategory" && "mainCategoryId" in e.target) {
       setFormData((prev) => ({
         ...prev,
         [name]: value,
-        mainExpenseCategory: e.mainCategoryId
+        mainExpenseCategory: e.target.mainCategoryId,
       }));
     } else {
       setFormData((prev) => ({
@@ -628,7 +643,6 @@ const ExpenseVoucherManagement = () => {
         [name]: files ? files[0] : value,
       }));
     }
-    
     setErrors((prev) => ({ ...prev, [name]: "" }));
   }, []);
 
@@ -640,8 +654,10 @@ const ExpenseVoucherManagement = () => {
 
   const validateForm = useCallback(() => {
     const e = {};
-    if (!formData.mainExpenseCategory) e.mainExpenseCategory = "Main category is required";
-    if (!formData.expenseCategory) e.expenseCategory = "Expense category is required";
+    if (!formData.mainExpenseCategory)
+      e.mainExpenseCategory = "Main category is required";
+    if (!formData.expenseCategory)
+      e.expenseCategory = "Expense category is required";
     if (!formData.transactor) e.transactor = "Transactor is required";
     if (!formData.amount || Number(formData.amount) <= 0)
       e.amount = "Amount must be greater than 0";
@@ -662,7 +678,7 @@ const ExpenseVoucherManagement = () => {
     setEditVoucherId(null);
     setFormData({
       expenseCategory: "",
-      mainExpenseCategory: expenseCategories[0]?.value || "",
+      mainExpenseCategory: "",
       transactor: transactors[0]?.value || "",
       amount: "",
       description: "",
@@ -675,14 +691,13 @@ const ExpenseVoucherManagement = () => {
     setShowModal(false);
     SessionManager.remove("formData");
     SessionManager.remove("lastSaveTime");
-  }, [expenseCategories, transactors]);
+  }, [transactors]);
 
   const resetCategoryForm = useCallback(() => {
     setEditCategoryId(null);
     setCategoryForm({ name: "", isSubCategory: false, parentCategory: "" });
     setCategoryErrors({});
     setShowCategoryModal(false);
-    setSelectedMainCategoryForSub(null);
   }, []);
 
   const handleSubmit = useCallback(async () => {
@@ -704,7 +719,6 @@ const ExpenseVoucherManagement = () => {
         submittedBy: formData.submittedBy,
         approvalStatus: formData.approvalStatus,
       };
-      
       if (formData.attachReceipt) {
         const formDataToSend = new FormData();
         Object.keys(payload).forEach((key) =>
@@ -765,9 +779,11 @@ const ExpenseVoucherManagement = () => {
     }
     setIsCategorySubmitting(true);
     try {
-      const payload = { 
+      const payload = {
         name: categoryForm.name,
-        parentCategoryId: categoryForm.isSubCategory ? categoryForm.parentCategory : null
+        parentCategoryId: categoryForm.isSubCategory
+          ? categoryForm.parentCategory
+          : null,
       };
       let newCategoryId;
       if (editCategoryId) {
@@ -786,9 +802,9 @@ const ExpenseVoucherManagement = () => {
       }
       await fetchExpenseCategories();
       if (!editCategoryId && !categoryForm.isSubCategory) {
-        setFormData((prev) => ({ 
-          ...prev, 
-          mainExpenseCategory: newCategoryId 
+        setFormData((prev) => ({
+          ...prev,
+          mainExpenseCategory: newCategoryId,
         }));
       }
       resetCategoryForm();
@@ -816,11 +832,19 @@ const ExpenseVoucherManagement = () => {
 
   const handleEdit = useCallback(
     (voucher) => {
+      const expenseCat = voucher.expenseCategoryId || {};
+      const mainCat =
+        voucher.mainExpenseCategoryId || expenseCat.parentCategory || {};
       setEditVoucherId(voucher._id);
       setFormData({
-        expenseCategory: voucher.expenseCategory?._id || voucher.expenseCategory || "",
-        mainExpenseCategory: voucher.mainExpenseCategory?._id || voucher.mainExpenseCategory || expenseCategories[0]?.value || "",
-        transactor: voucher.transactor?._id || voucher.transactor || transactors[0]?.value || "",
+        expenseCategory: expenseCat._id || "",
+        mainExpenseCategory:
+          mainCat._id || expenseCat.parentCategory?._id || "",
+        transactor:
+          voucher.transactorId?._id ||
+          voucher.transactorId ||
+          transactors[0]?.value ||
+          "",
         amount: String(voucher.totalAmount || 0),
         description: voucher.description || "",
         attachReceipt: null,
@@ -834,20 +858,17 @@ const ExpenseVoucherManagement = () => {
       SessionManager.remove("formData");
       SessionManager.remove("lastSaveTime");
     },
-    [expenseCategories, transactors]
+    [transactors]
   );
 
   const handleEditCategory = useCallback((category) => {
     setEditCategoryId(category.value);
-    setCategoryForm({ 
-      name: category.label, 
+    setCategoryForm({
+      name: category.label,
       isSubCategory: !!category.parentId,
-      parentCategory: category.parentId || ""
+      parentCategory: category.parentId || "",
     });
     setShowCategoryModal(true);
-    if (category.parentId) {
-      setSelectedMainCategoryForSub(category.parentId);
-    }
   }, []);
 
   const showDeleteConfirmation = useCallback((voucher) => {
@@ -920,7 +941,7 @@ const ExpenseVoucherManagement = () => {
     setCategoryDeleteConfirmation((prev) => ({ ...prev, isDeleting: true }));
     try {
       await axiosInstance.delete(
-        `/expense/categories/${categoryDeleteConfirmation.categoryId}` // Updated endpoint
+        `/expense/categories/${categoryDeleteConfirmation.categoryId}`
       );
       setExpenseCategories((prev) =>
         prev.filter(
@@ -978,25 +999,26 @@ const ExpenseVoucherManagement = () => {
     }, 10);
   }, [resetForm]);
 
-  const openCategoryModal = useCallback(() => {
-    resetCategoryForm();
-    setShowCategoryModal(true);
-    setTimeout(() => {
-      const modal = document.querySelector(".category-modal-container");
-      if (modal) modal.classList.add("scale-100");
-      if (categoryFormRef.current)
-        categoryFormRef.current.querySelector('input[name="name"]')?.focus();
-    }, 10);
-  }, [resetCategoryForm]);
-
-  const openSubCategoryModal = useCallback(() => {
-    if (!selectedMainCategoryForSub) {
-      showToastMessage("Please select a main category first", "error");
-      return;
-    }
-    setCategoryForm(prev => ({ ...prev, isSubCategory: true, parentCategory: selectedMainCategoryForSub }));
-    setShowSubCategoryModal(true);
-  }, [selectedMainCategoryForSub, showToastMessage]);
+  const openCategoryModal = useCallback(
+    (isSub = false, parentId = "") => {
+      resetCategoryForm();
+      if (isSub && parentId) {
+        setCategoryForm((prev) => ({
+          ...prev,
+          isSubCategory: true,
+          parentCategory: parentId,
+        }));
+      }
+      setShowCategoryModal(true);
+      setTimeout(() => {
+        const modal = document.querySelector(".category-modal-container");
+        if (modal) modal.classList.add("scale-100");
+        if (categoryFormRef.current)
+          categoryFormRef.current.querySelector('input[name="name"]')?.focus();
+      }, 10);
+    },
+    [resetCategoryForm]
+  );
 
   const handleRefresh = useCallback(() => {
     fetchVouchers(true);
@@ -1158,11 +1180,17 @@ const ExpenseVoucherManagement = () => {
     const term = searchTerm.trim().toLowerCase();
     let filtered = safeVouchers.filter((p) => {
       const description = p.description?.toLowerCase() || "";
-      const categoryName = p.expenseCategoryName?.toLowerCase() || "";
-      const mainCategoryName = p.mainExpenseCategoryName?.toLowerCase() || "";
-      return description.includes(term) || 
-             categoryName.includes(term) || 
-             mainCategoryName.includes(term);
+      const categoryName = p.expenseCategoryId?.name?.toLowerCase() || "";
+      const mainCategoryName =
+        (
+          p.mainExpenseCategoryId?.name ||
+          p.expenseCategoryId?.parentCategory?.name
+        )?.toLowerCase() || "";
+      return (
+        description.includes(term) ||
+        categoryName.includes(term) ||
+        mainCategoryName.includes(term)
+      );
     });
     if (sortConfig.key) {
       filtered = [...filtered].sort((a, b) => {
@@ -1192,29 +1220,25 @@ const ExpenseVoucherManagement = () => {
     return filtered;
   }, [safeVouchers, searchTerm, sortConfig]);
 
-  // Helper to find category details
-  const findCategoryDetails = useCallback((categoryId, mainCategoryId = null) => {
-    if (!mainCategoryId) {
-      // Find main category
-      const mainCategory = expenseCategories.find(cat => cat.value === categoryId);
-      return mainCategory ? { name: mainCategory.label, type: 'main' } : null;
-    } else {
-      // Find sub-category
-      const mainCategory = expenseCategories.find(cat => cat.value === mainCategoryId);
-      if (mainCategory) {
-        const subCategory = mainCategory.subCategories?.find(sub => sub.value === categoryId);
-        if (subCategory) {
-          return { name: subCategory.label, type: 'sub', parent: mainCategory.label };
-        }
-      }
+  const findCategoryDetails = useCallback((category, mainCategory) => {
+    const categoryObj = typeof category === "object" ? category : null;
+    const mainObj = typeof mainCategory === "object" ? mainCategory : null;
+
+    if (!categoryObj) return null;
+
+    const name = categoryObj.name || "";
+    const parent = categoryObj.parentCategory || mainObj || null;
+
+    if (parent && parent._id !== categoryObj._id) {
+      return { name, type: "sub", parent: parent.name || "" };
     }
-    return null;
-  }, [expenseCategories]);
+    return { name, type: "main" };
+  }, []);
 
   if (selectedVoucher) {
     const categoryDetails = findCategoryDetails(
-      selectedVoucher.expenseCategory?._id || selectedVoucher.expenseCategory,
-      selectedVoucher.mainExpenseCategory?._id || selectedVoucher.mainExpenseCategory
+      selectedVoucher.expenseCategoryId,
+      selectedVoucher.mainExpenseCategoryId
     );
     const totals = { total: Number(selectedVoucher.totalAmount || 0) };
     return (
@@ -1366,7 +1390,9 @@ const ExpenseVoucherManagement = () => {
                   <div style={{ fontSize: "10px" }}>
                     <p style={{ margin: "2px 0" }}>
                       <strong>Main Category:</strong>{" "}
-                      {categoryDetails?.type === 'sub' ? categoryDetails.parent : categoryDetails?.name || "N/A"}
+                      {categoryDetails?.type === "sub"
+                        ? categoryDetails.parent
+                        : categoryDetails?.name || "N/A"}
                     </p>
                     <p style={{ margin: "2px 0" }}>
                       <strong>Expense Category:</strong>{" "}
@@ -1375,10 +1401,10 @@ const ExpenseVoucherManagement = () => {
                     <p style={{ margin: "2px 0" }}>
                       <strong>Transactor:</strong>{" "}
                       {transactors.find(
-                        (t) => t.value === selectedVoucher.transactor?._id
+                        (t) => t.value === selectedVoucher.transactorId?._id
                       )?.label ||
-                        selectedVoucher.transactor?.accountName ||
-                        selectedVoucher.transactor}
+                        selectedVoucher.transactorId?.accountName ||
+                        selectedVoucher.transactorId}
                     </p>
                     <p style={{ margin: "2px 0" }}>
                       <strong>Submitted By:</strong>{" "}
@@ -1679,7 +1705,6 @@ const ExpenseVoucherManagement = () => {
   );
 
   const lastSaveTime = SessionManager.get("lastSaveTime");
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 p-4 sm:p-6">
       <Toast
@@ -1687,7 +1712,6 @@ const ExpenseVoucherManagement = () => {
         message={showToast.message}
         type={showToast.type}
       />
-      
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8">
         <div className="flex items-center space-x-4">
           <button className="p-3 rounded-xl bg-white shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
@@ -1726,7 +1750,6 @@ const ExpenseVoucherManagement = () => {
           </button>
         </div>
       </div>
-
       <div className="mb-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
@@ -1783,7 +1806,6 @@ const ExpenseVoucherManagement = () => {
           />
         </div>
       </div>
-
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100">
         <div className="p-6 border-b border-gray-100">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1826,7 +1848,6 @@ const ExpenseVoucherManagement = () => {
             </div>
           </div>
         </div>
-
         {sortedAndFilteredVouchers.length === 0 ? (
           <EmptyState />
         ) : (
@@ -1874,13 +1895,11 @@ const ExpenseVoucherManagement = () => {
                     (sum, entry) => sum + (Number(entry.creditAmount) || 0),
                     0
                   );
-                  
                   // Find category details for display
                   const categoryDetails = findCategoryDetails(
-                    p.expenseCategory?._id || p.expenseCategory,
-                    p.mainExpenseCategory?._id || p.mainExpenseCategory
+                    p.expenseCategoryId,
+                    p.mainExpenseCategoryId
                   );
-                  
                   return (
                     <tr
                       key={p._id}
@@ -1891,7 +1910,11 @@ const ExpenseVoucherManagement = () => {
                           onClick={() => handleViewVoucher(p)}
                           className="text-blue-600 hover:underline"
                         >
-                          {categoryDetails?.type === 'sub' ? categoryDetails.parent : categoryDetails?.name || p.mainExpenseCategoryName || "-"}
+                          {categoryDetails?.type === "sub"
+                            ? categoryDetails.parent
+                            : categoryDetails?.name ||
+                              p.mainExpenseCategoryName ||
+                              "-"}
                         </button>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
@@ -1947,7 +1970,6 @@ const ExpenseVoucherManagement = () => {
           </div>
         )}
       </div>
-
       {/* Main Modal for Expense Voucher */}
       {showModal && (
         <div className="fixed inset-0 bg-white/50 flex items-center justify-center p-4 z-50 modal-container transform scale-95 transition-transform duration-300">
@@ -1982,21 +2004,6 @@ const ExpenseVoucherManagement = () => {
             </div>
             <div className="p-6" ref={formRef}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Main Category Selector */}
-                <FormSelect
-                  label="Main Expense Category"
-                  icon={Building}
-                  name="mainExpenseCategory"
-                  value={formData.mainExpenseCategory}
-                  onChange={handleChange}
-                  hierarchical={false}
-                  error={errors.mainExpenseCategory}
-                  options={expenseCategories.filter(cat => cat.isMainCategory)}
-                  data={true}
-                  onAddNew={openCategoryModal}
-                />
-                
-                {/* Sub Category Selector */}
                 <FormSelect
                   label="Expense Category"
                   icon={Building}
@@ -2004,17 +2011,16 @@ const ExpenseVoucherManagement = () => {
                   value={formData.expenseCategory}
                   onChange={handleChange}
                   hierarchical={true}
-                  selectedMainCategory={findCategoryDetails(formData.mainExpenseCategory)?.name}
-                  onMainCategoryChange={(mainId) => setFormData(prev => ({...prev, mainExpenseCategory: mainId}))}
                   error={errors.expenseCategory}
                   options={expenseCategories}
                   data={true}
-                  onAddNew={() => {
-                    setSelectedMainCategoryForSub(formData.mainExpenseCategory);
-                    openSubCategoryModal();
-                  }}
+                  onAddNew={() =>
+                    openCategoryModal(
+                      !!formData.mainExpenseCategory,
+                      formData.mainExpenseCategory
+                    )
+                  }
                 />
-                
                 <FormSelect
                   label="Transactor"
                   icon={CreditCard}
@@ -2110,7 +2116,6 @@ const ExpenseVoucherManagement = () => {
           </div>
         </div>
       )}
-
       {/* Category Management Modal */}
       {showCategoryModal && (
         <div className="fixed inset-0 bg-white/50 flex items-center justify-center p-4 z-50 category-modal-container transform scale-95 transition-transform duration-300">
@@ -2118,7 +2123,9 @@ const ExpenseVoucherManagement = () => {
             <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-blue-50 sticky top-0 z-10">
               <div>
                 <h3 className="text-xl font-bold text-gray-900">
-                  {editCategoryId ? "Edit Expense Category" : "Add Expense Category"}
+                  {editCategoryId
+                    ? "Edit Expense Category"
+                    : "Add Expense Category"}
                 </h3>
                 <p className="text-gray-600 text-sm mt-1">
                   {editCategoryId
@@ -2141,14 +2148,13 @@ const ExpenseVoucherManagement = () => {
                     type="checkbox"
                     checked={categoryForm.isSubCategory}
                     onChange={(e) => {
-                      setCategoryForm(prev => ({
+                      setCategoryForm((prev) => ({
                         ...prev,
                         isSubCategory: e.target.checked,
-                        parentCategory: e.target.checked ? "" : ""
+                        parentCategory: e.target.checked
+                          ? prev.parentCategory
+                          : "",
                       }));
-                      if (!e.target.checked) {
-                        setSelectedMainCategoryForSub(null);
-                      }
                     }}
                     className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                   />
@@ -2162,19 +2168,23 @@ const ExpenseVoucherManagement = () => {
                   </p>
                 )}
               </div>
-
               {/* Category Name Input */}
               <FormInput
-                label={categoryForm.isSubCategory ? "Sub-Category Name" : "Main Category Name"}
+                label={
+                  categoryForm.isSubCategory
+                    ? "Sub-Category Name"
+                    : "Main Category Name"
+                }
                 icon={Building}
                 name="name"
                 value={categoryForm.name}
                 onChange={handleCategoryChange}
                 error={categoryErrors.name}
                 required
-                placeholder={`Enter ${categoryForm.isSubCategory ? 'sub-' : 'main '}category name`}
+                placeholder={`Enter ${
+                  categoryForm.isSubCategory ? "sub-" : "main "
+                }category name`}
               />
-
               {/* Parent Category Selector for Sub-Categories */}
               {categoryForm.isSubCategory && (
                 <FormSelect
@@ -2185,11 +2195,12 @@ const ExpenseVoucherManagement = () => {
                   onChange={handleCategoryChange}
                   error={categoryErrors.parentCategory}
                   hierarchical={false}
-                  options={expenseCategories.filter(cat => cat.isMainCategory)}
+                  options={expenseCategories.filter(
+                    (cat) => cat.isMainCategory
+                  )}
                   placeholder="Select parent category"
                 />
               )}
-
               {/* Existing Categories List */}
               <div className="mt-6">
                 <h4 className="text-sm font-semibold text-gray-700 mb-2">
@@ -2218,7 +2229,9 @@ const ExpenseVoucherManagement = () => {
                                 <Edit size={16} />
                               </button>
                               <button
-                                onClick={() => showCategoryDeleteConfirmation(mainCategory)}
+                                onClick={() =>
+                                  showCategoryDeleteConfirmation(mainCategory)
+                                }
                                 className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-all duration-200"
                                 title="Delete main category"
                               >
@@ -2226,59 +2239,62 @@ const ExpenseVoucherManagement = () => {
                               </button>
                             </div>
                           </div>
-                          
                           {/* Sub Categories */}
-                          {mainCategory.subCategories && mainCategory.subCategories.length > 0 && (
-                            <div className="ml-6 space-y-1">
-                              {mainCategory.subCategories.map((subCategory) => (
-                                <div
-                                  key={subCategory.value}
-                                  className="flex justify-between items-center p-2 bg-blue-50 rounded-lg shadow-sm hover:bg-blue-100 transition-all duration-200"
-                                >
-                                  <span className="text-sm text-gray-700">
-                                    └─ {subCategory.label}
-                                  </span>
-                                  <div className="flex space-x-2">
-                                    <button
-                                      onClick={() => handleEditCategory(subCategory)}
-                                      className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                                      title="Edit sub-category"
+                          {mainCategory.subCategories &&
+                            mainCategory.subCategories.length > 0 && (
+                              <div className="ml-6 space-y-1">
+                                {mainCategory.subCategories.map(
+                                  (subCategory) => (
+                                    <div
+                                      key={subCategory.value}
+                                      className="flex justify-between items-center p-2 bg-blue-50 rounded-lg shadow-sm hover:bg-blue-100 transition-all duration-200"
                                     >
-                                      <Edit size={14} />
-                                    </button>
-                                    <button
-                                      onClick={() => showCategoryDeleteConfirmation(subCategory)}
-                                      className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-all duration-200"
-                                      title="Delete sub-category"
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          
+                                      <span className="text-sm text-gray-700">
+                                        └─ {subCategory.label}
+                                      </span>
+                                      <div className="flex space-x-2">
+                                        <button
+                                          onClick={() =>
+                                            handleEditCategory(subCategory)
+                                          }
+                                          className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                                          title="Edit sub-category"
+                                        >
+                                          <Edit size={14} />
+                                        </button>
+                                        <button
+                                          onClick={() =>
+                                            showCategoryDeleteConfirmation(
+                                              subCategory
+                                            )
+                                          }
+                                          className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-all duration-200"
+                                          title="Delete sub-category"
+                                        >
+                                          <Trash2 size={14} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )
+                                )}
+                              </div>
+                            )}
                           {/* Add Sub-Category Button */}
-                          {mainCategory.subCategories && mainCategory.subCategories.length === 0 && (
-                            <button
-                              onClick={() => {
-                                setSelectedMainCategoryForSub(mainCategory.value);
-                                openSubCategoryModal();
-                              }}
-                              className="ml-6 text-xs text-blue-600 hover:text-blue-800 flex items-center space-x-1"
-                            >
-                              <Plus size={12} />
-                              <span>Add Sub-Category</span>
-                            </button>
-                          )}
+                          <button
+                            onClick={() =>
+                              openCategoryModal(true, mainCategory.value)
+                            }
+                            className="ml-6 text-xs text-blue-600 hover:text-blue-800 flex items-center space-x-1"
+                          >
+                            <Plus size={12} />
+                            <span>Add Sub-Category</span>
+                          </button>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
               </div>
-
               <div className="flex justify-end space-x-3 mt-8">
                 <button
                   onClick={resetCategoryForm}
@@ -2309,62 +2325,6 @@ const ExpenseVoucherManagement = () => {
           </div>
         </div>
       )}
-
-      {/* Sub-Category Modal */}
-      {showSubCategoryModal && (
-        <div className="fixed inset-0 bg-white/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-            <div className="p-6">
-              <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Building size={32} className="text-blue-600" />
-                </div>
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 text-center mb-2">
-                Add Sub-Category
-              </h3>
-              <p className="text-gray-600 text-center mb-4">
-                Parent Category: <span className="font-medium text-blue-600">
-                  {findCategoryDetails(selectedMainCategoryForSub)?.name || "N/A"}
-                </span>
-              </p>
-              <FormInput
-                label="Sub-Category Name"
-                icon={Building}
-                name="name"
-                value={categoryForm.name}
-                onChange={handleCategoryChange}
-                error={categoryErrors.name}
-                required
-                placeholder="Enter sub-category name"
-              />
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => {
-                    setShowSubCategoryModal(false);
-                    setSelectedMainCategoryForSub(null);
-                  }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCategorySubmit}
-                  disabled={isCategorySubmitting || !categoryForm.name.trim()}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 flex items-center justify-center"
-                >
-                  {isCategorySubmitting ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    "Add Sub-Category"
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Delete Confirmation Modals */}
       {categoryDeleteConfirmation.visible && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-60">
@@ -2454,7 +2414,6 @@ const ExpenseVoucherManagement = () => {
           </div>
         </div>
       )}
-
       {deleteConfirmation.visible && (
         <div className="fixed inset-0 bg-white/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
