@@ -69,6 +69,7 @@ const SalesOrderManagement = () => {
   // Form state
   const [formData, setFormData] = useState({
     transactionNo: "",
+    transactionNoMode: "AUTO",
     partyId: "",
     partyName: "",
     date: new Date().toISOString().slice(0, 10),
@@ -77,6 +78,9 @@ const SalesOrderManagement = () => {
     priority: "Medium",
     terms: "",
     notes: "",
+    refNo: "",
+    docNo: "",
+    discount: "0.00",
     items: [
       {
         _id: "",
@@ -89,7 +93,6 @@ const SalesOrderManagement = () => {
         vatPercent: "5",
         vatAmount: "0.00",
         lineTotal: "0.00",
-        package: "1",
         category: "",
         unitOfMeasure: "",
         unitOfMeasureDetails: {},
@@ -180,25 +183,52 @@ const SalesOrderManagement = () => {
       });
 
       const transactions = response.data?.data || [];
+      // DEBUG: Log raw backend rows for LPO/DOC/Discount audit
+      //console.log("[FETCH SO LIST] rows:", transactions.map(t => ({ id: t._id, lpono: t.lpono ?? t.refNo, docno: t.docno ?? t.docNo, discount: t.discount })));
+      console.log("Transaction Fetch from backend "+transactions);
+      // helper to format invoice number for APPROVED orders:
+// remove leading SO (case-insensitive), keep digits, pad to 4 chars (e.g. SO277 -> 0277)
+const formatDisplayTransactionNo = (t) => {
+  try {
+    if (t.status === "APPROVED" && t.transactionNo) {
+      // remove non-digits (and optional SO prefix)
+      const digits = String(t.transactionNo).replace(/^SO/i, "").replace(/\D/g, "");
+      if (!digits) return t.transactionNo;
+      return digits.padStart(4, "0"); // 277 -> 0277
+    }
+    return t.transactionNo;
+  } catch (e) {
+    return t.transactionNo;
+  }
+};
+
       setSalesOrders(
-        transactions.map((t) => ({
-          id: t._id,
-          transactionNo: t.transactionNo,
-          customerId: t.partyId,
-          customerName: t.party?.customerName || t.partyName,
-          date: t.date,
-          deliveryDate: t.deliveryDate,
-          status: t.status,
-          totalAmount: parseFloat(t.totalAmount).toFixed(2),
-          items: t.items,
-          terms: t.terms || "",
-          notes: t.notes || "",
-          createdBy: t.createdBy,
-          createdAt: t.createdAt,
-          invoiceGenerated: t.invoiceGenerated,
-          priority: t.priority || "Medium",
-        }))
-      );
+  transactions.map((t) => {
+    const displayTransactionNo = formatDisplayTransactionNo(t);
+    return {
+      id: t._id,
+      transactionNo: t.transactionNo,
+      displayTransactionNo,
+      customerId: t.partyId,
+      customerName: t.party?.customerName || t.partyName,
+      date: t.date,
+      deliveryDate: t.deliveryDate,
+      status: t.status,
+      totalAmount: parseFloat(t.totalAmount).toFixed(2),
+      items: t.items,
+      terms: t.terms || "",
+      notes: t.notes || "",
+      createdBy: t.createdBy,
+      createdAt: t.createdAt,
+      invoiceGenerated: t.invoiceGenerated,
+      priority: t.priority || "Medium",
+      // Map backend fields for LPO, Doc No, and Discount to UI fields
+      refNo: t.lpono ?? t.refNo ?? "",
+      docNo: t.docno ?? t.docNo ?? "",
+      discount: typeof t.discount === "number" ? t.discount : 0,
+    };
+  })
+);
     } catch (error) {
       addNotification(
         "Failed to fetch transactions: " +
@@ -260,7 +290,6 @@ const SalesOrderManagement = () => {
         vatPercent: (it.vatPercent || 5).toString(),
         vatAmount: (it.vatAmount || 0).toString(),
         lineTotal: (it.lineTotal || 0).toString(),
-        package: (it.package || 1).toString(),
         category: stock.category || "",
         unitOfMeasure: stock.unitOfMeasure || "",
         unitOfMeasureDetails: stock.unitOfMeasureDetails || {},
@@ -280,6 +309,9 @@ const SalesOrderManagement = () => {
       priority: so.priority || "Medium",
       terms: so.terms || "",
       notes: so.notes || "",
+      refNo: so.refNo || "",
+      docNo: so.docNo || "",
+      discount: (so.discount ?? 0).toString(),
       items: formItems,
     });
 
@@ -556,12 +588,14 @@ const SalesOrderManagement = () => {
         }
       } else if (action === "export") {
         const csv = [
-          "TransactionNo,Customer,Date,DeliveryDate,Status,TotalAmount,Priority",
-          ...selectedSOs.map((soId) => {
-            const so = salesOrders.find((s) => s.id === soId);
-            return `${so.transactionNo},${so.customerName},${so.date},${so.deliveryDate},${so.status},${so.totalAmount},${so.priority}`;
-          }),
-        ].join("\n");
+  "TransactionNo,Customer,Date,DeliveryDate,Status,TotalAmount,Priority",
+  ...selectedSOs.map((soId) => {
+    const so = salesOrders.find((s) => s.id === soId);
+    const tx = so?.displayTransactionNo || so?.transactionNo || "";
+    return `${tx},${so.customerName},${so.date},${so.deliveryDate},${so.status},${so.totalAmount},${so.priority}`;
+  }),
+].join("\n");
+
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
@@ -591,6 +625,9 @@ const SalesOrderManagement = () => {
       priority: "Medium",
       terms: "",
       notes: "",
+      refNo: "",
+      docNo: "",
+      discount: "0.00",
       items: [
         {
           _id: "",
@@ -603,7 +640,6 @@ const SalesOrderManagement = () => {
           vatPercent: "5",
           vatAmount: "0.00",
           lineTotal: "0.00",
-          package: "1",
           category: "",
           unitOfMeasure: "",
           unitOfMeasureDetails: {},
@@ -616,6 +652,18 @@ const SalesOrderManagement = () => {
 
   const confirmSO = async (id) => {
     try {
+      // Soft stock validation: warn for items exceeding stock but do not block approval
+      const so = salesOrders.find((s) => s.id === id);
+      if (so && Array.isArray(so.items)) {
+        so.items.forEach((it) => {
+          const stock = stockItems.find((s) => String(s._id) === String(it.itemId));
+          const qty = parseFloat(it.qty) || 0;
+          if (stock && typeof stock.currentStock === 'number' && qty > stock.currentStock) {
+            addNotification(`Insufficient stock for ${stock.itemName} (available ${stock.currentStock})`, 'warning');
+          }
+        });
+      }
+
       await axiosInstance.patch(`/transactions/transactions/${id}/process`, {
         action: "approve",
       });
@@ -627,6 +675,80 @@ const SalesOrderManagement = () => {
           (error.response?.data?.message || error.message),
         "error"
       );
+    }
+  };
+
+  // Generate invoice PDF for a given SO and copy type from the list views
+  const downloadInvoiceCopy = async (so, copyType) => {
+    try {
+      const container = document.createElement('div');
+      container.style.position = 'fixed';
+      container.style.left = '-9999px';
+      container.style.top = '0';
+      container.style.width = '210mm';
+      container.style.height = '297mm';
+      container.id = 'print-root';
+      document.body.appendChild(container);
+
+      const root = document.createElement('div');
+      root.id = 'invoice-content';
+      container.appendChild(root);
+
+      // Render minimal invoice HTML using current InvoiceView approach is heavy; instead snapshot current page content area
+      // We mimic InvoiceView by navigating data into a temporary node
+      const el = document.createElement('div');
+      el.innerHTML = document.querySelector('#invoice-content')?.outerHTML || '';
+
+      // Fallback: if no invoice-content in DOM, inform user
+      if (!el.innerHTML) {
+        // Dynamically import html2canvas/jsPDF and build from a lightweight template using SO data
+        const html2canvas = (await import('html2canvas')).default;
+        const { jsPDF } = await import('jspdf');
+
+        const temp = document.createElement('div');
+        temp.style.width = '210mm';
+        temp.style.padding = '10mm';
+        temp.style.background = '#fff';
+        temp.style.fontFamily = 'Arial,Helvetica,sans-serif';
+        temp.id = 'invoice-content';
+        temp.innerHTML = `<div id="copy-label" style="text-align:right;font-weight:bold;margin-bottom:9px">${copyType}</div>
+          <div style="text-align:center;font-weight:800;margin-bottom:8px">${so.displayTransactionNo || so.transactionNo}</div>`;
+        container.innerHTML = '';
+        container.appendChild(temp);
+
+        const canvas = await html2canvas(temp, { scale: 3, useCORS: true, backgroundColor: '#fff' });
+        const img = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfW = 210, pdfH = 297;
+        const ratio = Math.min(pdfW / canvas.width, pdfH / canvas.height);
+        const w = canvas.width * ratio, h = canvas.height * ratio;
+        pdf.addImage(img, 'PNG', (pdfW - w) / 2, (pdfH - h) / 2, w, h);
+        const fname = `${so.status === 'APPROVED' ? 'INV' : 'SO'}_${(so.displayTransactionNo || so.transactionNo)}_${copyType.replace(/\s+/g, '_')}.pdf`;
+        pdf.save(fname);
+        document.body.removeChild(container);
+        return;
+      }
+
+      // If an invoice-content exists in DOM, use it directly
+      const html2canvas = (await import('html2canvas')).default;
+      const { jsPDF } = await import('jspdf');
+      const copyLabel = document.getElementById('copy-label');
+      if (copyLabel) copyLabel.innerText = copyType;
+      await new Promise(r => setTimeout(r, 80));
+      const node = document.getElementById('invoice-content');
+      const canvas = await html2canvas(node, { scale: 3, useCORS: true, backgroundColor: '#fff' });
+      const img = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfW = 210, pdfH = 297;
+      const ratio = Math.min(pdfW / canvas.width, pdfH / canvas.height);
+      const w = canvas.width * ratio, h = canvas.height * ratio;
+      pdf.addImage(img, 'PNG', (pdfW - w) / 2, (pdfH - h) / 2, w, h);
+      const fname = `${so.status === 'APPROVED' ? 'INV' : 'SO'}_${(so.displayTransactionNo || so.transactionNo)}_${copyType.replace(/\s+/g, '_')}.pdf`;
+      pdf.save(fname);
+      if (copyLabel) copyLabel.innerText = 'Customer Copy';
+      document.body.removeChild(container);
+    } catch (e) {
+      addNotification('Failed to generate PDF', 'error');
     }
   };
 
@@ -772,8 +894,9 @@ const SalesOrderManagement = () => {
                   ></div>
                   <div>
                     <p className="font-medium text-slate-900">
-                      {so.transactionNo}
+                     {so.displayTransactionNo || so.transactionNo}
                     </p>
+
                     <p className="text-sm text-slate-600">{so.customerName}</p>
                   </div>
                 </div>
@@ -1129,6 +1252,8 @@ const SalesOrderManagement = () => {
                     editSO={editSO}
                     confirmSO={confirmSO}
                     deleteSO={deleteSO}
+                    onDownloadInternal={(so) => downloadInvoiceCopy(so, 'Internal Copy')}
+                    onDownloadCustomer={(so) => downloadInvoiceCopy(so, 'Customer Copy')}
                   />
                 ) : (
                   <GridView
@@ -1143,6 +1268,8 @@ const SalesOrderManagement = () => {
                     editSO={editSO}
                     confirmSO={confirmSO}
                     deleteSO={deleteSO}
+                    onDownloadInternal={(so) => downloadInvoiceCopy(so, 'Internal Copy')}
+                    onDownloadCustomer={(so) => downloadInvoiceCopy(so, 'Customer Copy')}
                   />
                 )}
                 {filteredSOs.length > 0 && <Pagination />}

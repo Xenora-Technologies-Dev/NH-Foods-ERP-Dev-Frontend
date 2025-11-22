@@ -27,6 +27,8 @@ const TableView = ({
   editSO,
   confirmSO,
   deleteSO,
+  onDownloadInternal,
+  onDownloadCustomer,
 }) => {
   console.log(paginatedSOs)
   return (
@@ -151,8 +153,11 @@ const TableView = ({
                     ></div>
                     <div>
                       <p className="font-medium text-slate-900">
-                        {so.transactionNo}
-                      </p>
+  {so.status === "APPROVED"
+    ? (so.displayTransactionNo ?? so.transactionNo)
+    : so.transactionNo}
+</p>
+
                       <p className="text-xs text-slate-500">{so.createdBy}</p>
                     </div>
                   </div>
@@ -242,10 +247,10 @@ const TableView = ({
                         <MoreVertical className="w-4 h-4" />
                       </button>
                       <div className="absolute right-0 top-8 w-32 bg-white rounded-lg shadow-lg border border-slate-200 py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
-                        <button className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                        <button onClick={() => onDownloadInternal && onDownloadInternal(so)} className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
                           Download
                         </button>
-                        <button className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                        <button onClick={() => onDownloadCustomer && onDownloadCustomer(so)} className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
                           Duplicate
                         </button>
                         {so.status === "DRAFT" && (

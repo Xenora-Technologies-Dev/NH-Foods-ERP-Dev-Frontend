@@ -39,6 +39,17 @@ const SOForm = React.memo(
       return calculateTotals(formData.items);
     }, [formData.items, calculateTotals]);
 
+    const effectiveDiscount = useMemo(() => {
+      const d = parseFloat(formData.discount || 0) || 0;
+      return Math.max(0, d);
+    }, [formData.discount]);
+
+    const totalsAfterDiscount = useMemo(() => {
+      const totalNum = parseFloat(totals.total) || 0;
+      const discounted = Math.max(0, totalNum - effectiveDiscount);
+      return discounted.toFixed(2);
+    }, [totals.total, effectiveDiscount]);
+
     const validateForm = useCallback(() => {
       const errors = {};
       if (!formData.partyId) errors.partyId = "Customer is required";
@@ -98,6 +109,8 @@ const SOForm = React.memo(
             currentItem.rate = (stock.salesPrice || 0).toString(); // 'rate' in form is per-unit price
             currentItem.purchasePrice = (stock.purchasePrice || 0).toString();
             currentItem.vatPercent = (stock.taxPercent || 5).toString();
+            // capture current stock for display
+            currentItem.currentStock = typeof stock.currentStock === 'number' ? stock.currentStock : 0;
             // currentItem.package = "1";
             if (stock.currentStock <= stock.reorderLevel) {
               addNotification(`Low stock warning: ${stock.itemName}`, "warning");
@@ -108,6 +121,7 @@ const SOForm = React.memo(
             currentItem.rate = "0.00";
             currentItem.purchasePrice = "0.00";
             currentItem.vatPercent = "5";
+            currentItem.currentStock = 0;
             // currentItem.package = "1";
           }
         }
@@ -140,7 +154,7 @@ const SOForm = React.memo(
           ...prev.items,
           {
             itemId: "", description: "", purchasePrice: "0.00",
-            rate: "", qty: "", package: "1", vatPercent: "5",
+            rate: "", qty: "", vatPercent: "5",
             subtotal: "0.00", vatAmount: "0.00", lineTotal: "0.00",
           },
         ],
@@ -165,6 +179,7 @@ const SOForm = React.memo(
 
       const payload = {
         transactionNo: formData.transactionNo,
+        transactionNoMode: formData.transactionNoMode || 'AUTO',
         type: "sales_order",
         partyId: formData.partyId,
         partyType: "Customer",
@@ -172,9 +187,14 @@ const SOForm = React.memo(
         deliveryDate: formData.deliveryDate,
         status: formData.status,
         priority: formData.priority || "Medium",
-        totalAmount: parseFloat(finalTotals.total),
+        // ensure discount is number and applied to totalAmount
+        discount: parseFloat(formData.discount || 0) || 0,
+        totalAmount: Math.max(0, (parseFloat(finalTotals.total) || 0) - (parseFloat(formData.discount || 0) || 0)),
         terms: formData.terms || "",
         notes: formData.notes || "",
+        // map UI fields to backend expected keys
+        lpono: formData.refNo || "",
+        docno: formData.docNo || "",
         items: formData.items
           .filter(i => i.itemId && parseFloat(i.qty) > 0 && parseFloat(i.rate) > 0)
           .map((i) => {
@@ -184,9 +204,15 @@ const SOForm = React.memo(
             const subtotal = qty * perUnitPrice;
             const vat = subtotal * (vatPct / 100);
             const grandTotal = subtotal + vat;
-
+            const stock = stockItems.find(s => String(s._id) === String(i.itemId));
+            const itemCode = i.itemCode || stock?.itemId || stock?.itemCode || i.itemCode || "";
+            // Soft stock validation: warn but do not block
+            if (stock && typeof stock.currentStock === 'number' && qty > stock.currentStock) {
+              addNotification(`Insufficient stock for ${stock.itemName} (available ${stock.currentStock})`, "warning");
+            }
             return {
               itemId: i.itemId,
+              itemCode,
               description: i.description,
               qty: qty,
               price: perUnitPrice, // Per-unit price
@@ -195,12 +221,18 @@ const SOForm = React.memo(
               vatPercent: vatPct,
               vatAmount: parseFloat(vat.toFixed(2)),
               grandTotal: parseFloat(grandTotal.toFixed(2)),
-              package: i.package ? parseFloat(i.package) : 1,
             };
           }),
       };
 
       console.log("Sending SO Payload:", JSON.stringify(payload, null, 2));
+      // DEBUG: Explicit audit for outgoing critical fields
+      console.log("[SO SAVE REQUEST] audit:", {
+        lpono: payload.lpono,
+        docno: payload.docno,
+        discount: payload.discount,
+        totalAmount: payload.totalAmount,
+      });
 
       try {
         let res;
@@ -212,12 +244,24 @@ const SOForm = React.memo(
           addNotification("Sales Order created successfully!", "success");
         }
 
+        // DEBUG: Log backend echo for critical fields
+        console.log("[SO SAVE RESPONSE] audit:", {
+          id: res?.data?.data?._id,
+          lpono: res?.data?.data?.lpono ?? res?.data?.data?.refNo,
+          docno: res?.data?.data?.docno ?? res?.data?.data?.docNo,
+          discount: res?.data?.data?.discount,
+        });
+
         const saved = res.data.data;
         
         // --- Critical Hydration Step: Ensure complete data for the next view ---
         const newSO = {
           ...saved,
           id: saved._id,
+          // map backend fields to UI-friendly names for display
+          refNo: saved.lpono ?? saved.refNo ?? (formData.refNo || ""),
+          docNo: saved.docno ?? saved.docNo ?? (formData.docNo || ""),
+          discount: (typeof saved.discount === 'number' ? saved.discount : (parseFloat(formData.discount || 0) || 0)),
           customerId: saved.partyId,
           customerName: customers.find((c) => c._id === saved.partyId)?.customerName || "Unknown",
           totalAmount: parseFloat(saved.totalAmount).toFixed(2),
@@ -265,7 +309,16 @@ const SOForm = React.memo(
                 <p className="text-slate-600">Fill in all required fields</p>
               </div>
             </div>
-            <button onClick={saveSO} className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 shadow-lg">
+            <button onClick={() => {
+              // ensure auto mode regenerates before save
+              if (formData.transactionNoMode === 'AUTO' && (!formData.transactionNo || !/^SO\d+/.test(formData.transactionNo))) {
+                const seq = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0');
+                setFormData(prev => ({...prev, transactionNo: `SO${seq}`}));
+                setTimeout(() => saveSO(), 0);
+              } else {
+                saveSO();
+              }
+            }} className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 shadow-lg">
               <Save className="w-5 h-5" />
               <span>{isEditing ? "Update SO" : "Save SO"}</span>
             </button>
@@ -280,9 +333,45 @@ const SOForm = React.memo(
                 {/* This section is well-structured, no major changes needed */}
                 {/* ... (Your original JSX for this part is fine) ... */}
                  <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">SO Number</label>
-                  <div className="relative"><Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" /><input type="text" value={formData.transactionNo || ''} disabled className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 cursor-not-allowed"/></div>
-                </div>
+  <label className="block text-sm font-semibold text-slate-700 mb-2">SO Number</label>
+  <div className="relative flex items-center gap-3">
+    <div className="relative flex-1">
+      <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+      <input
+        type="text"
+        name="transactionNo"
+        value={formData.transactionNo || ""}
+        onChange={handleInputChange}
+        placeholder="Enter or edit SO / Invoice number"
+        readOnly={formData.transactionNoMode !== 'MANUAL'}
+        className={`w-full pl-10 pr-28 py-3 bg-white rounded-xl border ${
+          formErrors.transactionNo ? "border-red-500" : "border-slate-200"
+        } focus:outline-none focus:ring-2 focus:ring-blue-500 ${formData.transactionNoMode !== 'MANUAL' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+      />
+    </div>
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => setFormData(prev => ({...prev, transactionNoMode: 'AUTO'}))}
+        className={`px-3 py-2 text-sm rounded-lg border ${formData.transactionNoMode === 'AUTO' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-300'}`}
+        title="Auto-generate SO number"
+      >Auto</button>
+      <button
+        type="button"
+        onClick={() => setFormData(prev => ({...prev, transactionNoMode: 'MANUAL'}))}
+        className={`px-3 py-2 text-sm rounded-lg border ${formData.transactionNoMode === 'MANUAL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-300'}`}
+        title="Enter SO number manually"
+      >Manual</button>
+    </div>
+  </div>
+  {formErrors.transactionNo && (
+    <p className="text-red-500 text-xs mt-1 flex items-center">
+      <AlertCircle className="w-3 h-3 mr-1" />
+      {formErrors.transactionNo}
+    </p>
+  )}
+</div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-2">Date</label>
@@ -304,9 +393,23 @@ const SOForm = React.memo(
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Status</label>
                   <select name="status" value={formData.status} onChange={handleInputChange} className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"><option value="DRAFT">Draft</option><option value="APPROVED">Approved</option>{isEditing && <option value="INVOICED">Invoiced</option>}</select>
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">LPO No</label>
+                    <input type="text" name="refNo" value={formData.refNo || ''} onChange={handleInputChange} placeholder="Enter LPO/Reference No" className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Doc No</label>
+                    <input type="text" name="docNo" value={formData.docNo || ''} onChange={handleInputChange} placeholder="Enter Document No" className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                  </div>
+                </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Notes</label>
                   <textarea name="notes" value={formData.notes || ''} onChange={handleInputChange} placeholder="Special instructions..." className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Discount (AED)</label>
+                  <input type="number" name="discount" min="0" step="0.01" value={formData.discount || ''} onChange={handleInputChange} placeholder="0.00" className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
                 </div>
               </div>
 
@@ -330,8 +433,9 @@ const SOForm = React.memo(
                     <div className="flex justify-between"><span>Items:</span><span>{formData.items.filter((i) => i.itemId).length}</span></div>
                     <div className="flex justify-between"><span>Subtotal:</span><span>AED {totals.subtotal}</span></div>
                     <div className="flex justify-between"><span>VAT:</span><span>AED {totals.tax}</span></div>
+                    <div className="flex justify-between"><span>Discount:</span><span className="text-rose-600">- AED {Number(effectiveDiscount).toFixed(2)}</span></div>
                     <div className="border-t pt-2">
-                      <div className="flex justify-between font-bold text-lg"><span>Total:</span><span className="text-emerald-600">AED {totals.total}</span></div>
+                      <div className="flex justify-between font-bold text-lg"><span>Total:</span><span className="text-emerald-600">AED {totalsAfterDiscount}</span></div>
                     </div>
                   </div>
                 </div>
@@ -367,13 +471,13 @@ const SOForm = React.memo(
                       {formErrors[`rate_${idx}`] && <p className="text-red-500 text-xs mt-1">{formErrors[`rate_${idx}`]}</p>}
                     </div>
                     <div className="col-span-1">
-                      <label className="text-xs font-medium text-slate-600">Package</label>
-                      <input type="text" value={item.package || ''} onChange={(e) => handleItemChange(idx, "package", e.target.value)} placeholder="1" className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"/>
-                    </div>
-                    <div className="col-span-1">
                       <label className="text-xs font-medium text-slate-600">Quantity</label>
                       <input type="number" value={item.qty || ''} onChange={(e) => handleItemChange(idx, "qty", e.target.value)} min="0" step="0.01" className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 ${formErrors[`qty_${idx}`] ? "border-red-500" : "border-slate-300"}`}/>
                       {formErrors[`qty_${idx}`] && <p className="text-red-500 text-xs mt-1">{formErrors[`qty_${idx}`]}</p>}
+                    </div>
+                    <div className="col-span-1">
+                      <label className="text-xs font-medium text-slate-600">Current stock</label>
+                      <input type="text" value={(item.currentStock ?? 0).toString()} readOnly className="w-full px-3 py-2 text-sm bg-slate-100 border border-slate-300 rounded-lg cursor-not-allowed"/>
                     </div>
                     
                     {/* FIX: Bind these inputs to the state fields calculated in handleItemChange */}

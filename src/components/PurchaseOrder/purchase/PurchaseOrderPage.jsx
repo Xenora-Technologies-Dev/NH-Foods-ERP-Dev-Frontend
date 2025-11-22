@@ -176,13 +176,13 @@ const PurchaseOrderManagement = () => {
 
         // Enrich each item with stock details (FIX: Preserve itemCode, fallback sku)
         const enrichedItems = (t.items || []).map((item) => {
-          const stock = item.stockDetails || {};  // May be empty from backend
-          console.log("DEBUG: Enriching item - raw:", item, "stockDetails:", stock);  // TEMP: Verify fields
+          const stock = item.stockDetails || stockItems.find(s => String(s._id) === String(item.itemId)) || {};
+          const normalizedItemCode = item.itemCode || stock.itemId || stock.itemCode || item.sku || item.itemId || "-";
 
           return {
-            // Original item fields (PRESERVE: Keep backend fields like itemCode, lineTotal)
+            // Preserve backend fields
             itemId: item.itemId,
-            itemCode: item.sku,  // FIX: Preserve from backend
+            itemCode: normalizedItemCode,
             description: item.description || "",
             qty: item.qty || 0,
             rate: item.rate || 0,
@@ -190,17 +190,14 @@ const PurchaseOrderManagement = () => {
             vatAmount: item.vatAmount || 0,
             vatPercent: item.vatPercent || 5,
 
-            // Enriched from stockDetails (with fallbacks)
+            // Enriched from stock or backend
             itemName: stock.itemName || "Unknown Item",
-            sku: item.itemCode || stock.sku || item.itemId || "-",  // FIX: Prioritize itemCode, then sku/itemId
+            sku: stock.sku || item.sku || item.itemId || normalizedItemCode,
             barcodeQrCode: stock.barcodeQrCode || "-",
             category: stock.category || "-",
             brand: stock.brand || "-",
             origin: stock.origin || "-",
-            unitOfMeasure:
-              stock.unitOfMeasureDetails?.unitName ||
-              stock.unitOfMeasure ||
-              "Unit",
+            unitOfMeasure: stock.unitOfMeasureDetails?.unitName || stock.unitOfMeasure || "Unit",
             currentStock: stock.currentStock || 0,
             purchasePrice: stock.purchasePrice || 0,
             salesPrice: stock.salesPrice || 0,
@@ -216,6 +213,7 @@ const PurchaseOrderManagement = () => {
           vendorId: t.partyId,
           vendorName,  // FIX: Use enriched vendorName
           vendorReference: t.vendorReference || "",
+          refNo: t.vendorReference || t.refNo || "",
           date: t.date ? new Date(t.date).toISOString().split("T")[0] : "",
           deliveryDate: t.deliveryDate
             ? new Date(t.deliveryDate).toISOString().split("T")[0]

@@ -24,6 +24,8 @@ const GridView = ({
   editSO,
   confirmSO,
   deleteSO,
+  onDownloadInternal,
+  onDownloadCustomer,
 }) => {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -117,6 +119,20 @@ const GridView = ({
                 >
                   <Eye className="w-4 h-4" />
                   <span className="text-sm">View</span>
+                </button>
+                <button
+                  onClick={() => onDownloadInternal && onDownloadInternal(so)}
+                  className="flex items-center space-x-1 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span className="text-sm">Download</span>
+                </button>
+                <button
+                  onClick={() => onDownloadCustomer && onDownloadCustomer(so)}
+                  className="flex items-center space-x-1 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span className="text-sm">Duplicate</span>
                 </button>
                 {so.status === "DRAFT" && (
                   <button

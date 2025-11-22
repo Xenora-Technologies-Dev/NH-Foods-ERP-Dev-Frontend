@@ -100,6 +100,8 @@ const CustomerManagement = () => {
     creditLimit: "",
     paymentTerms: "",
     status: "Active",
+    trnNumber: "", // <- ADDED
+    salesPerson: "", // <- NEW
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -281,6 +283,9 @@ const CustomerManagement = () => {
 
     setIsSubmitting(true);
     try {
+      const normalizedTrn = formData.trnNumber
+  ? formData.trnNumber.toString().trim().replace(/\s+/g, "")
+  : null;
       const payload = {
         customerName: formData.customerName,
         contactPerson: formData.contactPerson.trim(),
@@ -291,6 +296,8 @@ const CustomerManagement = () => {
         creditLimit: Number(formData.creditLimit) || 0,
         paymentTerms: formData.paymentTerms,
         status: formData.status,
+        trnNumber: normalizedTrn, // <- ADDED
+        salesPerson: formData.salesPerson ? formData.salesPerson.trim() : null, // <- NEW
       };
 
       if (editCustomerId) {
@@ -336,6 +343,8 @@ const CustomerManagement = () => {
       creditLimit: customer.creditLimit.toString(),
       paymentTerms: customer.paymentTerms,
       status: customer.status,
+      trnNumber: customer.trnNumber || "", // <- ADDED
+      salesPerson: customer.salesPerson || "", // <- NEW
     });
     setShowModal(true);
     setIsDraftSaved(false);
@@ -402,6 +411,8 @@ const CustomerManagement = () => {
       creditLimit: "",
       paymentTerms: "",
       status: "Active",
+      trnNumber: "", // <- ADDED
+      salesPerson: "", // <- NEW
     });
     setErrors({});
     setShowModal(false);
@@ -835,8 +846,10 @@ const CustomerManagement = () => {
                 <tr>
                   {[
                     { key: "customerId", label: "Customer ID" },
+                    { key: "trnNumber", label: "TRN" }, // <- ADDED
                     { key: "customerName", label: "Customer Name" },
                     { key: "contactPerson", label: "Contact Person" },
+                    { key: "salesPerson", label: "Sales Person" }, // <- ADDED
                     { key: "email", label: "Email" },
                     { key: "phone", label: "Phone" },
                     { key: "creditLimit", label: "Credit Limit" },
@@ -872,6 +885,14 @@ const CustomerManagement = () => {
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">
                       {customer.customerId}
                     </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+  {customer.trnNumber ? (
+    <span className="font-medium text-gray-900">{customer.trnNumber}</span>
+  ) : (
+    <span className="text-sm text-gray-400">—</span> // placeholder for missing TRN
+  )}
+</td>
+
                     <td className="px-6 py-4 text-sm text-gray-900">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
@@ -887,6 +908,14 @@ const CustomerManagement = () => {
                     <td className="px-6 py-4 text-sm text-gray-600">
                       {customer.contactPerson}
                     </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+  {customer.salesPerson ? (
+    <span className="font-medium text-gray-900">{customer.salesPerson}</span>
+  ) : (
+    <span className="text-sm text-gray-400">—</span>
+  )}
+</td>
+
                     <td className="px-6 py-4 text-sm text-gray-600">
                       <a
                         href={`mailto:${customer.email}`}
@@ -1126,6 +1155,43 @@ const CustomerManagement = () => {
                   />
                 </div>
 
+                   {/* TRN Number */}
+<div>
+  <label className="block text-sm font-semibold text-gray-700 mb-2">
+    <CreditCard size={16} className="inline mr-2" /> TRN Number
+  </label>
+  <input
+    type="text"
+    name="trnNumber"
+    value={formData.trnNumber}
+    onChange={handleChange}
+    placeholder="Enter TRN (optional)"
+    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 ${
+      errors.trnNumber ? "border-red-300 bg-red-50" : "border-gray-300"
+    }`}
+  />
+  {errors.trnNumber && (
+    <p className="mt-1 text-sm text-red-600 flex items-center">
+      <AlertCircle size={12} className="mr-1" />
+      {errors.trnNumber}
+    </p>
+  )}
+</div>            
+                {/* Sales Person */}
+<div>
+  <label className="block text-sm font-semibold text-gray-700 mb-2">
+    <User size={16} className="inline mr-2" /> Sales Person
+  </label>
+  <input
+    type="text"
+    name="salesPerson"
+    value={formData.salesPerson}
+    onChange={handleChange}
+    placeholder="Enter salesperson (optional)"
+    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+  />
+</div>
+                                                   
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     <CreditCard size={16} className="inline mr-2" /> Credit

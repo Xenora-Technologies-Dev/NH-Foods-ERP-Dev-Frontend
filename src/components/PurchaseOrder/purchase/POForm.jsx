@@ -214,9 +214,12 @@ const POForm = React.memo(
         const lineSubtotal = qty * currentPurchasePrice;
         const vatAmount = lineSubtotal * (vatPercent / 100);
         const grandTotal = lineSubtotal + vatAmount;
+        const stock = stockItems.find(s => String(s._id) === String(item.itemId));
+        const itemCode = item.itemCode || stock?.itemId || stock?.itemCode || item.itemCode || "";
         
         return {
           itemId: item.itemId,
+          itemCode,
           description: item.description,
           qty: qty,
           price: currentPurchasePrice, 

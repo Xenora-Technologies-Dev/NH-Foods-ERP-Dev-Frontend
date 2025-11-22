@@ -299,23 +299,24 @@ const Sidebar = () => {
 
   return (
     <>
+      {/* Mobile overlay when sidebar is open on small screens */}
       {!isSidebarCollapsed && (
-        <div className="fixed inset-0 bg-black/10 backdrop-blur-sm z-40 lg:hidden" />
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 sm:hidden" onClick={toggleSidebar} />
       )}
 
       <div
-        className={`relative flex flex-col h-screen bg-white text-gray-800 shadow-2xl transition-all duration-500 ease-out border-r border-gray-200/50 z-50 ${
-          isSidebarCollapsed ? "w-20" : "w-72"
-        }`}
+        className={`sm:relative fixed sm:static top-0 left-0 h-screen flex flex-col bg-white text-gray-800 shadow-2xl transition-all duration-500 ease-out border-r border-gray-200/50 z-50 ${
+          isSidebarCollapsed ? "w-0 sm:w-20 -ml-0" : "w-72 sm:w-72"
+        } ${!isSidebarCollapsed ? "translate-x-0" : "-translate-x-full sm:translate-x-0"}`}
       >
         {/* Header */}
-        <div className="relative flex items-center justify-between p-6 border-b border-gray-200/50 backdrop-blur-xl">
+        <div className="relative flex items-center justify-between p-4 sm:p-6 border-b border-gray-200/50 backdrop-blur-xl">
           {!isSidebarCollapsed && (
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center shadow-lg">
                 <Zap className="w-5 h-5 text-gray-800" />
               </div>
-              <div>
+              <div className="hidden sm:block">
                 <span className="text-xl font-bold text-gray-800">
                   ERP NEXUS
                 </span>
@@ -327,7 +328,7 @@ const Sidebar = () => {
           )}
           <button
             onClick={toggleSidebar}
-            className="relative p-2.5 rounded-xl bg-gray-100/50 backdrop-blur-sm transition-all duration-300 border border-gray-200/50 hover:bg-gray-200/50 hover:border-gray-300/50"
+            className="relative p-2 rounded-xl bg-gray-100/50 backdrop-blur-sm transition-all duration-300 border border-gray-200/50 hover:bg-gray-200/50 hover:border-gray-300/50 sm:ml-auto"
             aria-label={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
           >
             {isSidebarCollapsed ? (

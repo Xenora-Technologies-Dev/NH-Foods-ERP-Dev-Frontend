@@ -85,75 +85,75 @@ const Dashboard = () => {
   const kpiData = [
     {
       id: 1,
-      title: "Total Revenue",
+      title: "Sales (MTD)",
       value: "₹24,56,789",
       change: "+12.5%",
       trend: "up",
-      icon: <DollarSign className="w-6 h-6" />,
+      icon: <TrendingUp className="w-6 h-6" />,
       bgColor: "bg-gray-100/50",
       borderColor: "border-gray-200/50",
-      description: "vs last month",
+      description: "Month-to-date sales",
       target: "₹30,00,000",
     },
     {
       id: 2,
-      title: "Active Customers",
-      value: "1,234",
-      change: "+8.2%",
+      title: "Purchases (MTD)",
+      value: "₹18,54,321",
+      change: "+6.1%",
       trend: "up",
-      icon: <Users className="w-6 h-6" />,
+      icon: <TrendingDown className="w-6 h-6" />,
       bgColor: "bg-gray-100/50",
       borderColor: "border-gray-200/50",
-      description: "new customers",
-      target: "1,500",
+      description: "Month-to-date purchases",
+      target: "₹22,00,000",
     },
     {
       id: 3,
-      title: "Inventory Value",
-      value: "₹18,54,321",
-      change: "-2.1%",
-      trend: "down",
-      icon: <Package className="w-6 h-6" />,
+      title: "Gross Profit (MTD)",
+      value: "₹6,02,468",
+      change: "+3.9%",
+      trend: "up",
+      icon: <DollarSign className="w-6 h-6" />,
       bgColor: "bg-gray-100/50",
       borderColor: "border-gray-200/50",
-      description: "stock valuation",
-      target: "₹20,00,000",
+      description: "Sales - Purchases",
+      target: "₹8,00,000",
     },
     {
       id: 4,
-      title: "Monthly Orders",
+      title: "Sales Orders",
       value: "856",
       change: "+15.3%",
       trend: "up",
       icon: <ShoppingCart className="w-6 h-6" />,
       bgColor: "bg-gray-100/50",
       borderColor: "border-gray-200/50",
-      description: "orders processed",
+      description: "orders created",
       target: "1,000",
     },
     {
       id: 5,
-      title: "Profit Margin",
-      value: "23.5%",
-      change: "+2.3%",
+      title: "Purchase Orders",
+      value: "412",
+      change: "+4.2%",
       trend: "up",
-      icon: <TrendingUp className="w-6 h-6" />,
+      icon: <Truck className="w-6 h-6" />,
       bgColor: "bg-gray-100/50",
       borderColor: "border-gray-200/50",
-      description: "improvement",
-      target: "25%",
+      description: "orders placed",
+      target: "600",
     },
     {
       id: 6,
-      title: "Staff Productivity",
-      value: "87%",
-      change: "+5.1%",
+      title: "Avg. Profit Margin",
+      value: "23.5%",
+      change: "+2.3%",
       trend: "up",
-      icon: <Award className="w-6 h-6" />,
+      icon: <Scale className="w-6 h-6" />,
       bgColor: "bg-gray-100/50",
       borderColor: "border-gray-200/50",
-      description: "efficiency rate",
-      target: "90%",
+      description: "current month",
+      target: "25%",
     },
   ];
 
@@ -608,10 +608,10 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-xl font-bold text-gray-800">
-                      Sales Performance
+                      Sales vs Purchase Overview
                     </h3>
                     <p className="text-gray-600">
-                      Revenue, purchases, and profit trends
+                      Monthly sales, purchase and gross profit trends
                     </p>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -840,7 +840,7 @@ const Dashboard = () => {
                     color: "#000000",
                   }}
                 />
-                <Bar dataKey="processed" fill="#6B7280" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="processed" name="Vouchers Processed" fill="#6B7280" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -852,10 +852,10 @@ const Dashboard = () => {
           <div className="bg-gray-100/50 backdrop-blur-xl rounded-2xl border border-gray-200/50">
             <div className="p-6 border-b border-gray-200/50">
               <h3 className="text-xl font-bold text-gray-800">
-                Staff Performance
+                Sales Team Performance
               </h3>
               <p className="text-gray-600">
-                Department-wise performance metrics
+                Department-wise sales performance
               </p>
             </div>
             <div className="p-6">
@@ -908,9 +908,9 @@ const Dashboard = () => {
           <div className="bg-gray-100/50 backdrop-blur-xl rounded-2xl border border-gray-200/50">
             <div className="p-6 border-b border-gray-200/50">
               <h3 className="text-xl font-bold text-gray-800">
-                Top Performing Items
+                Top Selling Items
               </h3>
-              <p className="text-gray-600">Best-selling products by revenue</p>
+              <p className="text-gray-600">Best-selling products by sales value</p>
             </div>
             <div className="p-6">
               <div className="space-y-4">
