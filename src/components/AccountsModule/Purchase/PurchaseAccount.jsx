@@ -833,7 +833,7 @@ const PurchaseAccountsManagement = () => {
             className="text-purple-600 animate-spin mx-auto mb-4"
           />
           <p className="text-gray-600 text-lg font-medium">
-            Loading purchase accounts...
+            Loading debit accounts...
           </p>
         </div>
       </div>
@@ -848,7 +848,7 @@ const PurchaseAccountsManagement = () => {
         setActiveView={setActiveView}
         setSelectedInvoice={setSelectedInvoice}
         voucherType="purchase"
-        title="Purchase Invoice"
+        title="Debit Invoice"
       />
     );
   }
@@ -877,7 +877,7 @@ const PurchaseAccountsManagement = () => {
           </button>
           <div>
             <h1 className="text-3xl font-bold text-black bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-              Purchase Accounts
+              Debit Accounts
             </h1>
             <p className="text-gray-600 mt-1 font-medium">
               {activeTab === "invoices"
@@ -892,7 +892,7 @@ const PurchaseAccountsManagement = () => {
               onClick={() => setShowModal(true)}
               className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105 font-semibold"
             >
-              <Plus size={18} /> Add Purchase
+              <Plus size={18} /> Add Debit
             </button>
           )}
           <button
@@ -979,12 +979,12 @@ const PurchaseAccountsManagement = () => {
             <div>
               <h2 className="text-xl font-bold text-gray-900">
                 {activeTab === "invoices"
-                  ? "Purchase Invoices"
+                  ? "Debit Invoices"
                   : "Payment Vouchers"}
               </h2>
               <p className="text-gray-600 text-sm mt-1">
                 {activeTab === "invoices"
-                  ? "View purchase invoices and payment status"
+                  ? "View debit invoices and payment status"
                   : "View payment vouchers linked to invoices"}
               </p>
             </div>
@@ -1137,7 +1137,7 @@ const PurchaseAccountsManagement = () => {
                           : "Voucher Number",
                     },
                     { key: "date", label: "Date" },
-                    { key: "purchaseAmount", label: "Purchase Amount" },
+                    { key: "purchaseAmount", label: "Debit Amount" },
                     { key: "taxAmount", label: "Tax Amount" },
                     { key: "total", label: "Total" },
                     { key: "paidAmount", label: "Paid Amount" },
@@ -1283,10 +1283,10 @@ const PurchaseAccountsManagement = () => {
               <div>
                 <h3 className="text-2xl font-bold text-white flex items-center gap-2">
                   <Package size={28} />
-                  Add Purchase Invoice
+                  Add Debit Invoice
                 </h3>
                 <p className="text-purple-100 text-sm mt-1">
-                  Create a new purchase invoice with automatic calculations
+                  Create a new debit invoice with automatic calculations
                 </p>
               </div>
               <button
@@ -1345,7 +1345,7 @@ const PurchaseAccountsManagement = () => {
                   max={new Date().toISOString().split("T")[0]}
                 />
                 <FormInput
-                  label="Purchase Amount"
+                  label="Debit Amount"
                   icon={DollarSign}
                   type="number"
                   name="purchaseAmount"
@@ -1369,7 +1369,7 @@ const PurchaseAccountsManagement = () => {
                   name="total"
                   value={formData.total}
                   readOnly
-                  hint="Purchase + Tax - Return"
+                  hint="Debit + Tax - Return"
                 />
                 <FormInput
                   label="Return Amount"
@@ -1419,7 +1419,7 @@ const PurchaseAccountsManagement = () => {
                 </h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <div>
-                    <p className="text-xs text-gray-600 mb-1">Purchase</p>
+                    <p className="text-xs text-gray-600 mb-1">Debit</p>
                     <p className="font-semibold text-gray-900">
                       {formatCurrency(formData.purchaseAmount || 0)}
                     </p>

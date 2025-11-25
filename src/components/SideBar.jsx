@@ -93,13 +93,13 @@ const Sidebar = () => {
         children: [
           {
             icon: <ShoppingCart strokeWidth={1.5} size={20} />,
-            text: "Purchase Accounts",
-            to: "/purchase-accounts",
+            text: "Debit Accounts",
+            to: "/debit-accounts",
           },
           {
             icon: <FileText strokeWidth={1.5} size={20} />,
-            text: "Sales Accounts",
-            to: "/sales-accounts",
+            text: "Credit Accounts",
+            to: "/credit-accounts",
           },
           {
             icon: <ArrowLeftRight strokeWidth={1.5} size={20} />,

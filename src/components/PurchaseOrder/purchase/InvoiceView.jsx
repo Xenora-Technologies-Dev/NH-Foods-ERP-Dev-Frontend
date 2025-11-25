@@ -79,6 +79,7 @@ const PurchaseInvoiceView = ({
   if (!po) return null;
 
   const vendor = vendors.find((v) => v._id === po.vendorId) || {};
+  const vendorTRN = vendor.trnNO || vendor.vatNumber || po.vendorTRN || "";
   const isApproved = po.status === "APPROVED";
 
   // invoice meta: not editable in UI (display-only)
@@ -235,7 +236,7 @@ const PurchaseInvoiceView = ({
               <div style={{ fontWeight: 700, marginTop: 6 }}>{vendor.vendorName || ""}</div>
               <div style={{ marginTop: 4 }}>{vendor.address || profileData.addressLine1}</div>
               <div style={{ marginTop: 4 }}>TEL: {vendor.phone || profileData.phoneNumber}, Email: {vendor.email || profileData.email}</div>
-              <div style={{ marginTop: 4 }}>VAT Reg. No: {vendor.trnNO || ""}</div>
+              <div style={{ marginTop: 4 }}>VAT Reg. No: {vendorTRN}</div>
             </div>
 
             <div style={{ width: "38%", textAlign: "right", fontSize: 11 }}>

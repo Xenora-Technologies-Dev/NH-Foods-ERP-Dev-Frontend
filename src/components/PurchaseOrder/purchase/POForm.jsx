@@ -46,6 +46,28 @@ const POForm = React.memo(
     const isEditing = activeView === "edit";
     const [formErrors, setFormErrors] = useState({});
 
+    // Auto/Manual toggle for PO Number similar to Sales SO No
+    const [isAutoPONo, setIsAutoPONo] = useState(true);
+
+    const generatePONumber = useCallback(() => {
+      const date = new Date();
+      const y = date.getFullYear().toString().slice(-2);
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      const rand = Math.floor(Math.random() * 900 + 100); // 3-digit
+      return `PO${y}${m}${d}-${rand}`;
+    }, []);
+
+    // Initialize or update PO number when Auto is enabled and creating new
+    useEffect(() => {
+      if (!isEditing && isAutoPONo) {
+        setFormData((prev) => ({
+          ...prev,
+          transactionNo: prev.transactionNo && prev.transactionNo.length > 0 ? prev.transactionNo : generatePONumber(),
+        }));
+      }
+    }, [isEditing, isAutoPONo, setFormData, generatePONumber]);
+
     // This is correct. `useMemo` is the right tool for derived state.
     const totals = useMemo(() => {
       return calculateTotals(formData.items);
@@ -80,10 +102,11 @@ const POForm = React.memo(
     const handleInputChange = useCallback(
       (e) => {
         const { name, value } = e.target;
+        if (name === "transactionNo" && isAutoPONo) return; // Prevent edits in Auto mode
         setFormData((prev) => ({ ...prev, [name]: value }));
         setFormErrors((prev) => ({ ...prev, [name]: null }));
       },
-      [setFormData]
+      [setFormData, isAutoPONo]
     );
 
     const handleVendorSelect = useCallback(
@@ -254,11 +277,14 @@ const POForm = React.memo(
         const savedPOData = response.data.data;
 
         // 2. Hydrate the full PO object for the InvoiceView
+        const matchedVendor = vendors.find(v => v._id === savedPOData.partyId);
+        const vendorTRN = matchedVendor?.vatNumber || matchedVendor?.trnNO || matchedVendor?.trnNo || matchedVendor?.vat || "";
         const newPO = {
           ...savedPOData, // Start with what the backend returned
           id: savedPOData._id,
           vendorId: savedPOData.partyId,
-          vendorName: vendors.find(v => v._id === savedPOData.partyId)?.vendorName || "Unknown",
+          vendorName: matchedVendor?.vendorName || "Unknown",
+          vendorTRN,
           // Ensure items array is complete
           items: (savedPOData.items || []).map(backendItem => {
             // Find the original item from the form to get complete data
@@ -400,16 +426,43 @@ const POForm = React.memo(
                   <label className="block text-sm font-semibold text-slate-700 mb-2">
                     PO Number
                   </label>
-                  <div className="relative">
-                    <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input
-                      type="text"
-                      name="transactionNo"
-                      value={formData.transactionNo || ""}
-                      onChange={handleInputChange}
-                      disabled
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                  <div className="relative flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <input
+                        type="text"
+                        name="transactionNo"
+                        value={formData.transactionNo || ""}
+                        onChange={handleInputChange}
+                        disabled={isAutoPONo}
+                        className={`w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          isAutoPONo ? "bg-slate-50 border-slate-200" : "bg-white border-slate-300"
+                        }`}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAutoPONo((prev) => {
+                          const next = !prev;
+                          if (next) {
+                            // Switched to Auto: regenerate unless editing existing
+                            setFormData((p) => ({
+                              ...p,
+                              transactionNo: isEditing ? p.transactionNo : generatePONumber(),
+                            }));
+                          }
+                          return next;
+                        });
+                      }}
+                      className={`px-4 py-2 rounded-lg whitespace-nowrap ${
+                        isAutoPONo
+                          ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                          : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                      } transition-colors`}
+                    >
+                      {isAutoPONo ? "Auto" : "Manual"}
+                    </button>
                   </div>
                 </div>
 

@@ -15,8 +15,7 @@ import {
   X,
   Barcode,
   Tag,
-  DollarSign,
-  Calendar,
+    Calendar,
   AlertTriangle,
   TrendingUp,
   TrendingDown,
@@ -1097,7 +1096,7 @@ const StockManagement = () => {
             {
               title: "Total Value",
               count: formatCurrency(stockStats.totalValue),
-              icon: <DollarSign size={24} />,
+              icon: <img src={DirhamIcon} alt="AED" className="w-6 h-6" />,
               bgColor: "bg-purple-50",
               textColor: "text-purple-700",
               borderColor: "border-purple-200",
@@ -1793,7 +1792,7 @@ const StockManagement = () => {
 
                 <div className="lg:col-span-3 mt-6">
                   <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <DollarSign size={20} className="mr-2 text-green-600" />
+                    <img src={DirhamIcon} alt="AED" className="w-5 h-5 mr-2" />
                     Pricing Information
                   </h4>
                 </div>

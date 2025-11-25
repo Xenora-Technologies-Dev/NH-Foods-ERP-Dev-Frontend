@@ -59,11 +59,11 @@ export default function AdminRouter() {
                 <Route path="/expense-voucher" element={<ExpenseVoucherManagement />} />{" "}
         {/* Accounts Module */}
         <Route
-          path="/purchase-accounts"
+          path="/debit-accounts"
           element={<PurchaseAccounts />}
         />{" "}
         <Route
-          path="/sales-accounts"
+          path="/credit-accounts"
           element={<SaleAccountsManagement />}
         />{" "}
         <Route

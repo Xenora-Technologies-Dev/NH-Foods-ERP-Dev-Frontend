@@ -771,7 +771,7 @@ const SaleAccountsManagement = () => {
             className="text-purple-600 animate-spin mx-auto mb-4"
           />
           <p className="text-gray-600 text-lg font-medium">
-            Loading sale accounts...
+            Loading credit accounts...
           </p>
         </div>
       </div>
@@ -814,7 +814,7 @@ const SaleAccountsManagement = () => {
           </button>
           <div>
             <h1 className="text-3xl font-bold text-black bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-              Sale Accounts
+              Credit Accounts
             </h1>
             <p className="text-gray-600 mt-1 font-medium">
               {activeTab === "invoices"
@@ -829,7 +829,7 @@ const SaleAccountsManagement = () => {
               onClick={() => setShowModal(true)}
               className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105 font-semibold"
             >
-              <Plus size={18} /> Add Sale
+              <Plus size={18} /> Add Credit
             </button>
           )}
           <button
@@ -916,12 +916,12 @@ const SaleAccountsManagement = () => {
             <div>
               <h2 className="text-xl font-bold text-gray-900">
                 {activeTab === "invoices"
-                  ? "Sale Invoices"
+                  ? "Credit Invoices"
                   : "Receipt Vouchers"}
               </h2>
               <p className="text-gray-600 text-sm mt-1">
                 {activeTab === "invoices"
-                  ? "View sale invoices and payment status"
+                  ? "View credit invoices and payment status"
                   : "View receipt vouchers linked to invoices"}
               </p>
             </div>
@@ -1066,7 +1066,7 @@ const SaleAccountsManagement = () => {
                         : "Receipt Number",
                   },
                   { key: "date", label: "Date" },
-                  { key: "saleAmount", label: "Sale Amount" },
+                  { key: "saleAmount", label: "Credit Amount" },
                   { key: "taxAmount", label: "Tax Amount" },
                   { key: "total", label: "Total" },
                   { key: "paidAmount", label: "Paid Amount" },
@@ -1210,10 +1210,10 @@ const SaleAccountsManagement = () => {
               <div>
                 <h3 className="text-2xl font-bold text-white flex items-center gap-2">
                   <Package size={28} />
-                  Add Sale Invoice
+                  Add Credit Invoice
                 </h3>
                 <p className="text-purple-100 text-sm mt-1">
-                  Create a new sale invoice with automatic calculations
+                  Create a new credit invoice with automatic calculations
                 </p>
               </div>
               <button
@@ -1271,7 +1271,7 @@ const SaleAccountsManagement = () => {
                   hint="Select invoice date (cannot be future date)"
                 />
                 <FormInput
-                  label="Sale Amount"
+                  label="Credit Amount"
                   icon={DollarSign}
                   type="number"
                   name="saleAmount"
@@ -1295,7 +1295,7 @@ const SaleAccountsManagement = () => {
                   name="total"
                   value={formData.total}
                   readOnly
-                  hint="Sale + Tax - Return"
+                  hint="Credit + Tax - Return"
                 />
                 <FormInput
                   label="Return Amount"
@@ -1345,7 +1345,7 @@ const SaleAccountsManagement = () => {
                 </h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <div>
-                    <p className="text-xs text-gray-600 mb-1">Sale</p>
+                    <p className="text-xs text-gray-600 mb-1">Credit</p>
                     <p className="font-semibold text-gray-900">
                       {formatCurrency(formData.saleAmount || 0)}
                     </p>

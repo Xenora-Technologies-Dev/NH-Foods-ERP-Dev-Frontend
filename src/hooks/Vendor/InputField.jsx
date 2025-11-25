@@ -1,5 +1,6 @@
 import React from "react";
-import { UserPlus, Mail, Phone, MapPin, DollarSign, Percent } from "lucide-react";
+import { UserPlus, Mail, Phone, MapPin, Percent } from "lucide-react";
+import DirhamIcon from "../../assets/dirham.svg";
 
 const InputField = ({ label, name, value, onChange, error, type = "text", placeholder, icon }) => {
   const getIcon = () => {
@@ -8,7 +9,7 @@ const InputField = ({ label, name, value, onChange, error, type = "text", placeh
       case "mail": return <Mail size={16} className="text-gray-400" />;
       case "phone": return <Phone size={16} className="text-gray-400" />;
       case "map": return <MapPin size={16} className="text-gray-400" />;
-      case "dollar": return <DollarSign size={16} className="text-gray-400" />;
+      case "dollar": return <img src={DirhamIcon} alt="AED" className="w-4 h-4 text-gray-400" />;
       case "percent": return <Percent size={16} className="text-gray-400" />;
       default: return null;
     }
