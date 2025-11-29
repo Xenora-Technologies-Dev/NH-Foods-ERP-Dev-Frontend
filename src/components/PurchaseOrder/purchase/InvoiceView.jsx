@@ -16,6 +16,8 @@ const PurchaseInvoiceView = ({
   setActiveView,
   setSelectedPO,
   setCreatedPO,
+  addNotification,
+  updatePurchaseOrderStatus,   // NEW
 }) => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [profileData, setProfileData] = useState({
@@ -138,12 +140,45 @@ const PurchaseInvoiceView = ({
     pdf.save(fname);
   };
 
-  const handleBack = () => {
-    setSelectedPO && setSelectedPO(null);
-    setCreatedPO && setCreatedPO(null);
-    setActiveView && setActiveView("list");
-  };
+ const handleBack = () => {
+  setSelectedPO && setSelectedPO(null);
+  setCreatedPO && setCreatedPO(null);
+  setActiveView && setActiveView("list");
+};
 
+// Convert current Purchase Order to Invoice by approving it
+const handleConvertToInvoice = async () => {
+  try {
+    const id = po.id || po._id;
+    if (!id) {
+      addNotification &&
+        addNotification("Unable to convert: missing Purchase Order id.", "error");
+      return;
+    }
+
+    await axiosInstance.patch(`/transactions/transactions/${id}/process`, {
+      action: "approve",
+    });
+
+    const updated = { ...po, status: "APPROVED" };
+    setSelectedPO && setSelectedPO(updated);
+    setCreatedPO && setCreatedPO(updated);
+
+     // Update list in PurchaseOrderPage so status is reflected when going back
+    updatePurchaseOrderStatus && updatePurchaseOrderStatus(id, "APPROVED");
+
+    if (addNotification) {
+      addNotification("Purchase Order approved successfully", "success");
+    }
+  } catch (error) {
+    console.error("Convert PO to invoice error:", error);
+    const message =
+      error.response?.data?.message || error.message || "Unknown error";
+    if (addNotification) {
+      addNotification(`Failed to convert to invoice: ${message}`, "error");
+    }
+  }
+};
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
@@ -154,14 +189,22 @@ const PurchaseInvoiceView = ({
           <div className="flex gap-3">
             <button onClick={async () => { setIsGeneratingPDF(true); try { await generatePDF("Internal Copy"); } finally { setIsGeneratingPDF(false); document.getElementById("copy-label").innerText = "Vendor Copy"; } }} disabled={isGeneratingPDF} className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
               {isGeneratingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              {isGeneratingPDF ? "Generating…" : "Download (Internal Copy)"}
+              {isGeneratingPDF ? "Generating…" : "Download"}
             </button>
-            <button onClick={async () => { setIsGeneratingPDF(true); try { await generatePDF("Vendor Copy"); } finally { setIsGeneratingPDF(false); document.getElementById("copy-label").innerText = "Vendor Copy"; } }} disabled={isGeneratingPDF} className="flex items-center gap-2 px-5 py-2 bg-slate-600 text-white rounded hover:bg-slate-700 disabled:opacity-50">
+            {/* <button onClick={async () => { setIsGeneratingPDF(true); try { await generatePDF("Vendor Copy"); } finally { setIsGeneratingPDF(false); document.getElementById("copy-label").innerText = "Vendor Copy"; } }} disabled={isGeneratingPDF} className="flex items-center gap-2 px-5 py-2 bg-slate-600 text-white rounded hover:bg-slate-700 disabled:opacity-50">
               {isGeneratingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               {isGeneratingPDF ? "Generating…" : "Copy (Vendor Copy)"}
-            </button>
+            </button> */}
             <button onClick={() => { const w = window.open("", "_blank"); const invoiceEl = document.getElementById("invoice-content"); const now = new Date().toLocaleString("en-GB"); const printHTML = `<!doctype html><html><head><meta charset=\"utf-8\"><title>PO</title><style>@page{size:A4;margin:0}html,body{margin:0;padding:0}#invoice-content{width:210mm;height:297mm;padding:10mm;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;background:#fff}table{border-collapse:collapse;width:100%}th,td{padding:6px 8px;border:0 solid #ccc}thead th{border-bottom:2px solid #000;padding:8px}tbody td{border-bottom:1px dotted #ccc}.right{text-align:right}.center{text-align:center}.small{font-size:10px}</style></head><body>${invoiceEl.outerHTML}<script>document.querySelector('.date-time').innerText='${now}';</script></body></html>`; w.document.write(printHTML); w.document.close(); setTimeout(()=>{w.focus(); w.print(); w.close();},300); }} className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded hover:bg-green-700"><Printer className="w-4 h-4" /> Print</button>
-            <button onClick={() => alert("Sent")} className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"><Send className="w-4 h-4" /> Send</button>
+            {/* <button onClick={() => alert("Sent")} className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"><Send className="w-4 h-4" /> Send</button> */}
+            {po.status !== "APPROVED" && (
+  <button
+    onClick={handleConvertToInvoice}
+    className="flex items-center gap-2 px-5 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+  >
+    Convert to Invoice
+  </button>
+)}
           </div>
         </div>
 
@@ -221,7 +264,7 @@ const PurchaseInvoiceView = ({
               </div>
 
               <div style={{ fontWeight: 700, textDecoration: "underline", marginTop: 6, fontSize: 13 }}>
-                {isApproved ? "PURCHASE ORDER" : "PURCHASE"}
+                {isApproved ? "PURCHASE ORDER" : "PURCHASE ORDER"}
               </div>
             </div>
 

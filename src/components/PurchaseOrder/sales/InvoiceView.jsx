@@ -8,7 +8,7 @@ const pad4 = (v = "") => {
   const n = String(v || "").replace(/\D/g, "");
   return n ? n.padStart(4, "0") : "".padStart(4, "0");
 };
-
+ 
 const SaleInvoiceView = ({
   selectedSO,
   createdSO,
@@ -16,6 +16,8 @@ const SaleInvoiceView = ({
   setActiveView,
   setSelectedSO,
   setCreatedSO,
+  addNotification,
+   updateSalesOrderStatus,    // NEW
 }) => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [profileData, setProfileData] = useState({
@@ -175,7 +177,40 @@ const SaleInvoiceView = ({
     setCreatedSO(null);
     setActiveView("list");
   };
+// Convert current Sales Order to Invoice by approving it
+// Convert current Sales Order to Invoice by approving it
+const handleConvertToInvoice = async () => {
+  try {
+    const id = so.id || so._id;
+    if (!id) {
+      addNotification &&
+        addNotification("Unable to convert: missing Sales Order id.", "error");
+      return;
+    }
 
+    await axiosInstance.patch(`/transactions/transactions/${id}/process`, {
+      action: "approve",
+    });
+
+    const updated = { ...so, status: "APPROVED" };
+    setSelectedSO && setSelectedSO(updated);
+    setCreatedSO && setCreatedSO(updated);
+
+     // Update list in SalesOrderPage so status is reflected when going back
+    updateSalesOrderStatus && updateSalesOrderStatus(id, "APPROVED");
+
+    if (addNotification) {
+      addNotification("Sales Order approved successfully", "success");
+    }
+  } catch (error) {
+    console.error("Convert SO to invoice error:", error);
+    const message =
+      error.response?.data?.message || error.message || "Unknown error";
+    if (addNotification) {
+      addNotification(`Failed to convert to invoice: ${message}`, "error");
+    }
+  }
+};
   // layout JSX
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -191,6 +226,14 @@ const SaleInvoiceView = ({
             </button>
             <button onClick={handlePrint} className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded hover:bg-green-700"><Printer className="w-4 h-4" /> Print</button>
             <button onClick={() => alert("Sent")} className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"><Send className="w-4 h-4" /> Send</button>
+            {so.status !== "APPROVED" && (
+  <button
+    onClick={handleConvertToInvoice}
+    className="flex items-center gap-2 px-5 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+  >
+    Convert to Invoice
+  </button>
+)}
           </div>
         </div>
 

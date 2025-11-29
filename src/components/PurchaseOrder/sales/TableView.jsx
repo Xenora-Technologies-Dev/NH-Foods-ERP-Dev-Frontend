@@ -233,7 +233,7 @@ const TableView = ({
                         <Edit3 className="w-4 h-4" />
                       </button>
                     )}
-                    {so.status === "DRAFT" && (
+                    {/* {so.status === "DRAFT" && (
                       <button
                         onClick={() => confirmSO(so.id)}
                         className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -241,7 +241,7 @@ const TableView = ({
                       >
                         <CheckSquare className="w-4 h-4" />
                       </button>
-                    )}
+                    )} */}
                     <div className="relative group">
                       <button className="p-1.5 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">
                         <MoreVertical className="w-4 h-4" />

@@ -193,7 +193,7 @@ const TableView = ({
                     )}
 
                     {/* Approve: Only PENDING */}
-                    {po.status === "PENDING" && (
+                    {/* {po.status === "PENDING" && (
                       <button
                         onClick={() => approvePO(po.id)}
                         className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
@@ -201,7 +201,7 @@ const TableView = ({
                       >
                         <CheckSquare className="w-4 h-4" />
                       </button>
-                    )}
+                    )} */}
 
                     {/* More Actions */}
                     <div className="relative group">

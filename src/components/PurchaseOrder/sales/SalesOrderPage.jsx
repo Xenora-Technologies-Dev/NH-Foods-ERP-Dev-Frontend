@@ -274,28 +274,61 @@ const formatDisplayTransactionNo = (t) => {
   );
 
   // EDIT SO – FULLY WORKING
-  const editSO = (so) => {
-    const formItems = so.items.map((it) => {
-      const stock = getStockItemById(it.itemId) || {};
+const editSO = (so) => {
+  const formItems = (so.items || []).map((it) => {
+    const stock = getStockItemById(it.itemId) || {};
 
-      return {
-        _id: it._id || "",
-        itemId: it.itemId,
-        description: it.description,
-        itemName: stock.itemName || it.description,
-        qty: it.qty.toString(),
-        rate: it.rate  ,
-        salesPrice: (stock.salesPrice || 0).toString(),
-        purchasePrice:(stock.purchasePrice || 0).toString(),
-        vatPercent: (it.vatPercent || 5).toString(),
-        vatAmount: (it.vatAmount || 0).toString(),
-        lineTotal: (it.lineTotal || 0).toString(),
-        category: stock.category || "",
-        unitOfMeasure: stock.unitOfMeasure || "",
-        unitOfMeasureDetails: stock.unitOfMeasureDetails || {},
-        stockDetails: it.stockDetails || {},
-      };
-    });
+    // parse numeric helpers
+    const lineQty = parseFloat(it.qty) || 0;
+    const lineRateRaw = parseFloat(it.rate) || 0; // backend 'rate' is line subtotal in your save flow
+    const backendSalesPrice = it.salesPrice != null ? parseFloat(it.salesPrice) : null;
+    const backendPrice = it.price != null ? parseFloat(it.price) : null; // sometimes backend uses `price` as per-unit
+    // Determine per-unit sales price: prefer explicit salesPrice -> price -> rate/qty -> stock salesPrice
+    const perUnitPrice =
+      backendSalesPrice !== null
+        ? backendSalesPrice
+        : backendPrice !== null
+        ? backendPrice
+        : lineQty > 0
+        ? lineRateRaw / lineQty
+        : stock.salesPrice || 0;
+
+    const purchasePrice =
+      it.purchasePrice != null
+        ? parseFloat(it.purchasePrice)
+        : stock.purchasePrice || 0;
+
+    const vatPct = it.vatPercent != null ? parseFloat(it.vatPercent) : (stock.taxPercent || 5);
+    // lineTotal: prefer backend lineTotal/grandTotal -> use computed (perUnitPrice * qty) + VAT
+    const lineSubtotal = lineQty * perUnitPrice;
+    const vatAmount = it.vatAmount != null ? parseFloat(it.vatAmount) : lineSubtotal * (vatPct / 100);
+    const lineTotal = it.lineTotal != null
+      ? parseFloat(it.lineTotal)
+      : it.grandTotal != null
+      ? parseFloat(it.grandTotal)
+      : lineSubtotal + vatAmount;
+
+    return {
+      _id: it._id || "",
+      itemId: it.itemId,
+      description: it.description || stock.itemName || "",
+      itemName: stock.itemName || it.description || "",
+      qty: lineQty ? lineQty.toString() : (it.qty ?? "").toString(),
+      // IMPORTANT: set `rate` and `salesPrice` to per-unit price (string) — form expects per-unit
+      rate: perUnitPrice.toString(),
+      salesPrice: perUnitPrice.toString(),
+      purchasePrice: purchasePrice.toString(),
+      vatPercent: vatPct.toString(),
+      vatAmount: vatAmount.toFixed(2).toString(),
+      lineTotal: parseFloat(lineTotal).toFixed(2).toString(),
+      category: stock.category || "",
+      unitOfMeasure: stock.unitOfMeasure || "",
+      unitOfMeasureDetails: stock.unitOfMeasureDetails || {},
+      stockDetails: it.stockDetails || {},
+      currentStock: typeof stock.currentStock === "number" ? stock.currentStock : 0,
+    };
+  });
+
 
     setFormData({
       transactionNo: so.transactionNo,
@@ -677,7 +710,16 @@ const formatDisplayTransactionNo = (t) => {
       );
     }
   };
-
+// Update a single SO in local list state (used when approving from invoice view)
+const updateSalesOrderStatus = (id, newStatus) => {
+  setSalesOrders((prev) =>
+    prev.map((so) =>
+      so.id === id || so._id === id
+        ? { ...so, status: newStatus }
+        : so
+    )
+  );
+};
   // Generate invoice PDF for a given SO and copy type from the list views
   const downloadInvoiceCopy = async (so, copyType) => {
     try {
@@ -1303,6 +1345,8 @@ const formatDisplayTransactionNo = (t) => {
                 createdSO={createdSO}
                 setSelectedSO={setSelectedSO}
                 setCreatedSO={setCreatedSO}
+                addNotification={addNotification} // NEW
+                 updateSalesOrderStatus={updateSalesOrderStatus} // NEW
               />
             )}
           </>

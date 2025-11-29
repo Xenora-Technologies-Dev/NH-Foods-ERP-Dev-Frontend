@@ -1021,7 +1021,16 @@ const PurchaseOrderManagement = () => {
       );
     }
   };
-
+// Update a single PO in local list state (used when approving from invoice view)
+const updatePurchaseOrderStatus = (id, newStatus) => {
+  setPurchaseOrders((prev) =>
+    prev.map((po) =>
+      po.id === id || po._id === id
+        ? { ...po, status: newStatus }
+        : po
+    )
+  );
+};
   // Reject PO
   const rejectPO = async (id) => {
     try {
@@ -1307,9 +1316,11 @@ const PurchaseOrderManagement = () => {
                 createdPO={createdPO}
                 setSelectedPO={setSelectedPO}
                 setCreatedPO={setCreatedPO}
+                addNotification={addNotification} 
+                updatePurchaseOrderStatus={updatePurchaseOrderStatus} // NEW
               />
             )}
-          </>
+          </> 
         )}
       </div>
     </div>
