@@ -152,9 +152,19 @@ const Sidebar = () => {
             to: "/purchase-order",
           },
           {
+            icon: <ShoppingCart strokeWidth={1.5} size={20} />,
+            text: "Approved Purchase",
+            to: "/approved-purchase",
+          },
+          {
             icon: <FileText strokeWidth={1.5} size={20} />,
             text: "Sales Order",
             to: "/sales-order",
+          },
+          {
+            icon: <FileText strokeWidth={1.5} size={20} />,
+            text: "Approved Sales",
+            to: "/approved-sales",
           },
           {
             icon: <ArrowLeftRight strokeWidth={1.5} size={20} />,

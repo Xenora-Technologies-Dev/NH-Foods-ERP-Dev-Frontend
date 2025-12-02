@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Download, Loader2, Printer, Send } from "lucide-react";
 import axiosInstance from "../../../axios/axios";
+import { createApproveBody } from '../../../utils/orderUtils';
 import { formatNumber, formatDateGB, decimalSum } from "../../../utils/format";
 
 const pad4 = (v = "") => {
@@ -86,17 +87,19 @@ const PurchaseInvoiceView = ({
 
   // invoice meta: not editable in UI (display-only)
   const [invoiceMeta, setInvoiceMeta] = useState({
-    // Prefer explicit vendorReference, then refNo
-    reference: po.vendorReference ?? po.refNo ?? "",
-    poNo: isApproved ? (po.displayTransactionNo || po.transactionNo) : po.transactionNo,
+    // Prefer explicit vendorReference, then refNo, fallback '-'
+    reference: (po.vendorReference ?? po.refNo ?? '-') || '-',
+    // Always show only PO number without INV suffix
+    poNo: po.transactionNo || po.displayTransactionNo || '',
     paymentTerms: vendor.paymentTerms || "COD",
   });
 
   useEffect(() => {
     setInvoiceMeta((m) => ({
       ...m,
-      reference: (po.vendorReference ?? po.refNo ?? m.reference ?? ""),
-      poNo: isApproved ? (po.displayTransactionNo || po.transactionNo) : po.transactionNo,
+      reference: (po.vendorReference ?? po.refNo ?? m.reference ?? '-') || '-',
+      // Show PO number only; do not append invoice number into PO No field
+      poNo: po.transactionNo || po.displayTransactionNo || m.poNo || '',
       paymentTerms: vendor.paymentTerms || m.paymentTerms || "COD",
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -156,9 +159,7 @@ const handleConvertToInvoice = async () => {
       return;
     }
 
-    await axiosInstance.patch(`/transactions/transactions/${id}/process`, {
-      action: "approve",
-    });
+    await axiosInstance.patch(`/transactions/transactions/${id}/process`, createApproveBody());
 
     const updated = { ...po, status: "APPROVED" };
     setSelectedPO && setSelectedPO(updated);
@@ -187,15 +188,47 @@ const handleConvertToInvoice = async () => {
             <ArrowLeft className="w-4 h-4" /> Back to List
           </button>
           <div className="flex gap-3">
-            <button onClick={async () => { setIsGeneratingPDF(true); try { await generatePDF("Internal Copy"); } finally { setIsGeneratingPDF(false); document.getElementById("copy-label").innerText = "Vendor Copy"; } }} disabled={isGeneratingPDF} className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
+            <button
+              onClick={async () => {
+                setIsGeneratingPDF(true);
+                try {
+                  await generatePDF("Internal Copy");
+                  await generatePDF("Vendor Copy");
+                } finally {
+                  setIsGeneratingPDF(false);
+                  document.getElementById("copy-label").innerText = "Vendor Copy";
+                }
+              }}
+              disabled={isGeneratingPDF}
+              className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            >
               {isGeneratingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              {isGeneratingPDF ? "Generating…" : "Download"}
+              {isGeneratingPDF ? "Generating…" : "Download (Internal + Vendor)"}
             </button>
-            {/* <button onClick={async () => { setIsGeneratingPDF(true); try { await generatePDF("Vendor Copy"); } finally { setIsGeneratingPDF(false); document.getElementById("copy-label").innerText = "Vendor Copy"; } }} disabled={isGeneratingPDF} className="flex items-center gap-2 px-5 py-2 bg-slate-600 text-white rounded hover:bg-slate-700 disabled:opacity-50">
-              {isGeneratingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              {isGeneratingPDF ? "Generating…" : "Copy (Vendor Copy)"}
-            </button> */}
-            <button onClick={() => { const w = window.open("", "_blank"); const invoiceEl = document.getElementById("invoice-content"); const now = new Date().toLocaleString("en-GB"); const printHTML = `<!doctype html><html><head><meta charset=\"utf-8\"><title>PO</title><style>@page{size:A4;margin:0}html,body{margin:0;padding:0}#invoice-content{width:210mm;height:297mm;padding:10mm;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;background:#fff}table{border-collapse:collapse;width:100%}th,td{padding:6px 8px;border:0 solid #ccc}thead th{border-bottom:2px solid #000;padding:8px}tbody td{border-bottom:1px dotted #ccc}.right{text-align:right}.center{text-align:center}.small{font-size:10px}</style></head><body>${invoiceEl.outerHTML}<script>document.querySelector('.date-time').innerText='${now}';</script></body></html>`; w.document.write(printHTML); w.document.close(); setTimeout(()=>{w.focus(); w.print(); w.close();},300); }} className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded hover:bg-green-700"><Printer className="w-4 h-4" /> Print</button>
+            <button
+              onClick={() => {
+                // open two print windows sequentially: Internal then Vendor
+                const invoiceEl = document.getElementById("invoice-content");
+                const now = new Date().toLocaleString("en-GB");
+                const doPrint = (copyLabel) => {
+                  document.getElementById("copy-label").innerText = copyLabel;
+                  const w = window.open("", "_blank");
+                  const printHTML = `<!doctype html><html><head><meta charset=\"utf-8\"><title>PO</title><style>@page{size:A4;margin:0}html,body{margin:0;padding:0}#invoice-content{width:210mm;height:297mm;padding:10mm;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;background:#fff}table{border-collapse:collapse;width:100%}th,td{padding:6px 8px;border:0 solid #ccc}thead th{border-bottom:2px solid #000;padding:8px}tbody td{border-bottom:1px dotted #ccc}.right{text-align:right}.center{text-align:center}.small{font-size:10px}</style></head><body>${invoiceEl.outerHTML}<script>document.querySelector('.date-time').innerText='${now}';</script></body></html>`;
+                  w.document.write(printHTML);
+                  w.document.close();
+                  setTimeout(() => { w.focus(); w.print(); w.close(); }, 300);
+                };
+                try {
+                  doPrint("Internal Copy");
+                  setTimeout(() => doPrint("Vendor Copy"), 1200);
+                } catch (e) {
+                  console.error(e);
+                }
+              }}
+              className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              <Printer className="w-4 h-4" /> Print (Internal + Vendor)
+            </button>
             {/* <button onClick={() => alert("Sent")} className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"><Send className="w-4 h-4" /> Send</button> */}
             {po.status !== "APPROVED" && (
   <button

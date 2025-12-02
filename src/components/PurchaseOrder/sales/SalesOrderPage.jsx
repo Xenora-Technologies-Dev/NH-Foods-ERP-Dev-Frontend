@@ -183,27 +183,31 @@ const SalesOrderManagement = () => {
       });
 
       const transactions = response.data?.data || [];
+      // Exclude APPROVED orders from the main Sales list unless user explicitly selects status=APPROVED
+      const txs = statusFilter === "ALL" ? transactions.filter((t) => t.status !== "APPROVED") : transactions;
       // DEBUG: Log raw backend rows for LPO/DOC/Discount audit
       //console.log("[FETCH SO LIST] rows:", transactions.map(t => ({ id: t._id, lpono: t.lpono ?? t.refNo, docno: t.docno ?? t.docNo, discount: t.discount })));
       console.log("Transaction Fetch from backend "+transactions);
-      // helper to format invoice number for APPROVED orders:
-// remove leading SO (case-insensitive), keep digits, pad to 4 chars (e.g. SO277 -> 0277)
-const formatDisplayTransactionNo = (t) => {
-  try {
-    if (t.status === "APPROVED" && t.transactionNo) {
-      // remove non-digits (and optional SO prefix)
-      const digits = String(t.transactionNo).replace(/^SO/i, "").replace(/\D/g, "");
-      if (!digits) return t.transactionNo;
-      return digits.padStart(4, "0"); // 277 -> 0277
-    }
-    return t.transactionNo;
-  } catch (e) {
-    return t.transactionNo;
-  }
-};
+      // helper to format display number for APPROVED orders:
+      // If SOYYYYMM-NNNNN pattern, show NNNNN; otherwise keep digits padded to 5
+      const formatDisplayTransactionNo = (t) => {
+        try {
+          const tx = t.transactionNo || '';
+          if (t.status === 'APPROVED' && tx) {
+            const m = String(tx).match(/^SO\d{6}-(\d{5})$/i);
+            if (m) return m[1];
+            const digits = String(tx).replace(/\D/g, '');
+            if (!digits) return tx;
+            return digits.slice(-5).padStart(5, '0');
+          }
+          return tx;
+        } catch (e) {
+          return t.transactionNo;
+        }
+      };
 
-      setSalesOrders(
-  transactions.map((t) => {
+        setSalesOrders(
+      txs.map((t) => {
     const displayTransactionNo = formatDisplayTransactionNo(t);
     return {
       id: t._id,
@@ -449,10 +453,14 @@ const editSO = (so) => {
   const filteredAndSortedSOs = useMemo(
     () => () => {
       let filtered = salesOrders.filter((so) => {
+        const txNo = String(so.transactionNo || "").toLowerCase();
+        const custName = String(so.customerName || "").toLowerCase();
+        const createdBy = String(so.createdBy || "").toLowerCase();
+        const term = String(searchTerm || "").toLowerCase();
         const matchesSearch =
-          so.transactionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          so.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          so.createdBy?.toLowerCase().includes(searchTerm.toLowerCase());
+          txNo.includes(term) ||
+          custName.includes(term) ||
+          createdBy.includes(term);
 
         const matchesStatus =
           statusFilter === "ALL" || so.status === statusFilter;
@@ -712,13 +720,16 @@ const editSO = (so) => {
   };
 // Update a single SO in local list state (used when approving from invoice view)
 const updateSalesOrderStatus = (id, newStatus) => {
-  setSalesOrders((prev) =>
-    prev.map((so) =>
+  setSalesOrders((prev) => {
+    if (newStatus === "APPROVED") {
+      return prev.filter((so) => so.id !== id && so._id !== id);
+    }
+    return prev.map((so) =>
       so.id === id || so._id === id
-        ? { ...so, status: newStatus }
+        ? { ...so, status: newStatus, approvedAt: new Date().toISOString() }
         : so
-    )
-  );
+    );
+  });
 };
   // Generate invoice PDF for a given SO and copy type from the list views
   const downloadInvoiceCopy = async (so, copyType) => {

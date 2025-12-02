@@ -2,12 +2,14 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { ArrowLeft, Download, Loader2, Printer, Send } from "lucide-react";
 import axiosInstance from "../../../axios/axios";
+import { createApproveBody } from '../../../utils/orderUtils';
 import { formatNumber, formatDateGB, decimalSum } from "../../../utils/format";
 
+
 const pad4 = (v = "") => {
-  const n = String(v || "").replace(/\D/g, "");
-  return n ? n.padStart(4, "0") : "".padStart(4, "0");
-};
+    const n = String(v || "").replace(/\D/g, "");
+    return n ? n.padStart(4, "0") : "".padStart(4, "0");
+  };
  
 const SaleInvoiceView = ({
   selectedSO,
@@ -83,24 +85,48 @@ const SaleInvoiceView = ({
   const customer = customers.find((c) => c._id === so.customerId) || {};
   const isApproved = so.status === "APPROVED";
 
+  const deriveInvoiceNo = (soObj) => {
+    try {
+      if (!isApproved) return '';
+      const orderNo = soObj.orderNumber || soObj.transactionNo || '';
+      console.log(soObj);
+      // Auto pattern SOYYYYMM-NNNNN -> extract NNNNN
+      const m = String(orderNo).match(/^SO\d{6}-(\d{5})$/i);
+      if (m) return m[1];
+      // If backend sent invoiceNumber/transactionNumber explicitly, use its last 5 digits if present
+      const invRaw = soObj.invoiceNumber || soObj.transactionNumber || '';
+      if (invRaw) {
+        const digits = String(invRaw).replace(/\D/g, '');
+        if (digits.length >= 5) return digits.slice(-5);
+        if (digits) return digits.padStart(5, '0');
+      }
+      // Manual mode or unknown format: use order number as-is
+      return orderNo || '';
+    } catch {
+      return '';
+    }
+  };
+
   // invoice meta: not editable in UI (display-only)
   const [invoiceMeta, setInvoiceMeta] = useState({
-    invoiceNo: pad4(so.invoiceNumber || so.displayTransactionNo || ""),
-    soNo: isApproved ? (so.displayTransactionNo || so.transactionNo) : so.transactionNo,
-    lpoOrRef: so.refNo ?? so.lpono ?? "",
-    docNo: so.docNo ?? so.docno ?? "",
-    paymentTerms: customer.paymentTerms || "COD",
+    invoiceNo: deriveInvoiceNo(so),
+    soNo: so.orderNumber || so.transactionNo || '',
+    lpoOrRef: (so.refNo ?? so.lpono ?? '-') || '-',
+    docNo: (so.docNo ?? so.docno ?? '-') || '-',
+    paymentTerms: customer.paymentTerms || 'COD',
   });
 
   useEffect(() => {
     setInvoiceMeta((m) => ({
       ...m,
-      invoiceNo: pad4(so.invoiceNumber || so.displayTransactionNo || m.invoiceNo),
-      soNo: isApproved ? (so.displayTransactionNo || so.transactionNo) : so.transactionNo,
-      lpoOrRef: (so.refNo ?? so.lpono ?? m.lpoOrRef ?? ""),
-      docNo: (so.docNo ?? so.docno ?? m.docNo ?? ""),
-      paymentTerms: customer.paymentTerms || m.paymentTerms || "COD",
+      invoiceNo: deriveInvoiceNo(so) || m.invoiceNo,
+      soNo: so.orderNumber || so.transactionNo || m.soNo || '',
+      lpoOrRef: (so.refNo ?? so.lpono ?? m.lpoOrRef ?? '-') || '-',
+      docNo: (so.docNo ?? so.docno ?? m.docNo ?? '-') || '-',
+      paymentTerms: customer.paymentTerms || m.paymentTerms || 'COD',
     }));
+    console.log("Invoice Meta Updated:", invoiceMeta);
+    console.log(so);  
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [so, customer, isApproved]);
 
@@ -136,7 +162,7 @@ const SaleInvoiceView = ({
     const ratio = Math.min(pdfW / canvas.width, pdfH / canvas.height);
     const w = canvas.width * ratio, h = canvas.height * ratio;
     pdf.addImage(img, "PNG", (pdfW - w) / 2, (pdfH - h) / 2, w, h);
-    const fname = `${isApproved ? "INV" : "SO"}_${invoiceMeta.invoiceNo || (so.displayTransactionNo || so.transactionNo)}_${copyType.replace(/\s+/g, "_")}.pdf`;
+    const fname = `${isApproved ? "INV" : "SO"}_${invoiceMeta.invoiceNo}_${copyType.replace(/\s+/g, "_")}.pdf`;
     pdf.save(fname);
   };
 
@@ -188,9 +214,7 @@ const handleConvertToInvoice = async () => {
       return;
     }
 
-    await axiosInstance.patch(`/transactions/transactions/${id}/process`, {
-      action: "approve",
-    });
+    await axiosInstance.patch(`/transactions/transactions/${id}/process`, createApproveBody());
 
     const updated = { ...so, status: "APPROVED" };
     setSelectedSO && setSelectedSO(updated);
@@ -325,7 +349,7 @@ const handleConvertToInvoice = async () => {
             <div style={{ width: "38%", textAlign: "right", fontSize: 11 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ textAlign: "left", minWidth: 100 }}>
-                  <div style={{ fontWeight: 700 }}>Invoice:</div>
+                  {isApproved && <div style={{ fontWeight: 700 }}>Invoice:</div>}
                   <div style={{ fontWeight: 700, marginTop: 6 }}>Date:</div>
                   <div style={{ fontWeight: 700, marginTop: 6 }}>SO No</div>
                   <div style={{ fontWeight: 700, marginTop: 6 }}>LPO</div>
@@ -333,7 +357,9 @@ const handleConvertToInvoice = async () => {
                   <div style={{ fontWeight: 700, marginTop: 6 }}>Payment Terms</div>
                 </div>
                 <div style={{ textAlign: "right", minWidth: 110 }}>
-                  <div style={{ marginBottom: 2, fontWeight: 700 }}>{invoiceMeta.invoiceNo}</div>
+                  {isApproved && (
+                    <div style={{ marginBottom: 2, fontWeight: 700 }}>{invoiceMeta.invoiceNo}</div>
+                  )}
                   <div style={{ marginTop: 6 }}>{formatDateGB(so.date)}</div>
                   <div style={{ marginTop: 6 }}>{invoiceMeta.soNo}</div>
                   <div style={{ marginTop: 6 }}>{invoiceMeta.lpoOrRef}</div>

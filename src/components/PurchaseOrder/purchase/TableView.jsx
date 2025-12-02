@@ -27,14 +27,18 @@ const TableView = ({
   editPO,
   approvePO,
   deletePO,
+  showApprovedAt = false,
+  showSelection = true,
 }) => {
   const toggleSelect = (id) => {
+    if (!showSelection) return;
     setSelectedPOs((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   };
 
   const toggleSelectAll = () => {
+    if (!showSelection) return;
     if (selectedPOs.length === paginatedPOs.length) {
       setSelectedPOs([]);
     } else {
@@ -48,17 +52,19 @@ const TableView = ({
         <table className="w-full">
           <thead>
             <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-              <th className="px-4 py-4 text-left">
-                <input
-                  type="checkbox"
-                  checked={
-                    selectedPOs.length === paginatedPOs.length &&
-                    paginatedPOs.length > 0
-                  }
-                  onChange={toggleSelectAll}
-                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-              </th>
+              {showSelection && (
+                <th className="px-4 py-4 text-left">
+                  <input
+                    type="checkbox"
+                    checked={
+                      selectedPOs.length === paginatedPOs.length &&
+                      paginatedPOs.length > 0
+                    }
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </th>
+              )}
               <th
                 onClick={() => handleSort("transactionNo")}
                 className="px-4 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider cursor-pointer hover:bg-slate-200 transition-colors"
@@ -77,6 +83,11 @@ const TableView = ({
               >
                 Date
               </th>
+              {showApprovedAt && (
+                <th className="px-4 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  Approved At
+                </th>
+              )}
               <th
                 onClick={() => handleSort("amount")}
                 className="px-4 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider cursor-pointer hover:bg-slate-200 transition-colors"
@@ -105,21 +116,23 @@ const TableView = ({
                   selectedPOs.includes(po.id) ? "bg-blue-50" : ""
                 }`}
               >
-                <td className="px-4 py-4">
-                  <input
-                    type="checkbox"
-                    checked={selectedPOs.includes(po.id)}
-                    onChange={() => toggleSelect(po.id)}
-                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                  />
-                </td>
+                {showSelection && (
+                  <td className="px-4 py-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedPOs.includes(po.id)}
+                      onChange={() => toggleSelect(po.id)}
+                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </td>
+                )}
                 <td className="px-4 py-4">
                   <div className="flex items-center space-x-2">
                     <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
                       <HashIcon className="w-4 h-4 text-blue-600" />
                     </div>
                     <span className="font-medium text-slate-900">
-                      {po.transactionNo}
+                      {po.orderNumber || po.transactionNo}
                     </span>
                   </div>
                 </td>
@@ -143,6 +156,11 @@ const TableView = ({
                 <td className="px-4 py-4 text-sm text-slate-700">
                   {new Date(po.date).toLocaleDateString()}
                 </td>
+                {showApprovedAt && (
+                  <td className="px-4 py-4 text-sm text-slate-700">
+                    {po.approvedAt ? new Date(po.approvedAt).toLocaleString() : "-"}
+                  </td>
+                )}
                 <td className="px-4 py-4 font-semibold text-slate-900">
                   AED {po.totalAmount}
                 </td>

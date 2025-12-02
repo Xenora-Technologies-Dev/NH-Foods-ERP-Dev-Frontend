@@ -26,7 +26,8 @@ axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Only attempt refresh in non-test environments to avoid network calls during unit tests
+    if (process.env.NODE_ENV !== 'test' && error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
         const { data } = await axios.post(
@@ -36,7 +37,8 @@ axiosInstance.interceptors.response.use(
         );
         if (data.success && data.data?.accessToken) {
           const newAccessToken = data.data.accessToken;
-          sessionStorage.setItem("accessToken", newAccessToken); // Store in sessionStorage
+          try { sessionStorage.setItem("accessToken", newAccessToken); } catch (e) {}
+          originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
           return axiosInstance(originalRequest);
         } else {
@@ -44,9 +46,11 @@ axiosInstance.interceptors.response.use(
         }
       } catch (refreshError) {
         console.error("Token refresh failed:", refreshError);
-        sessionStorage.removeItem("accessToken"); // Clear from sessionStorage
-        // Redirect to login on refresh failure
-        window.location.href = "/";
+        try { sessionStorage.removeItem("accessToken"); } catch (e) {}
+        // In browser (non-test) redirect to login on refresh failure
+        if (typeof window !== 'undefined') {
+          window.location.href = "/";
+        }
         return Promise.reject(refreshError);
       }
     }

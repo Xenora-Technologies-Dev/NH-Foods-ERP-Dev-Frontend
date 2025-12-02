@@ -29,6 +29,8 @@ const TableView = ({
   deleteSO,
   onDownloadInternal,
   onDownloadCustomer,
+  showApprovedAt = false,
+  showSelection = true,
 }) => {
   console.log(paginatedSOs)
   return (
@@ -37,23 +39,25 @@ const TableView = ({
         <table className="w-full">
           <thead className="bg-slate-50/80 border-b border-slate-200">
             <tr>
-              <th className="px-4 py-4 text-left">
-                <input
-                  type="checkbox"
-                  className="rounded border-slate-300"
-                  checked={
-                    selectedSOs.length === paginatedSOs.length &&
-                    paginatedSOs.length > 0
-                  }
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedSOs(paginatedSOs.map((so) => so.id));
-                    } else {
-                      setSelectedSOs([]);
-                    }
-                  }}
-                />
-              </th>
+                {showSelection && (
+                  <th className="px-4 py-4 text-left">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300"
+                      checked={
+                        selectedSOs.length === paginatedSOs.length &&
+                        paginatedSOs.length > 0
+                      }
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedSOs(paginatedSOs.map((so) => so.id));
+                        } else {
+                          setSelectedSOs([]);
+                        }
+                      }}
+                    />
+                  </th>
+                )}
               <th className="px-4 py-4 text-left">
                 <button
                   onClick={() => handleSort("id")}
@@ -96,6 +100,11 @@ const TableView = ({
                     ))}
                 </button>
               </th>
+              {showApprovedAt && (
+                <th className="px-4 py-4 text-left">
+                  <span className="text-sm font-semibold text-slate-700">Approved At</span>
+                </th>
+              )}
               <th className="px-4 py-4 text-left">
                 <span className="text-sm font-semibold text-slate-700">
                   Status
@@ -128,22 +137,24 @@ const TableView = ({
                 key={i}
                 className="hover:bg-slate-50/50 transition-colors"
               >
-                <td className="px-4 py-4">
-                  <input
-                    type="checkbox"
-                    className="rounded border-slate-300"
-                    checked={selectedSOs.includes(so.id)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedSOs((prev) => [...prev, so.id]);
-                      } else {
-                        setSelectedSOs((prev) =>
-                          prev.filter((id) => id !== so.id)
-                        );
-                      }
-                    }}
-                  />
-                </td>
+                {showSelection && (
+                  <td className="px-4 py-4">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300"
+                      checked={selectedSOs.includes(so.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedSOs((prev) => [...prev, so.id]);
+                        } else {
+                          setSelectedSOs((prev) =>
+                            prev.filter((id) => id !== so.id)
+                          );
+                        }
+                      }}
+                    />
+                  </td>
+                )}
                 <td className="px-4 py-4">
                   <div className="flex items-center space-x-3">
                     <div
@@ -153,10 +164,19 @@ const TableView = ({
                     ></div>
                     <div>
                       <p className="font-medium text-slate-900">
-  {so.status === "APPROVED"
-    ? (so.displayTransactionNo ?? so.transactionNo)
-    : so.transactionNo}
-</p>
+                        {(() => {
+                          // For DRAFT SOs, display orderNumber, fallback to a display-friendly transaction number
+                          if (so.status !== "APPROVED") {
+                            return so.orderNumber || so.displayTransactionNo || "";
+                          }
+
+                          // For APPROVED SOs, show order number and invoice number
+                          const orderNum = so.orderNumber || "";
+                          const invoiceNum = so.invoiceNumber || so.transactionNumber || so.displayTransactionNo || "";
+                          
+                          return invoiceNum ? `${orderNum} • INV:${invoiceNum}` : orderNum;
+                        })()}
+                      </p>
 
                       <p className="text-xs text-slate-500">{so.createdBy}</p>
                     </div>
@@ -180,6 +200,11 @@ const TableView = ({
                     </p>
                   </div>
                 </td>
+                {showApprovedAt && (
+                  <td className="px-4 py-4">
+                    {so.approvedAt ? new Date(so.approvedAt).toLocaleString() : "-"}
+                  </td>
+                )}
                 <td className="px-4 py-4">
                   <div className="flex flex-col space-y-1">
                     <div

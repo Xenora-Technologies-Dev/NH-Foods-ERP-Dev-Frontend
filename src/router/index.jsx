@@ -12,7 +12,9 @@ import Settings from "../components/Settings/Settings.jsx";
 import NotFound from "../components/NotFound.jsx";
 import ERPLogin from "../components/Login/Login.jsx";
 import PurchaseOrderPage from "../components/PurchaseOrder/purchase/PurchaseOrderPage.jsx";
+import ApprovedPurchase from "../components/PurchaseOrder/purchase/ApprovedPurchase.jsx";
 import SalesOrderPage from "../components/PurchaseOrder/sales/SalesOrderPage.jsx";
+import ApprovedSales from "../components/PurchaseOrder/sales/ApprovedSales.jsx";
 import InventoryManagement from "../components/Inventory/InventoryManagement.jsx";
 import PurchaseReturnPage from "../components/PurchaseOrder/purchaseReturn/PurchaseOrderPage.jsx";
 import SalesReturnPage from "../components/PurchaseOrder/salesReturn/SalesOrderPage.jsx";
@@ -43,7 +45,9 @@ export default function AdminRouter() {
         <Route path="/staff-records" element={<Staff />} />{" "}
         <Route path="/settings" element={<Settings />} />{" "}
         <Route path="/purchase-order" element={<PurchaseOrderPage />} />{" "}
+        <Route path="/approved-purchase" element={<ApprovedPurchase />} />{" "}
         <Route path="/sales-order" element={<SalesOrderPage />} />{" "}
+        <Route path="/approved-sales" element={<ApprovedSales />} />{" "}
         <Route path="/inventory" element={<InventoryManagement />} />{" "}
         <Route path="/purchase-return" element={<PurchaseReturnPage />} />{" "}
         <Route path="/sales-return" element={<SalesReturnPage />} />{" "}

@@ -134,4 +134,42 @@ describe('SaleInvoiceView', () => {
     expect(baseProps.setCreatedSO).toHaveBeenCalledWith(null);
     expect(baseProps.setActiveView).toHaveBeenCalledWith('list');
   });
+
+  it('hides Invoice field when SO is not approved', () => {
+    render(<SaleInvoiceView {...baseProps} />);
+    // Should not render the label "Invoice:" block in DRAFT state
+    expect(screen.queryByText(/Invoice:/i)).not.toBeInTheDocument();
+  });
+
+  it('shows 5-digit invoice number when approved with auto SO format', () => {
+    const approved = {
+      ...baseProps,
+      createdSO: {
+        ...baseProps.createdSO,
+        status: 'APPROVED',
+        transactionNo: 'SO202512-01234',
+        orderNumber: 'SO202512-01234',
+      },
+    };
+    render(<SaleInvoiceView {...approved} />);
+    // Invoice label visible and number is NNNNN part of SO
+    expect(screen.getByText(/Invoice:/i)).toBeInTheDocument();
+    expect(screen.getByText('01234')).toBeInTheDocument();
+  });
+
+  it('uses manual SO number as invoice number when approved and not matching auto pattern', () => {
+    const approvedManual = {
+      ...baseProps,
+      createdSO: {
+        ...baseProps.createdSO,
+        status: 'APPROVED',
+        transactionNo: 'CUSTOM-SO-ABC',
+        orderNumber: 'CUSTOM-SO-ABC',
+      },
+    };
+    render(<SaleInvoiceView {...approvedManual} />);
+    // Invoice should display the same manual value
+    expect(screen.getByText(/Invoice:/i)).toBeInTheDocument();
+    expect(screen.getByText('CUSTOM-SO-ABC')).toBeInTheDocument();
+  });
 });
