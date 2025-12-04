@@ -170,7 +170,7 @@ const ApprovedSales = () => {
       <div className="relative bg-white/80 backdrop-blur-xl shadow-xl border-b border-gray-200/50">
         <div className="px-8 py-6 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-slate-800">Approved Sales</h1>
+            <h1 className="text-3xl font-bold text-slate-800">Sales Invoice</h1>
             <p className="text-slate-600 mt-1">Only approved invoices are listed here</p>
           </div>
           <button onClick={() => fetchTransactions()} className="p-3 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">

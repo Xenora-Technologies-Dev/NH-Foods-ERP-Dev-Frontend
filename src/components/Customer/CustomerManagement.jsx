@@ -301,10 +301,10 @@ const CustomerManagement = () => {
       };
 
       if (editCustomerId) {
-        await axiosInstance.put(`/customers/${editCustomerId}`, payload);
+        await axiosInstance.put(`/customers/customers/${editCustomerId}`, payload);
         showToastMessage("Customer updated successfully!", "success");
       } else {
-        const response = await axiosInstance.post("/customers", payload);
+        const response = await axiosInstance.post("/customers/customers", payload);
         fetchCustomers();
         showToastMessage("Customer created successfully!", "success");
       }
@@ -376,7 +376,7 @@ const CustomerManagement = () => {
     setDeleteConfirmation((prev) => ({ ...prev, isDeleting: true }));
 
     try {
-      await axiosInstance.delete(`/customers/${deleteConfirmation.customerId}`);
+      await axiosInstance.delete(`/customers/customers/${deleteConfirmation.customerId}`);
       setCustomers((prev) =>
         prev.filter(
           (customer) => customer._id !== deleteConfirmation.customerId

@@ -153,7 +153,7 @@ const Sidebar = () => {
           },
           {
             icon: <ShoppingCart strokeWidth={1.5} size={20} />,
-            text: "Approved Purchase",
+            text: "Purchase Entry",
             to: "/approved-purchase",
           },
           {
@@ -163,7 +163,7 @@ const Sidebar = () => {
           },
           {
             icon: <FileText strokeWidth={1.5} size={20} />,
-            text: "Approved Sales",
+            text: "Sales Invoice",
             to: "/approved-sales",
           },
           {

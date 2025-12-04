@@ -341,7 +341,7 @@ const handleConvertToInvoice = async () => {
               <div style={{ marginTop: 6 }}>{customer.customerId || ""}</div>
               <div style={{ fontWeight: 700, marginTop: 6 }}>{customer.customerName || ""}</div>
               <div style={{ marginTop: 4 }}>{customer.billingAddress || profileData.addressLine1}</div>
-              <div style={{ marginTop: 4 }}>TEL: {customer.phone || profileData.phoneNumber}, Email: {customer.email || profileData.email}</div>
+              <div style={{ marginTop: 4 }}>Email: {customer.email || profileData.email}</div>
               <div style={{ marginTop: 4 }}>VAT Reg. No: {customer.trnNumber || ""}</div>
             </div>
 

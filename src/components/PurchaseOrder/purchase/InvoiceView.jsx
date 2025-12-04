@@ -125,11 +125,10 @@ const PurchaseInvoiceView = ({
   const decimalWords = numberToWords(Math.round((grossAmount % 1) * 100));
   const amountInWords = `${numberToWords(Math.floor(grossAmount))} Dirhams and ${decimalWords} Fils Only`;
 
-  // pdf generation
-  const generatePDF = async (copyType) => {
+  // pdf generation (single copy only for PO)
+  const generatePDF = async () => {
     const html2canvas = (await import("html2canvas")).default;
     const { jsPDF } = await import("jspdf");
-    document.getElementById("copy-label").innerText = copyType;
     await new Promise((r) => setTimeout(r, 80));
     const el = document.getElementById("invoice-content");
     const canvas = await html2canvas(el, { scale: 3, useCORS: true, backgroundColor: "#fff" });
@@ -139,7 +138,7 @@ const PurchaseInvoiceView = ({
     const ratio = Math.min(pdfW / canvas.width, pdfH / canvas.height);
     const w = canvas.width * ratio, h = canvas.height * ratio;
     pdf.addImage(img, "PNG", (pdfW - w) / 2, (pdfH - h) / 2, w, h);
-    const fname = `${isApproved ? "PINV" : "PO"}_${invoiceMeta.invoiceNo || (po.displayTransactionNo || po.transactionNo)}_${copyType.replace(/\s+/g, "_")}.pdf`;
+    const fname = `${isApproved ? "PINV" : "PO"}_${po.displayTransactionNo || po.transactionNo}.pdf`;
     pdf.save(fname);
   };
 
@@ -192,42 +191,30 @@ const handleConvertToInvoice = async () => {
               onClick={async () => {
                 setIsGeneratingPDF(true);
                 try {
-                  await generatePDF("Internal Copy");
-                  await generatePDF("Vendor Copy");
+                  await generatePDF();
                 } finally {
                   setIsGeneratingPDF(false);
-                  document.getElementById("copy-label").innerText = "Vendor Copy";
                 }
               }}
               disabled={isGeneratingPDF}
               className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
             >
               {isGeneratingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              {isGeneratingPDF ? "Generating…" : "Download (Internal + Vendor)"}
+              {isGeneratingPDF ? "Generating…" : "Download"}
             </button>
             <button
               onClick={() => {
-                // open two print windows sequentially: Internal then Vendor
                 const invoiceEl = document.getElementById("invoice-content");
                 const now = new Date().toLocaleString("en-GB");
-                const doPrint = (copyLabel) => {
-                  document.getElementById("copy-label").innerText = copyLabel;
-                  const w = window.open("", "_blank");
-                  const printHTML = `<!doctype html><html><head><meta charset=\"utf-8\"><title>PO</title><style>@page{size:A4;margin:0}html,body{margin:0;padding:0}#invoice-content{width:210mm;height:297mm;padding:10mm;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;background:#fff}table{border-collapse:collapse;width:100%}th,td{padding:6px 8px;border:0 solid #ccc}thead th{border-bottom:2px solid #000;padding:8px}tbody td{border-bottom:1px dotted #ccc}.right{text-align:right}.center{text-align:center}.small{font-size:10px}</style></head><body>${invoiceEl.outerHTML}<script>document.querySelector('.date-time').innerText='${now}';</script></body></html>`;
-                  w.document.write(printHTML);
-                  w.document.close();
-                  setTimeout(() => { w.focus(); w.print(); w.close(); }, 300);
-                };
-                try {
-                  doPrint("Internal Copy");
-                  setTimeout(() => doPrint("Vendor Copy"), 1200);
-                } catch (e) {
-                  console.error(e);
-                }
+                const w = window.open("", "_blank");
+                const printHTML = `<!doctype html><html><head><meta charset=\"utf-8\"><title>PO</title><style>@page{size:A4;margin:0}html,body{margin:0;padding:0}#invoice-content{width:210mm;height:297mm;padding:10mm;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;background:#fff}table{border-collapse:collapse;width:100%}th,td{padding:6px 8px;border:0 solid #ccc}thead th{border-bottom:2px solid #000;padding:8px}tbody td{border-bottom:1px dotted #ccc}.right{text-align:right}.center{text-align:center}.small{font-size:10px}</style></head><body>${invoiceEl.outerHTML}<script>document.querySelector('.date-time').innerText='${now}';</script></body></html>`;
+                w.document.write(printHTML);
+                w.document.close();
+                setTimeout(() => { w.focus(); w.print(); w.close(); }, 300);
               }}
               className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded hover:bg-green-700"
             >
-              <Printer className="w-4 h-4" /> Print (Internal + Vendor)
+              <Printer className="w-4 h-4" /> Print
             </button>
             {/* <button onClick={() => alert("Sent")} className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"><Send className="w-4 h-4" /> Send</button> */}
             {po.status !== "APPROVED" && (
@@ -235,7 +222,7 @@ const handleConvertToInvoice = async () => {
     onClick={handleConvertToInvoice}
     className="flex items-center gap-2 px-5 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
   >
-    Convert to Invoice
+    Convert to Purchase Entry
   </button>
 )}
           </div>
@@ -255,7 +242,7 @@ const handleConvertToInvoice = async () => {
           }}
         >
           <div style={{ textAlign: "right", fontWeight: "bold", marginBottom: 9 }}>
-            <span id="copy-label">Vendor Copy</span>
+            <span id="copy-label">Purchase Order</span>
           </div>
 
           {/* Header block: Arabic, English, contact, title */}
@@ -376,17 +363,8 @@ const handleConvertToInvoice = async () => {
 
           <div style={{ minHeight: 40 }} />
 
-          {/* totals block and bank details */}
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-            <div style={{ width: "58%", fontSize: 11 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>BANK DETAILS:-</div>
-              <div style={{ marginTop: 3 }}>BANK : {profileData.bankName}</div>
-              <div>ACCOUNT NO : {profileData.accountNumber}</div>
-              <div>IBAN NO : {profileData.ibanNumber}</div>
-              <div>CURRENCY : AED</div>
-              <div>ACCOUNT NAME : {profileData.accountName}</div>
-            </div>
-
+          {/* totals block (bank details removed for PO printout) */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
             <div style={{ width: "38%", fontSize: 11 }}>
               <div style={{ border: "1px solid #000", padding: 8 }}>
                 {/* <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
@@ -409,17 +387,11 @@ const handleConvertToInvoice = async () => {
             </div>
           </div>
 
-          {/* signature area and footer */}
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18, alignItems: "flex-start" }}>
+          {/* footer (remove Received By section and goods receipt comment for PO) */}
+          <div style={{ display: "flex", justifyContent: "flex-start", marginTop: 18, alignItems: "flex-start" }}>
             <div style={{ width: "58%", fontSize: 10 }}>
               <div>This is computer generated document. Therefore signature is not required.</div>
               <div style={{ marginTop: 6 }}>For {profileData.companyName}</div>
-            </div>
-
-            <div style={{ width: "38%", textAlign: "center" }}>
-              <div style={{ fontSize: 11, marginBottom: 6 }}>Received the above goods in good order and condition.</div>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Received by</div>
-              <div style={{ border: "1px solid #000", height: 82, width: "78%", marginLeft: "auto", marginRight: "auto" }} />
             </div>
           </div>
 
