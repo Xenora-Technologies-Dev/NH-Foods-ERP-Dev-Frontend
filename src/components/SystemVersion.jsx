@@ -12,7 +12,7 @@ const SystemVersion = () => {
       className="sticky bottom-0 left-0 w-full bg-white/80 backdrop-blur border-t border-slate-200 text-slate-500 text-xs py-2 z-40"
     >
       <div className="max-w-7xl mx-auto px-3 sm:px-4 flex items-center justify-between text-sm sm:text-base">
-        <span className="font-semibold text-slate-600">Version 1.35</span>
+        <span className="font-semibold text-slate-600">Version 1.40</span>
         {/* Reserved for future: build number / environment tag */}
         <span className="hidden sm:inline-block" aria-hidden></span>
       </div>
