@@ -378,6 +378,8 @@ const POForm = React.memo(
           vendorId: saved.partyId,
           vendorName: matchedVendor?.vendorName || "Unknown",
           vendorTRN,
+          // Ensure orderNumber is set from backend response or fallback to transactionNo
+          orderNumber: saved.orderNumber || saved.transactionNo,
           items: (saved.items || []).map((backendItem) => {
             const originalItem = itemsPayload.find((i) => i.itemId === backendItem.itemId) || {};
             return {

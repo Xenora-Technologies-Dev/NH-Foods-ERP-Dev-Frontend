@@ -9,15 +9,15 @@ export const formatNumber = (value, decimals = 2, locale = 'en-GB') => {
   }).format(n);
 };
 
-// Currency formatter for AED; returns with currency symbol
-export const formatCurrencyAED = (value, locale = 'en-AE') => {
+// Currency formatter for AED; returns with AED symbol explicitly
+export const formatCurrencyAED = (value) => {
   const n = Number(value || 0);
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: 'AED',
+  // Format the number with 2 decimal places and thousand separators
+  const formatted = new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(n);
+  return `AED ${formatted}`;
 };
 
 // Simple date formatting to dd/mm/yyyy (GB)

@@ -185,6 +185,8 @@ const PurchaseReturnOrderManagement = () => {
           grnGenerated: transaction.grnGenerated,
           invoiceGenerated: transaction.invoiceGenerated,
           priority: transaction.priority,
+          // Add orderNumber as fallback to transactionNo for display purposes
+          orderNumber: transaction.orderNumber || transaction.transactionNo,
         }))
       );
     } catch (error) {
@@ -586,7 +588,7 @@ const PurchaseReturnOrderManagement = () => {
                 <div className="flex items-center space-x-3">
                   <div className={`w-2 h-2 rounded-full ${getPriorityColor(po.priority)}`}></div>
                   <div>
-                    <p className="font-medium text-slate-900">{po.transactionNo}</p>
+                    <p className="font-medium text-slate-900">{po.orderNumber || po.transactionNo}</p>
                     <p className="text-sm text-slate-600">{po.vendorName}</p>
                   </div>
                 </div>

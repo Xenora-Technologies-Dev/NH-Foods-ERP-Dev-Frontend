@@ -398,6 +398,8 @@ const SOForm = React.memo(
           customerId: saved.partyId,
           customerName: customers.find((c) => c._id === saved.partyId)?.customerName || "Unknown",
           totalAmount: parseFloat(saved.totalAmount).toFixed(2),
+          // Ensure orderNumber is set from backend response or fallback to transactionNo
+          orderNumber: saved.orderNumber || saved.transactionNo,
           items: (saved.items || []).map((backendItem) => {
             const originalItem = itemsPayload.find((i) => i.itemId === backendItem.itemId) || {};
             return {

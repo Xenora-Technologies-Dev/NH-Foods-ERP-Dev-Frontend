@@ -235,6 +235,8 @@ const PurchaseOrderManagement = () => {
           creditNoteIssued: t.creditNoteIssued || false,
           quoteRef: t.quoteRef || null,
           linkedRef: t.linkedRef || null,
+          // Add orderNumber as fallback to transactionNo for display purposes
+          orderNumber: t.orderNumber || t.transactionNo,
         };
       });
 
@@ -701,7 +703,7 @@ const PurchaseOrderManagement = () => {
                   ></div>
                   <div>
                     <p className="font-medium text-slate-900">
-                      {po.transactionNo}
+                      {po.orderNumber || po.transactionNo}
                     </p>
                     <p className="text-sm text-slate-600">{po.vendorName}</p>
                   </div>

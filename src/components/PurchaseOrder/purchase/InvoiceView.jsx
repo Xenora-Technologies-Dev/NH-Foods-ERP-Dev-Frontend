@@ -29,7 +29,7 @@ const PurchaseInvoiceView = ({
     phoneNumber: "04 885 7575",
     email: "corporate@elfab.ae",
     website: "www.nhfoodsglobal.com",
-    vatNumber: "1000033168300003",
+    vatNumber: "105033168300003",
     logo: null,
     bankName: "NATIONAL BANK OF RAS AL KHAIMAH",
     accountNumber: "0333547283001",
@@ -284,7 +284,7 @@ const handleConvertToInvoice = async () => {
               </div>
 
               <div style={{ fontWeight: 700, textDecoration: "underline", marginTop: 6, fontSize: 13 }}>
-                {isApproved ? "PURCHASE ORDER" : "PURCHASE ORDER"}
+                {isApproved ? "PURCHASE ENTRY" : "PURCHASE ORDER"}
               </div>
             </div>
 

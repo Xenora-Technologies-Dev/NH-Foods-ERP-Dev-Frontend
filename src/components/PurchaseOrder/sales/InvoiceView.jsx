@@ -30,7 +30,7 @@ const SaleInvoiceView = ({
     phoneNumber: "04 885 7575",
     email: "corporate@elfab.ae",
     website: "www.nhfoodsglobal.com",
-    vatNumber: "1000033168300003",
+    vatNumber: "105033168300003",
     logo: null,
     bankName: "NATIONAL BANK OF RAS AL KHAIMAH",
     accountNumber: "0333547283001",
@@ -152,7 +152,9 @@ const SaleInvoiceView = ({
   const generatePDF = async (copyType) => {
     const html2canvas = (await import("html2canvas")).default;
     const { jsPDF } = await import("jspdf");
-    document.getElementById("copy-label").innerText = copyType;
+    if (document.getElementById("copy-label")) {
+      document.getElementById("copy-label").innerText = copyType;
+    }
     await new Promise((r) => setTimeout(r, 80));
     const el = document.getElementById("invoice-content");
     const canvas = await html2canvas(el, { scale: 3, useCORS: true, backgroundColor: "#fff" });
@@ -162,20 +164,31 @@ const SaleInvoiceView = ({
     const ratio = Math.min(pdfW / canvas.width, pdfH / canvas.height);
     const w = canvas.width * ratio, h = canvas.height * ratio;
     pdf.addImage(img, "PNG", (pdfW - w) / 2, (pdfH - h) / 2, w, h);
-    const fname = `${isApproved ? "INV" : "SO"}_${invoiceMeta.invoiceNo}_${copyType.replace(/\s+/g, "_")}.pdf`;
+    const customerName = customer.customerName ? customer.customerName.replace(/\s+/g, "_") : "Customer";
+    const docNumber = isApproved ? invoiceMeta.invoiceNo : invoiceMeta.soNo;
+    const filenameSuffix = copyType ? `_${copyType.replace(/\s+/g, "_")}` : "";
+    const fname = `${isApproved ? "INV" : "SO"}_${docNumber}_${customerName}${filenameSuffix}.pdf`;
     pdf.save(fname);
   };
 
   const handleDownloadPDF = async () => {
     setIsGeneratingPDF(true);
     try {
-      await generatePDF("Internal Copy");
-      await generatePDF("Customer Copy");
+      if (isApproved) {
+        // For invoice: generate both Internal Copy and Customer Copy
+        await generatePDF("Internal Copy");
+        await generatePDF("Customer Copy");
+      } else {
+        // For sales order: generate only single document
+        await generatePDF("");
+      }
     } catch (e) {
       alert("PDF generation failed");
     } finally {
       setIsGeneratingPDF(false);
-      document.getElementById("copy-label").innerText = "Customer Copy";
+      if (isApproved) {
+        document.getElementById("copy-label").innerText = "Customer Copy";
+      }
     }
   };
 
@@ -275,7 +288,7 @@ const handleConvertToInvoice = async () => {
           }}
         >
           <div style={{ textAlign: "right", fontWeight: "bold", marginBottom: 9 }}>
-            <span id="copy-label">Customer Copy</span>
+            {isApproved && <span id="copy-label">Customer Copy</span>}
           </div>
 
           {/* header: left logo, center names, right blank (meta moved lower) */}
@@ -415,18 +428,20 @@ const handleConvertToInvoice = async () => {
           {/* spacer to mimic sample (leaves blank area for long blank space) */}
           <div style={{ minHeight: 40 }} />
 
-          {/* totals block and bank details */}
+          {/* totals block and bank details (hide bank details for Sales Order) */}
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-            <div style={{ width: "58%", fontSize: 11 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>BANK DETAILS:-</div>
-              <div style={{ marginTop: 3 }}>BANK : {profileData.bankName}</div>
-              <div>ACCOUNT NO : {profileData.accountNumber}</div>
-              <div>IBAN NO : {profileData.ibanNumber}</div>
-              <div>CURRENCY : AED</div>
-              <div>ACCOUNT NAME : {profileData.accountName}</div>
-            </div>
+            {isApproved && (
+              <div style={{ width: "58%", fontSize: 11 }}>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>BANK DETAILS:-</div>
+                <div style={{ marginTop: 3 }}>BANK : {profileData.bankName}</div>
+                <div>ACCOUNT NO : {profileData.accountNumber}</div>
+                <div>IBAN NO : {profileData.ibanNumber}</div>
+                <div>CURRENCY : AED</div>
+                <div>ACCOUNT NAME : {profileData.accountName}</div>
+              </div>
+            )}
 
-            <div style={{ width: "38%", fontSize: 11 }}>
+            <div style={{ width: isApproved ? "38%" : "100%", fontSize: 11 }}>
               <div style={{ border: "1px solid #000", padding: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <div>DISCOUNT (IF ANY)</div>
@@ -448,19 +463,28 @@ const handleConvertToInvoice = async () => {
             </div>
           </div>
 
-          {/* signature area and footer */}
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18, alignItems: "flex-start" }}>
-            <div style={{ width: "58%", fontSize: 10 }}>
-              <div>This is computer generated document. Therefore signature is not required.</div>
-              <div style={{ marginTop: 6 }}>For {profileData.companyName}</div>
-            </div>
+          {/* signature area and footer (hide Received By for Sales Order) */}
+          {isApproved ? (
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18, alignItems: "flex-start" }}>
+              <div style={{ width: "58%", fontSize: 10 }}>
+                <div>This is computer generated document. Therefore signature is not required.</div>
+                <div style={{ marginTop: 6 }}>For {profileData.companyName}</div>
+              </div>
 
-            <div style={{ width: "38%", textAlign: "center" }}>
-              <div style={{ fontSize: 11, marginBottom: 6 }}>Received the above goods in good order and condition.</div>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Received by</div>
-              <div style={{ border: "1px solid #000", height: 82, width: "78%", marginLeft: "auto", marginRight: "auto" }} />
+              <div style={{ width: "38%", textAlign: "center" }}>
+                <div style={{ fontSize: 11, marginBottom: 6 }}>Received the above goods in good order and condition.</div>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>Received by</div>
+                <div style={{ border: "1px solid #000", height: 82, width: "78%", marginLeft: "auto", marginRight: "auto" }} />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div style={{ display: "flex", justifyContent: "flex-start", marginTop: 18, alignItems: "flex-start" }}>
+              <div style={{ width: "58%", fontSize: 10 }}>
+                <div>This is computer generated document. Therefore signature is not required.</div>
+                <div style={{ marginTop: 6 }}>For {profileData.companyName}</div>
+              </div>
+            </div>
+          )}
 
           {/* page number centered */}
           <div style={{ textAlign: "center", marginTop: 18, fontSize: 10 }}>Page 1 of 1</div>

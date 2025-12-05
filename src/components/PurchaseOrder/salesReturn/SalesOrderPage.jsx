@@ -192,6 +192,8 @@ const SalesReturnOrderManagement = () => {
             invoiceGenerated: transaction.invoiceGenerated,
             priority: transaction.priority,
             reason: transaction.reason || "",
+            // Add orderNumber as fallback to transactionNo for display purposes
+            orderNumber: transaction.orderNumber || transaction.transactionNo,
           };
         })
       );
@@ -589,7 +591,7 @@ const SalesReturnOrderManagement = () => {
                     className={`w-2 h-2 rounded-full ${getPriorityColor(so.priority)}`}
                   ></div>
                   <div>
-                    <p className="font-medium text-slate-900">{so.transactionNo}</p>
+                    <p className="font-medium text-slate-900">{so.orderNumber || so.transactionNo}</p>
                     <p className="text-sm text-slate-600">{so.customerName || "Unknown"}</p>
                     <p className="text-xs text-slate-500">{so.reason}</p>
                   </div>

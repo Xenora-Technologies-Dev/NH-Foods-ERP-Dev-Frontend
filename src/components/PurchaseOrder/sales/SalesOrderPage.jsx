@@ -230,6 +230,8 @@ const SalesOrderManagement = () => {
       refNo: t.lpono ?? t.refNo ?? "",
       docNo: t.docno ?? t.docNo ?? "",
       discount: typeof t.discount === "number" ? t.discount : 0,
+      // Add orderNumber as fallback to transactionNo for display purposes
+      orderNumber: t.orderNumber || t.transactionNo,
     };
   })
 );
