@@ -385,20 +385,44 @@ const PaymentVoucherManagement = () => {
 
   const fetchOutstandingInvoices = useCallback(
     async (vendorId = null) => {
+      if (!vendorId) {
+        setAvailableInvoices([]);
+        return;
+      }
+
       try {
         const params = new URLSearchParams();
-        if (vendorId) params.append("partyId", vendorId);
+        params.append("partyId", vendorId);
         params.append("partyType", "Vendor");
-        params.append("type", "purchase_order");
-        params.append("status", "APPROVED");
+        params.append("type", "purchase_order"); // or "purchase_invoice" if you use that
+        // Remove status=APPROVED if not needed — better to get all and filter outstanding
+
         const response = await axiosInstance.get(
           `/transactions/transactions?${params.toString()}`
         );
-        console.log(response);
-        const invoices = takeArray(response);
-        setAvailableInvoices(invoices);
+
+        let invoices = takeArray(response);
+
+        // Filter only invoices with outstanding balance > 0
+        const outstandingInvoices = invoices
+          .filter((inv) => {
+            const outstanding = Number(inv.outstandingAmount || 0);
+            return outstanding > 0;
+          })
+          .map((inv) => ({
+            _id: inv._id,
+            transactionNo: inv.transactionNo || inv.docno || "N/A",
+            date: inv.date,
+            totalAmount: Number(inv.totalAmount || 0),
+            paidAmount: Number(inv.paidAmount || 0),
+            outstandingAmount: Number(inv.outstandingAmount || 0),
+            status: inv.status,
+          }));
+
+        setAvailableInvoices(outstandingInvoices);
       } catch (err) {
-        showToastMessage("Failed to fetch available invoices.", "error");
+        console.error("Error fetching invoices:", err);
+        showToastMessage("Failed to load outstanding invoices.", "error");
         setAvailableInvoices([]);
       }
     },
@@ -474,46 +498,77 @@ const PaymentVoucherManagement = () => {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [previewUrl, selectedFile]);
 
-  const handleInvoiceSelection = useCallback((invoiceId, totalAmount) => {
-    setFormData((prev) => {
-      const list = asArray(prev.linkedInvoices);
-      const isSelected = list.some((inv) => inv.invoiceId === invoiceId);
-      const newList = isSelected
-        ? list.filter((inv) => inv.invoiceId !== invoiceId)
-        : [
+  const handleInvoiceSelection = useCallback(
+    (invoiceId) => {
+      setFormData((prev) => {
+        const list = asArray(prev.linkedInvoices);
+        const exists = list.some((item) => item.invoiceId === invoiceId);
+
+        let newList;
+        if (exists) {
+          newList = list.filter((item) => item.invoiceId !== invoiceId);
+        } else {
+          const invoice = availableInvoices.find(
+            (inv) => inv._id === invoiceId
+          );
+          if (!invoice) return prev;
+
+          newList = [
             ...list,
-            { invoiceId, amount: String(totalAmount), balance: String(0) },
+            {
+              invoiceId,
+              amount: String(invoice.outstandingAmount), // Pre-fill with full outstanding
+              balance: "0",
+            },
           ];
-      const total = newList.reduce(
-        (sum, inv) => sum + (Number(inv.amount) || 0),
-        0
-      );
-      return { ...prev, linkedInvoices: newList, amount: String(total) };
-    });
-  }, []);
+        }
+
+        const total = newList.reduce(
+          (sum, item) => sum + Number(item.amount || 0),
+          0
+        );
+
+        return {
+          ...prev,
+          linkedInvoices: newList,
+          amount: String(total.toFixed(2)),
+        };
+      });
+    },
+    [availableInvoices]
+  );
 
   const handleInvoiceAmountChange = useCallback(
     (invoiceId, value) => {
+      const numValue = Number(value) || 0;
+
       setFormData((prev) => {
-        const list = asArray(prev.linkedInvoices);
         const invoice = availableInvoices.find((inv) => inv._id === invoiceId);
-        const totalAmount = Number(invoice?.totalAmount) || 0;
-        const amount = Math.min(Number(value) || 0, totalAmount);
-        const balance = totalAmount - amount;
-        const newList = list.map((inv) =>
-          inv.invoiceId === invoiceId
+        if (!invoice) return prev;
+
+        const maxAllowed = invoice.outstandingAmount;
+        const clampedAmount = Math.max(0, Math.min(numValue, maxAllowed));
+
+        const newList = prev.linkedInvoices.map((item) =>
+          item.invoiceId === invoiceId
             ? {
-                ...inv,
-                amount: String(amount),
-                balance: String(balance >= 0 ? balance : 0),
+                ...item,
+                amount: String(clampedAmount),
+                balance: String((maxAllowed - clampedAmount).toFixed(2)),
               }
-            : inv
+            : item
         );
+
         const total = newList.reduce(
-          (sum, inv) => sum + (Number(inv.amount) || 0),
+          (sum, item) => sum + Number(item.amount || 0),
           0
         );
-        return { ...prev, linkedInvoices: newList, amount: String(total) };
+
+        return {
+          ...prev,
+          linkedInvoices: newList,
+          amount: String(total.toFixed(2)),
+        };
       });
     },
     [availableInvoices]
@@ -790,7 +845,6 @@ const PaymentVoucherManagement = () => {
   const handleBackToList = useCallback(() => {
     setSelectedPayment(null);
   }, []);
-
 
   const safePayments = useMemo(() => asArray(payments), [payments]);
 
@@ -1315,96 +1369,106 @@ const PaymentVoucherManagement = () => {
                 />
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    <LinkIcon size={16} className="inline mr-2" /> Linked
-                    Invoice(s) *
+                    Linked Invoice(s) *
                   </label>
                   <div
-                    className={`border rounded-xl p-4 max-h-48 overflow-y-auto ${
+                    className={`border rounded-xl p-4 max-h-64 overflow-y-auto ${
                       errors.linkedInvoices
                         ? "border-red-300 bg-red-50"
                         : "border-gray-300"
                     }`}
                   >
                     {availableInvoices.length === 0 ? (
-                      <p className="text-gray-500 text-sm text-center py-4">
+                      <p className="text-gray-500 text-center py-8">
                         {formData.vendorId
-                          ? "No outstanding invoices found for selected vendor"
-                          : "Please select a vendor first to view outstanding invoices"}
+                          ? "No outstanding invoices found for this vendor"
+                          : "Please select a vendor to view outstanding invoices"}
                       </p>
                     ) : (
-                      <div className="space-y-2">
-                        {availableInvoices.map((inv) => (
-                          <div
-                            key={inv._id}
-                            className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
-                          >
-                            <div className="flex items-center space-x-3">
-                              <input
-                                type="checkbox"
-                                checked={asArray(formData.linkedInvoices).some(
-                                  (i) => i.invoiceId === inv._id
+                      <div className="space-y-3">
+                        {availableInvoices.map((inv) => {
+                          const linkedItem = formData.linkedInvoices.find(
+                            (i) => i.invoiceId === inv._id
+                          );
+                          const isSelected = !!linkedItem;
+                          const enteredAmount = Number(linkedItem?.amount || 0);
+
+                          return (
+                            <div
+                              key={inv._id}
+                              className={`p-4 rounded-lg border ${
+                                isSelected
+                                  ? "border-purple-300 bg-purple-50"
+                                  : "border-gray-200 bg-white"
+                              } transition-all`}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-start space-x-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() =>
+                                      handleInvoiceSelection(inv._id)
+                                    }
+                                    className="mt-1 h-4 w-4 text-purple-600 rounded focus:ring-purple-500"
+                                  />
+                                  <div>
+                                    <p className="font-semibold text-gray-900">
+                                      {inv.transactionNo}
+                                    </p>
+                                    <p className="text-sm text-gray-500">
+                                      {new Date(inv.date).toLocaleDateString()}{" "}
+                                      • Total: {formatCurrency(inv.totalAmount)}
+                                    </p>
+                                    <p className="text-sm text-gray-600">
+                                      Paid: {formatCurrency(inv.paidAmount)} •{" "}
+                                      <span className="text-red-600 font-medium">
+                                        Due:{" "}
+                                        {formatCurrency(inv.outstandingAmount)}
+                                      </span>
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {isSelected && (
+                                  <div className="flex items-center space-x-3">
+                                    <div className="text-right">
+                                      <input
+                                        type="number"
+                                        value={linkedItem.amount || ""}
+                                        onChange={(e) =>
+                                          handleInvoiceAmountChange(
+                                            inv._id,
+                                            e.target.value
+                                          )
+                                        }
+                                        className="w-24 px-2 py-1 border border-gray-300 rounded-md text-sm"
+                                        placeholder="0.00"
+                                        step="0.01"
+                                        max={inv.outstandingAmount}
+                                      />
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        Max:{" "}
+                                        {formatCurrency(inv.outstandingAmount)}
+                                      </p>
+                                    </div>
+                                  </div>
                                 )}
-                                onChange={() =>
-                                  handleInvoiceSelection(
-                                    inv._id,
-                                    inv.totalAmount
-                                  )
-                                }
-                                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-                              />
-                              <div>
-                                <p className="font-medium text-sm text-gray-900">
-                                  {inv.transactionNo || inv.transactionId}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {new Date(inv.date).toLocaleDateString()}
-                                </p>
                               </div>
                             </div>
-                            <div className="flex items-center space-x-3">
-                              <input
-                                type="number"
-                                value={
-                                  asArray(formData.linkedInvoices).find(
-                                    (i) => i.invoiceId === inv._id
-                                  )?.amount || ""
-                                }
-                                onChange={(e) =>
-                                  handleInvoiceAmountChange(
-                                    inv._id,
-                                    e.target.value
-                                  )
-                                }
-                                placeholder="Amount"
-                                min="0"
-                                step="0.01"
-                                className="w-24 px-2 py-1 border border-gray-300 rounded-md text-sm"
-                                disabled={
-                                  !asArray(formData.linkedInvoices).some(
-                                    (i) => i.invoiceId === inv._id
-                                  )
-                                }
-                              />
-                              <p className="font-medium text-sm text-gray-900">
-                                {formatCurrency(
-                                  asArray(formData.linkedInvoices).find(
-                                    (i) => i.invoiceId === inv._id
-                                  )?.balance || inv.totalAmount
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
                   {errors.linkedInvoices && (
                     <p className="mt-1 text-sm text-red-600 flex items-center">
-                      <AlertCircle size={12} className="mr-1" />
+                      <AlertCircle size={12} className="mr-1" />{" "}
                       {errors.linkedInvoices}
                     </p>
                   )}
                 </div>
+
                 <FormSelect
                   label="Payment Mode"
                   icon={CreditCard}

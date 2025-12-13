@@ -241,28 +241,48 @@ const ReceiptVoucherManagement = () => {
     }
   }, [showToastMessage]);
 
-  const fetchUnpaidInvoices = useCallback(
-    async (customerId = null) => {
-      try {
-        const params = new URLSearchParams();
-        if (customerId) params.append("partyId", customerId);
-        params.append("partyType", "Customer");
-        params.append("type", "sales_order");
-        params.append("status", "APPROVED");
-        const response = await axios.get(
-          `/transactions/transactions?${params.toString()}`
-        );
-        console.log("object")
-        console.log(response.data)
-        const invoices = takeArray(response)
-        setAvailableInvoices(invoices);
-      } catch (err) {
-        showToastMessage("Failed to fetch available invoices.", "error");
-        setAvailableInvoices([]);
-      }
-    },
-    [showToastMessage]
-  );
+const fetchUnpaidInvoices = useCallback(
+  async (customerId = null) => {
+    if (!customerId) {
+      setAvailableInvoices([]);
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams();
+      params.append("partyId", customerId);
+      params.append("partyType", "Customer");
+      params.append("type", "sales_order"); // or "sales_invoice" if you use that
+
+      const response = await axios.get(`/transactions/transactions?${params.toString()}`);
+
+      let invoices = takeArray(response);
+
+      // Filter only invoices that have outstanding balance
+      const outstandingInvoices = invoices
+        .filter((inv) => {
+          const outstanding = Number(inv.outstandingAmount || 0);
+          return outstanding > 0;
+        })
+        .map((inv) => ({
+          _id: inv._id,
+          transactionNo: inv.transactionNo || inv.docno || "N/A",
+          date: inv.date,
+          totalAmount: Number(inv.totalAmount || 0),
+          paidAmount: Number(inv.paidAmount || 0),
+          outstandingAmount: Number(inv.outstandingAmount || 0),
+          status: inv.status,
+        }));
+
+      setAvailableInvoices(outstandingInvoices);
+    } catch (err) {
+      console.error("Error fetching unpaid invoices:", err);
+      showToastMessage("Failed to load outstanding invoices.", "error");
+      setAvailableInvoices([]);
+    }
+  },
+  [showToastMessage]
+);
 
   const handleChange = useCallback(
     (e) => {
@@ -291,50 +311,72 @@ const ReceiptVoucherManagement = () => {
     [customers, fetchUnpaidInvoices]
   );
 
-  const handleInvoiceSelection = useCallback((invoiceId, totalAmount) => {
-    setFormData((prev) => {
-      const list = asArray(prev.linkedInvoices);
-      const isSelected = list.some((inv) => inv.invoiceId === invoiceId);
-      const newList = isSelected
-        ? list.filter((inv) => inv.invoiceId !== invoiceId)
-        : [
-            ...list,
-            { invoiceId, amount: String(totalAmount), balance: String(0) },
-          ];
-      const total = newList.reduce(
-        (sum, inv) => sum + (Number(inv.amount) || 0),
-        0
-      );
-      return { ...prev, linkedInvoices: newList, amount: String(total) };
-    });
-  }, []);
+const handleInvoiceSelection = useCallback((invoiceId) => {
+  setFormData((prev) => {
+    const list = asArray(prev.linkedInvoices);
+    const exists = list.some((item) => item.invoiceId === invoiceId);
 
-  const handleInvoiceAmountChange = useCallback(
-    (invoiceId, value) => {
-      setFormData((prev) => {
-        const list = asArray(prev.linkedInvoices);
-        const invoice = availableInvoices.find((inv) => inv._id === invoiceId);
-        const totalAmount = Number(invoice?.totalAmount) || 0;
-        const amount = Math.min(Number(value) || 0, totalAmount);
-        const balance = totalAmount - amount;
-        const newList = list.map((inv) =>
-          inv.invoiceId === invoiceId
-            ? {
-                ...inv,
-                amount: String(amount),
-                balance: String(balance >= 0 ? balance : 0),
-              }
-            : inv
-        );
-        const total = newList.reduce(
-          (sum, inv) => sum + (Number(inv.amount) || 0),
-          0
-        );
-        return { ...prev, linkedInvoices: newList, amount: String(total) };
-      });
-    },
-    [availableInvoices]
-  );
+    let newList;
+    if (exists) {
+      newList = list.filter((item) => item.invoiceId !== invoiceId);
+    } else {
+      const invoice = availableInvoices.find((inv) => inv._id === invoiceId);
+      if (!invoice) return prev;
+
+      newList = [
+        ...list,
+        {
+          invoiceId,
+          amount: String(invoice.outstandingAmount),
+          balance: "0",
+        },
+      ];
+    }
+
+    const total = newList.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+    return {
+      ...prev,
+      linkedInvoices: newList,
+      amount: String(total.toFixed(2)),
+    };
+  });
+}, [availableInvoices]);
+
+
+
+const handleInvoiceAmountChange = useCallback(
+  (invoiceId, value) => {
+    const numValue = Number(value) || 0;
+
+    setFormData((prev) => {
+      const invoice = availableInvoices.find((inv) => inv._id === invoiceId);
+      if (!invoice) return prev;
+
+      const maxAllowed = invoice.outstandingAmount;
+      const clampedAmount = Math.max(0, Math.min(numValue, maxAllowed));
+
+      const newList = prev.linkedInvoices.map((item) =>
+        item.invoiceId === invoiceId
+          ? {
+              ...item,
+              amount: String(clampedAmount.toFixed(2)),
+              balance: String((maxAllowed - clampedAmount).toFixed(2)),
+            }
+          : item
+      );
+
+      const total = newList.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+      return {
+        ...prev,
+        linkedInvoices: newList,
+        amount: String(total.toFixed(2)),
+      };
+    });
+  },
+  [availableInvoices]
+);
 
   const validateForm = useCallback(() => {
     const e = {};

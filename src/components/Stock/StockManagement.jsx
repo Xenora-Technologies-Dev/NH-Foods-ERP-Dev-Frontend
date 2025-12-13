@@ -15,6 +15,7 @@ import {
   X,
   Barcode,
   Tag,
+  Hash,
     Calendar,
   AlertTriangle,
   TrendingUp,
@@ -208,12 +209,12 @@ const StockManagement = () => {
   const [showLowStock, setShowLowStock] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
-  const [isAutoSKU, setIsAutoSKU] = useState(true);
+  const [isManualItemId, setIsManualItemId] = useState(false);
   const [barcodeData, setBarcodeData] = useState(null);
 
   // Updated formData with new fields: origin and brand
   const [formData, setFormData] = useState({
-    sku: "",
+    sku: null,
     itemName: "",
     category: "",
     unitOfMeasure: "",
@@ -228,6 +229,8 @@ const StockManagement = () => {
     vendorId: "",
     origin: "", // New field
     brand: "", // New field
+    itemId: "",
+    isManualItemId: false,
   });
 
   const [errors, setErrors] = useState({});
@@ -273,7 +276,9 @@ const StockManagement = () => {
 
   const fetchCategories = useCallback(async () => {
     try {
-      const response = await axiosInstance.get("/categories/categories");
+      const response = await axiosInstance.get("/categories/categories", {
+        params: { limit: 1000 } // Fetch up to 1000 categories to ensure all are loaded
+      });
       setCategories(response.data.data?.categories || []);
     } catch (error) {
       console.error("Error fetching categories:", error);
@@ -316,29 +321,41 @@ const StockManagement = () => {
   }, [showModal, fetchCategories, fetchVendors, fetchUnits]);
 
   useEffect(() => {
-    if (isAutoSKU && formData.category && !editItemId) {
+    if (!isManualItemId && !editItemId && formData.category && showModal) {
+      // Auto-generate Item ID based on category
       const selectedCategory = categories.find(
         (cat) => cat._id === formData.category
       );
       if (selectedCategory) {
-        const prefix = selectedCategory.name
-          .substring(0, 2)
+        const categoryPrefix = selectedCategory.name
+          .substring(0, 3)
           .toUpperCase()
           .replace(/[^A-Z]/g, "");
-        const lastItem = stockItems
-          .filter((item) => item.category?._id === formData.category)
-          .sort((a, b) => b.sku.localeCompare(a.sku))[0];
+        
+        // Find the highest existing Item ID for this category
+        const categoryItems = stockItems.filter(
+          (item) => item.category?._id === formData.category && item.itemId
+        );
+        
         let nextNumber = 1;
-        if (lastItem && lastItem.sku) {
-          const number = parseInt(lastItem.sku.replace(prefix, ""));
-          if (!isNaN(number)) nextNumber = number + 1;
+        if (categoryItems.length > 0) {
+          const numbers = categoryItems
+            .map((item) => {
+              const match = item.itemId.match(new RegExp(`^${categoryPrefix}(\\d+)$`));
+              return match ? parseInt(match[1]) : 0;
+            })
+            .filter((num) => !isNaN(num));
+          
+          if (numbers.length > 0) {
+            nextNumber = Math.max(...numbers) + 1;
+          }
         }
-        const newSKU = `${prefix}${nextNumber.toString().padStart(4, "0")}`;
-        setFormData((prev) => ({ ...prev, sku: newSKU }));
-        setBarcodeData(newSKU);
+        
+        const autoItemId = `${categoryPrefix}${nextNumber.toString().padStart(4, "0")}`;
+        setFormData((prev) => ({ ...prev, itemId: autoItemId }));
       }
     }
-  }, [formData.category, isAutoSKU, categories, stockItems, editItemId]);
+  }, [isManualItemId, formData.category, categories, stockItems, editItemId, showModal]);
 
   useEffect(() => {
     const savedFormData = SessionManager.get("formData");
@@ -347,9 +364,9 @@ const StockManagement = () => {
 
     if (savedFormData && Object.values(savedFormData).some((val) => val)) {
       setFormData(savedFormData);
+      setIsManualItemId(savedFormData.isManualItemId || false);
       setIsDraftSaved(true);
       setLastSaveTime(SessionManager.get("lastSaveTime"));
-      setBarcodeData(savedFormData.sku);
     }
 
     if (savedFilters) {
@@ -431,7 +448,6 @@ const StockManagement = () => {
     (e) => {
       const { name, value } = e.target;
       setFormData((prev) => ({ ...prev, [name]: value }));
-      if (name === "sku") setBarcodeData(value);
       if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
       setIsDraftSaved(false);
     },
@@ -442,13 +458,24 @@ const StockManagement = () => {
   const validateForm = useCallback(() => {
     const newErrors = {};
     if (!formData.itemName.trim()) newErrors.itemName = "Item name is required";
-    if (!formData.sku.trim()) newErrors.sku = "SKU is required";
     if (!formData.category) newErrors.category = "Category is required";
     if (!formData.unitOfMeasure)
       newErrors.unitOfMeasure = "Unit of measure is required";
     // if (!formData.vendorId) newErrors.vendorId = "Vendor is required";
     if (!formData.origin.trim()) newErrors.origin = "Origin is required"; // New validation
     if (!formData.brand.trim()) newErrors.brand = "Brand is required"; // New validation
+    if (isManualItemId && !formData.itemId?.trim()) {
+      newErrors.itemId = "Item ID is required when manual mode is enabled";
+    }
+    if (isManualItemId && formData.itemId?.trim()) {
+      // Check for duplicate Item ID
+      const existingItem = stockItems.find(
+        (item) => item.itemId === formData.itemId?.trim() && item._id !== editItemId
+      );
+      if (existingItem) {
+        newErrors.itemId = "Item ID already exists. Please choose a different ID.";
+      }
+    }
     if (
       formData.reorderLevel &&
       (isNaN(formData.reorderLevel) || Number(formData.reorderLevel) < 0)
@@ -487,7 +514,8 @@ const StockManagement = () => {
     setIsSubmitting(true);
     try {
       const payload = {
-        sku: formData.sku,
+        sku: null,
+        itemId: formData.itemId,
         itemName: formData.itemName,
         categoryId: formData.category,
         unitOfMeasure: formData.unitOfMeasure,
@@ -530,7 +558,7 @@ const StockManagement = () => {
     console.log(item)
     setEditItemId(item._id);
     setFormData({
-      sku: item.sku,
+      sku: null,
       itemName: item.itemName,
       category: item.category?._id || "",
       unitOfMeasure: item.unitOfMeasure,
@@ -547,9 +575,10 @@ const StockManagement = () => {
       vendorId: item.vendorId?._id || "",
       origin: item.origin || "", // New field
       brand: item.brand || "", // New field
+      itemId: item.itemId || "",
+      isManualItemId: !!item.itemId,
     });
-    setBarcodeData(item.sku);
-    setIsAutoSKU(false);
+    setIsManualItemId(!!item.itemId);
     setShowModal(true);
     setIsDraftSaved(false);
     SessionManager.remove("formData");
@@ -602,7 +631,8 @@ const StockManagement = () => {
   const resetForm = useCallback(() => {
     setEditItemId(null);
     setFormData({
-      sku: "",
+      sku: null,
+      itemId: "",
       itemName: "",
       category: "",
       unitOfMeasure: "",
@@ -617,13 +647,14 @@ const StockManagement = () => {
       vendorId: "",
       origin: "", // New field
       brand: "", // New field
+      isManualItemId: false,
     });
     setErrors({});
     setShowModal(false);
     setIsDraftSaved(false);
     setLastSaveTime(null);
     setBarcodeData(null);
-    setIsAutoSKU(true);
+    setIsManualItemId(false);
     SessionManager.remove("formData");
     SessionManager.remove("lastSaveTime");
   }, []);
@@ -637,7 +668,7 @@ const StockManagement = () => {
         modal.classList.add("scale-100");
       }
       if (formRef.current) {
-        const firstInput = formRef.current.querySelector('input[name="sku"]');
+        const firstInput = formRef.current.querySelector('input[name="itemName"]');
         if (firstInput) firstInput.focus();
       }
     }, 10);
@@ -679,7 +710,6 @@ const StockManagement = () => {
     let filtered = stockItems.filter((item) => {
       const matchesSearch =
         item.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (item.itemId &&
           item.itemId.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesCategory = filterCategory
@@ -739,10 +769,10 @@ const StockManagement = () => {
   const handleExport = useCallback(async () => {
     try {
       const csv = [
-        "ItemID,SKU,ItemName,Category,CategoryId,VendorName,VendorId,UnitOfMeasure,Origin,Brand,CurrentStock,ReorderLevel,PurchasePrice,SalesPrice,Status,BatchNumber,ExpiryDate,CreatedAt",
+        "ItemID,ItemName,Category,CategoryId,VendorName,VendorId,UnitOfMeasure,Origin,Brand,CurrentStock,ReorderLevel,PurchasePrice,SalesPrice,Status,BatchNumber,ExpiryDate,CreatedAt",
         ...sortedAndFilteredItems.map(
           (item) =>
-            `${item.itemId || item._id},${item.sku},"${item.itemName}",${
+            `${item.itemId || item._id},"${item.itemName}",${
               item.category?.name || ""
             },${item.category?._id || ""},${item.vendorId?.vendorName || ""},${
               item.vendorId?._id || ""
@@ -860,10 +890,16 @@ const StockManagement = () => {
     const lowStockItems = stockItems.filter(
       (item) => item.currentStock <= item.reorderLevel
     ).length;
-    const totalValue = stockItems.reduce(
-      (sum, item) => sum + (item.currentStock * item.purchasePrice || 0),
-      0
-    );
+    const totalValue = stockItems
+      .filter((item) => item.status === "Active")
+      .reduce(
+        (sum, item) => {
+          const stock = Number(item.currentStock) || 0;
+          const price = Number(item.purchasePrice) || 0;
+          return sum + (stock * price);
+        },
+        0
+      );
 
     return {
       totalItems,
@@ -1173,7 +1209,7 @@ const StockManagement = () => {
               <input
                 ref={searchInputRef}
                 type="text"
-                placeholder="Search by item name, SKU, or item ID..."
+                placeholder="Search by item name or item ID..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
@@ -1320,9 +1356,6 @@ const StockManagement = () => {
                           <div>
                             <p className="text-sm font-semibold text-gray-900">
                               {item.itemName.toUpperCase()}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              SKU: {item.sku}
                             </p>
                             <p className="text-xs text-gray-500">
                               ID: {item.itemId || item._id}
@@ -1488,8 +1521,8 @@ const StockManagement = () => {
 
       {showModal && (
         <div className="fixed inset-0 bg-white/50 flex items-center justify-center p-4 z-50 modal-container transform scale-95 transition-transform duration-300">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50 sticky top-0 z-10">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50 sticky top-0 z-10 flex-shrink-0">
               <div>
                 <h3 className="text-xl font-bold text-gray-900">
                   {editItemId ? "Edit Stock Item" : "Add New Stock Item"}
@@ -1516,7 +1549,7 @@ const StockManagement = () => {
               </button>
             </div>
 
-            <div className="p-6" ref={formRef}>
+            <div className="p-6 overflow-y-auto flex-1" ref={formRef}>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-3">
                   <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -1544,44 +1577,6 @@ const StockManagement = () => {
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    <Barcode size={16} className="inline mr-2" />
-                    SKU *
-                  </label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="text"
-                      name="sku"
-                      value={formData.sku}
-                      onChange={handleChange}
-                      placeholder="Enter SKU code"
-                      disabled={isAutoSKU && !editItemId}
-                      className={`flex-1 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 ${
-                        errors.sku
-                          ? "border-red-300 bg-red-50"
-                          : "border-gray-300"
-                      } ${isAutoSKU && !editItemId ? "bg-gray-100" : ""}`}
-                    />
-                    <button
-                      onClick={() => setIsAutoSKU(!isAutoSKU)}
-                      className={`px-4 py-2 rounded-lg ${
-                        isAutoSKU
-                          ? "bg-indigo-600 text-white"
-                          : "bg-gray-200 text-gray-700"
-                      } hover:bg-indigo-700 hover:text-white transition-all duration-200`}
-                    >
-                      {isAutoSKU ? "Auto" : "Manual"}
-                    </button>
-                  </div>
-                  {errors.sku && (
-                    <p className="mt-1 text-sm text-red-600 flex items-center">
-                      <AlertCircle size={12} className="mr-1" />
-                      {errors.sku}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
                     <Package size={16} className="inline mr-2" />
                     Item Name *
                   </label>
@@ -1601,6 +1596,44 @@ const StockManagement = () => {
                     <p className="mt-1 text-sm text-red-600 flex items-center">
                       <AlertCircle size={12} className="mr-1" />
                       {errors.itemName}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <Hash size={16} className="inline mr-2" />
+                    Item ID
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      name="itemId"
+                      value={isManualItemId ? (formData.itemId || "") : ""}
+                      onChange={handleChange}
+                      placeholder={isManualItemId ? "Enter custom item ID" : "Auto-generated"}
+                      disabled={!isManualItemId}
+                      className={`flex-1 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 ${
+                        errors.itemId
+                          ? "border-red-300 bg-red-50"
+                          : "border-gray-300"
+                      } ${!isManualItemId ? "bg-gray-100" : ""}`}
+                    />
+                    <button
+                      onClick={() => setIsManualItemId(!isManualItemId)}
+                      className={`px-4 py-2 rounded-lg ${
+                        isManualItemId
+                          ? "bg-indigo-600 text-white"
+                          : "bg-gray-200 text-gray-700"
+                      } hover:bg-indigo-700 hover:text-white transition-all duration-200`}
+                    >
+                      {isManualItemId ? "Manual" : "Auto"}
+                    </button>
+                  </div>
+                  {errors.itemId && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center">
+                      <AlertCircle size={12} className="mr-1" />
+                      {errors.itemId}
                     </p>
                   )}
                 </div>
@@ -1873,7 +1906,6 @@ const StockManagement = () => {
                       Changes saved automatically
                     </span>
                   ) : formData.itemName ||
-                    formData.sku ||
                     formData.category ||
                     formData.vendorId ||
                     formData.origin || // New field

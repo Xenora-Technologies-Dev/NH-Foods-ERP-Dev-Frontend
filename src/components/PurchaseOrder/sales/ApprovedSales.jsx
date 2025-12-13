@@ -295,7 +295,7 @@ const ApprovedSales = () => {
         )}
       </div>
 
-      <Modal open={!!selectedSO} onClose={() => setSelectedSO(null)} title={selectedSO ? `Invoice: ${selectedSO.transactionNo}` : ''}>
+      <Modal open={!!selectedSO} onClose={() => setSelectedSO(null)} title={selectedSO ? `Invoice: ${selectedSO.transactionNo}` : ''} size="full">
         {selectedSO && (
           <SaleInvoiceView
             selectedSO={selectedSO}

@@ -69,7 +69,8 @@ import {
   Pie,
 } from "recharts";
 import axiosInstance from "../../axios/axios.js";
-import { formatCurrencyAED } from "../../utils/format.js";
+import { formatAED, formatAmount } from "../../utils/currencyUtils.js";
+import DirhamIcon from "../../assets/dirham.svg";
 
 const Dashboard = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -126,38 +127,41 @@ const Dashboard = () => {
           {
             id: 1,
             title: "Sales (MTD)",
-            value: formatCurrencyAED(totalSales),
+            value: formatAED(totalSales),
+            displayAmount: totalSales,
             change: "+12.5%",
             trend: "up",
             icon: <TrendingUp className="w-6 h-6" />,
             bgColor: "bg-green-100/50",
             borderColor: "border-green-200/50",
             description: "Month-to-date sales",
-            target: formatCurrencyAED(totalSales * 1.2),
+            target: formatAED(totalSales * 1.2),
           },
           {
             id: 2,
             title: "Purchases (MTD)",
-            value: formatCurrencyAED(totalPurchase),
+            value: formatAED(totalPurchase),
+            displayAmount: totalPurchase,
             change: "+6.1%",
             trend: "up",
             icon: <TrendingDown className="w-6 h-6" />,
             bgColor: "bg-blue-100/50",
             borderColor: "border-blue-200/50",
             description: "Month-to-date purchases",
-            target: formatCurrencyAED(totalPurchase * 1.15),
+            target: formatAED(totalPurchase * 1.15),
           },
           {
             id: 3,
             title: "Gross Profit (MTD)",
-            value: formatCurrencyAED(profit),
+            value: formatAED(profit),
+            displayAmount: profit,
             change: `${profit > 0 ? '+' : ''}${((profit / (totalPurchase || 1)) * 100).toFixed(1)}%`,
             trend: profit > 0 ? "up" : "down",
             icon: <Wallet className="w-6 h-6" />,
             bgColor: "bg-purple-100/50",
             borderColor: "border-purple-200/50",
             description: "Sales - Purchases",
-            target: formatCurrencyAED(profit * 1.2),
+            target: formatAED(profit * 1.2),
           },
           {
             id: 4,
@@ -544,7 +548,13 @@ const Dashboard = () => {
                     </div>
                   </div>
                   <div className="space-y-1 sm:space-y-2">
-                    <h3 className="text-base sm:text-lg lg:text-xl font-bold text-gray-800 break-words">{kpi.value}</h3>
+                    {/* Display value with dirham symbol for currency fields */}
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {kpi.displayAmount !== undefined && (
+                        <img src={DirhamIcon} alt="AED" className="w-5 h-5 opacity-80" />
+                      )}
+                      <h3 className="text-base sm:text-lg lg:text-xl font-bold text-gray-800 break-words">{kpi.value}</h3>
+                    </div>
                     <p className="text-xs sm:text-sm font-medium text-gray-700">{kpi.title}</p>
                     <p className="text-xs text-gray-600 hidden sm:block">{kpi.description}</p>
                     <div className="w-full bg-gray-200/50 rounded-full h-1.5 sm:h-2">

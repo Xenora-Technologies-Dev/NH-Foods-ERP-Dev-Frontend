@@ -1,6 +1,6 @@
 import { Banknote, CreditCard, Landmark, Smartphone } from "lucide-react";
+import DirhamIcon from "../../../assets/dirham.svg";
 
-import dirham  from
 export const asArray = (data) => {
   if (!data) return [];
   if (Array.isArray(data)) return data;
@@ -53,7 +53,7 @@ export const formatCurrency = (amount, textClass = "text-gray-900") => {
   return (
     <span className={textClass}>
       <img
-        src="/dirham.svg"
+        src={DirhamIcon}
         alt="AED"
         className="inline w-4 h-4 mr-1"
         style={{ filter: getColorFilter(textClass) }}

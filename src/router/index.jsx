@@ -30,6 +30,8 @@ import ContraVoucherManagement from "../components/FinancialModules/Contra/Contr
 import ExpenseVoucherManagement from "../components/FinancialModules/Expense/ExpenseVoucherManagement.jsx";
 import StockDetail from "../components/Stock/StockDetail.jsx";
 import VatReports from "../components/Reports/VATReportCreate.jsx";
+import VendorDetailsPage from "../components/AccountsModule/Purchase/VendorDetailsPage.jsx";
+import CustomerDetailsPage from "../components/AccountsModule/Sales/CustomerDetailsPage.jsx";
 export default function AdminRouter() {
   return (
     <Routes>
@@ -40,7 +42,7 @@ export default function AdminRouter() {
         <Route path="/customer-creation" element={<CustomerCreation />} />{" "}
         <Route path="/stock-item-creation" element={<StockCreation />} />{" "}
         <Route path="/stock-item-creation" element={<StockCreation />} />{" "}
-         <Route path="/stock-detail/:id" element={<StockDetail />} />{" "}
+        <Route path="/stock-detail/:id" element={<StockDetail />} />{" "}
         <Route path="/unit-setup" element={<UnitOfMeasure />} />{" "}
         <Route path="/staff-records" element={<Staff />} />{" "}
         <Route path="/settings" element={<Settings />} />{" "}
@@ -60,31 +62,23 @@ export default function AdminRouter() {
         <Route path="/payment-voucher" element={<PaymentVoucherManagement />} />{" "}
         <Route path="/journal-voucher" element={<JournalVoucherManagement />} />{" "}
         <Route path="/contra-voucher" element={<ContraVoucherManagement />} />{" "}
-                <Route path="/expense-voucher" element={<ExpenseVoucherManagement />} />{" "}
+        <Route path="/expense-voucher" element={<ExpenseVoucherManagement />} />{" "}
         {/* Accounts Module */}
+        <Route path="/debit-accounts" element={<PurchaseAccounts />} />{" "}
         <Route
-          path="/debit-accounts"
-          element={<PurchaseAccounts />}
-        />{" "}
+          path="/debit-accounts/vendor/:vendorId"
+          element={<VendorDetailsPage />}
+        />
+        <Route path="/credit-accounts" element={<SaleAccountsManagement />} />{" "}
         <Route
-          path="/credit-accounts"
-          element={<SaleAccountsManagement />}
-        />{" "}
-        <Route
-          path="/transactions"
-          element={<TransactionsManagement />}
-        />{" "}
-        <Route
-          path="/transactors"
-          element={<TransactorsManagement />}
-        />{" "}
+          path="/credit-accounts/customer/:customerId"
+          element={<CustomerDetailsPage />}
+        />
+        <Route path="/transactions" element={<TransactionsManagement />} />{" "}
+        <Route path="/transactors" element={<TransactorsManagement />} />{" "}
         <Route path="/payment-voucher" element={<PaymentVoucherManagement />} />{" "}
-
         {/* reports */}
-          <Route
-          path="/vat-reports"
-          element={<VatReports />}
-        />{" "}
+        <Route path="/vat-reports" element={<VatReports />} />{" "}
       </Route>
       {/* </Route> */}
       <Route path="*" element={<NotFound />} />

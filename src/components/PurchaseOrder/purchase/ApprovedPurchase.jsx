@@ -230,7 +230,7 @@ const ApprovedPurchase = () => {
         )}
       </div>
       {/* Invoice modal */}
-      <Modal open={!!selectedPO} onClose={() => setSelectedPO(null)} title={selectedPO ? `Invoice: ${selectedPO.transactionNo}` : ''}>
+      <Modal open={!!selectedPO} onClose={() => setSelectedPO(null)} title={selectedPO ? `Invoice: ${selectedPO.transactionNo}` : ''} size="full">
         {selectedPO && (
           <InvoiceView
             selectedPO={selectedPO}

@@ -423,18 +423,20 @@ const Sidebar = () => {
             isCollapsed={isSidebarCollapsed}
             onClick={() => handleNavigation("/help-center")}
           />
-          <div onClick={handleLogout} className="cursor-pointer">
-            <div
-              className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-300 ${
-                isSidebarCollapsed ? "justify-center" : ""
-              } bg-gray-100/50 backdrop-blur-xl border border-gray-200/50 hover:bg-gray-200/50`}
-            >
-              <LogOut strokeWidth={1.5} size={22} className="text-gray-600" />
-              {!isSidebarCollapsed && (
-                <span className="font-medium text-gray-600">Log Out</span>
-              )}
-            </div>
-          </div>
+          <button
+            onClick={handleLogout}
+            type="button"
+            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-300 ${
+              isSidebarCollapsed ? "justify-center" : ""
+            } bg-gray-100/50 backdrop-blur-xl border border-gray-200/50 hover:bg-gray-200/50 hover:border-gray-300/50 cursor-pointer`}
+            aria-label="Log Out"
+            title={isSidebarCollapsed ? "Log Out" : ""}
+          >
+            <LogOut strokeWidth={1.5} size={22} className="text-gray-600" />
+            {!isSidebarCollapsed && (
+              <span className="font-medium text-gray-600">Log Out</span>
+            )}
+          </button>
         </div>
       </div>
     </>
@@ -444,10 +446,12 @@ const Sidebar = () => {
 // Sidebar Item Component
 const SidebarItem = React.memo(
   ({ icon, text, to, active, isCollapsed, special = false, onClick }) => (
-    <div
-      className="block cursor-pointer group"
+    <button
+      className="w-full block cursor-pointer group"
       title={isCollapsed ? text : ""}
       onClick={onClick}
+      type="button"
+      aria-label={text}
     >
       <div
         className={`relative flex items-center gap-3 p-3 rounded-xl transition-all duration-300 ${
@@ -457,7 +461,7 @@ const SidebarItem = React.memo(
             ? special
               ? "bg-gray-200 text-gray-800 shadow-lg border border-gray-200/50"
               : "bg-gray-100 text-gray-800 shadow-md border border-gray-200/50"
-            : "text-gray-600 hover:bg-gray-200/50 hover:border-gray-300/50"
+            : "text-gray-600 hover:bg-gray-200/50 hover:border-gray-300/50 border border-transparent"
         }`}
       >
         <div
@@ -473,7 +477,7 @@ const SidebarItem = React.memo(
           </span>
         )}
       </div>
-    </div>
+    </button>
   )
 );
 
@@ -500,22 +504,30 @@ const SidebarSection = React.memo(
         onToggle();
         return;
       }
-      handleNavigation(sectionTo);
-      onToggle();
+      if (!isCollapsed) {
+        handleNavigation(sectionTo);
+        onToggle();
+      } else {
+        // In collapsed state, just expand the section
+        onToggle();
+      }
     };
 
     return (
       <div className="w-full group" style={{ animationDelay: `${delay}ms` }}>
-        <div
+        <button
           onClick={handleSectionClick}
-          className={`relative flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-300 ${
+          className={`relative w-full flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-300 ${
             isCollapsed ? "justify-center" : ""
           } ${
             hasActiveChild || currentPath === sectionTo
               ? "bg-gray-200 text-gray-800 shadow-lg border border-gray-200/50"
-              : "text-gray-600 hover:bg-gray-200/50 hover:border-gray-300/50"
+              : "text-gray-600 hover:bg-gray-200/50 hover:border-gray-300/50 border border-transparent"
           }`}
           title={isCollapsed ? text : ""}
+          type="button"
+          aria-label={text}
+          aria-expanded={expanded && !isCollapsed}
         >
           <div className="relative z-10 p-2 rounded-lg bg-gray-200/50">
             {icon}
@@ -529,17 +541,12 @@ const SidebarSection = React.memo(
                 className={`toggle-arrow transform transition-transform duration-300 relative z-10 p-1 rounded ${
                   expanded ? "rotate-180" : ""
                 }`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onToggle();
-                }}
               >
                 <ChevronDown strokeWidth={1.5} size={18} className="text-gray-600" />
               </div>
             </>
           )}
-        </div>
+        </button>
 
         <div
           className={`overflow-hidden transition-all duration-500 ease-out ${
@@ -548,17 +555,19 @@ const SidebarSection = React.memo(
         >
           <div className="ml-6 mt-2 space-y-1 border-l border-gray-200/50 pl-4">
             {children.map((child) => (
-              <div
+              <button
                 key={child.to}
-                className="block cursor-pointer group"
+                className="w-full block cursor-pointer group"
                 title={isCollapsed ? child.text : ""}
                 onClick={() => handleNavigation(child.to)}
+                type="button"
+                aria-label={child.text}
               >
                 <div
                   className={`relative flex items-center gap-3 p-2.5 rounded-lg transition-all duration-300 ${
                     currentPath === child.to
                       ? "bg-gray-100 text-gray-800 border border-gray-200/50 shadow-md"
-                      : "text-gray-600 hover:bg-gray-200/50 hover:border-gray-300/50"
+                      : "text-gray-600 hover:bg-gray-200/50 hover:border-gray-300/50 border border-transparent"
                   }`}
                 >
                   {currentPath === child.to && (
@@ -573,7 +582,7 @@ const SidebarSection = React.memo(
                     </span>
                   )}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>

@@ -180,13 +180,15 @@
               `/uom/units/${editId}`,
               unitForm
             );
+            const savedUnit = response.data.data || response.data;
             setUnits((prev) =>
-              prev.map((unit) => (unit.id === editId ? response.data : unit))
+              prev.map((unit) => (unit._id === editId ? savedUnit : unit))
             );
             showToastMessage("Unit updated successfully!", "success");
           } else {
             const response = await axiosInstance.post("/uom/units", unitForm);
-            setUnits((prev) => [...prev, response.data]);
+            const newUnit = response.data.data || response.data;
+            setUnits((prev) => [...prev, newUnit]);
             showToastMessage("Unit created successfully!", "success");
           }
         } else {
@@ -206,9 +208,10 @@
               `/uom/conversions/${editId}`,
               payload
             );
+            const savedConversion = response.data.data || response.data;
             setConversions((prev) =>
               prev.map((conversion) =>
-                conversion.id === editId ? response.data : conversion
+                conversion._id === editId ? savedConversion : conversion
               )
             );
             showToastMessage("Conversion updated successfully!", "success");
@@ -217,8 +220,8 @@
               "/uom/conversions",
               payload
             );
-           
-            setConversions((prev) => [...prev, response.data]);
+            const newConversion = response.data.data || response.data;
+            setConversions((prev) => [...prev, newConversion]);
             showToastMessage("Conversion created successfully!", "success");
           }
         }
