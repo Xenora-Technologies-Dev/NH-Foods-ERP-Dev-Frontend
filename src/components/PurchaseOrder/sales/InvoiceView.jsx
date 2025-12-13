@@ -121,8 +121,8 @@ const SaleInvoiceView = ({
       ...m,
       invoiceNo: deriveInvoiceNo(so) || m.invoiceNo,
       soNo: so.orderNumber || so.transactionNo || m.soNo || '',
-      lpoOrRef: (so.refNo ?? so.lpono ?? m.lpoOrRef ?? '-') || '-',
-      docNo: (so.docNo ?? so.docno ?? m.docNo ?? '-') || '-',
+      lpoOrRef: (so.refNo ?? so.lpono ?? m.lpoOrRef ?? '-') ,
+      docNo: (so.docNo ?? so.docno ?? m.docNo ?? '-') ,
       paymentTerms: customer.paymentTerms || m.paymentTerms || 'COD',
     }));
     console.log("Invoice Meta Updated:", invoiceMeta);

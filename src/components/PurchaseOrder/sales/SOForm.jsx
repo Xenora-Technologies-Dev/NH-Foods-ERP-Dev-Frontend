@@ -590,7 +590,7 @@ const SOForm = React.memo(
                     <input
                       type="text"
                       name="refNo"
-                      value={formData.refNo || selectedSO?.refNo || selectedSO?.lpoNo || selectedSO?.lpo || selectedSO?.reference || ''}
+                      value={formData.refNo || selectedSO?.refNo || selectedSO?.lpono || selectedSO?.lpoNo || selectedSO?.lpo || selectedSO?.reference || ''}
                       onChange={handleInputChange}
                       placeholder="Enter LPO/Reference No"
                       className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -601,7 +601,7 @@ const SOForm = React.memo(
                     <input
                       type="text"
                       name="docNo"
-                      value={formData.docNo || selectedSO?.docNo || selectedSO?.documentNo || selectedSO?.docNumber || ''}
+                      value={formData.docNo || selectedSO?.docNo || selectedSO?.docno || selectedSO?.documentNo || selectedSO?.docNumber || ''}
                       onChange={handleInputChange}
                       placeholder="Enter Document No"
                       className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"

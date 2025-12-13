@@ -50,6 +50,7 @@ const ApprovedPurchase = () => {
           orderNumber: t.orderNumber, // <-- Added this
           vendorId: t.partyId,
           vendorName: t.party?.vendorName || t.partyName,
+          vendorReference: t.vendorReference || "",
           date: t.date,
           approvedAt: t.approvedAt || t.updatedAt || t.approvedDate || null,
           deliveryDate: t.deliveryDate,
