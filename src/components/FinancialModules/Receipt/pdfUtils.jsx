@@ -27,7 +27,7 @@ export const downloadReceiptPDF = async (selectedReceipt, showToastMessage) => {
       },
     });
 
-    const imgData = canvas.toDataURL("image/png", 1.0);
+    const imgData = canvas.toDataURL("image/jpeg", 0.92);
     const pdf = new jsPDF("p", "mm", "a4");
 
     const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -45,7 +45,7 @@ export const downloadReceiptPDF = async (selectedReceipt, showToastMessage) => {
 
     pdf.addImage(
       imgData,
-      "PNG",
+      "JPEG",
       imgX,
       imgY,
       imgWidth * 0.264583 * ratio,

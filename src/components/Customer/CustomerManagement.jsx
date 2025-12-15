@@ -257,11 +257,11 @@ const CustomerManagement = () => {
 
   const validateForm = useCallback(() => {
     const newErrors = {};
-    if (!formData.customerName.trim())
+    if (!(formData.customerName || "").trim())
       newErrors.customerName = "Customer name is required";
-    if (!formData.contactPerson.trim())
+    if (!(formData.contactPerson || "").trim())
       newErrors.contactPerson = "Contact person is required";
-    if (!formData.billingAddress.trim())
+    if (!(formData.billingAddress || "").trim())
       newErrors.billingAddress = "Billing address is required";
     if (formData.email && !/\S+@\S+\.\S+/.test(formData.email))
       newErrors.email = "Invalid email format";
@@ -284,13 +284,13 @@ const CustomerManagement = () => {
     setIsSubmitting(true);
     try {
       const normalizedTrn = formData.trnNumber
-  ? formData.trnNumber.toString().trim().replace(/\s+/g, "")
+  ? String(formData.trnNumber).trim().replace(/\s+/g, "")
   : null;
       const payload = {
         customerName: formData.customerName,
-        contactPerson: formData.contactPerson.trim(),
+        contactPerson: (formData.contactPerson || "").trim(),
         email: formData.email,
-        phone: formData.phone.trim(),
+        phone: (formData.phone || "").trim(),
         billingAddress: formData.billingAddress,
         shippingAddress: formData.shippingAddress,
         creditLimit: Number(formData.creditLimit) || 0,
@@ -301,25 +301,56 @@ const CustomerManagement = () => {
       };
 
       if (editCustomerId) {
-        await axiosInstance.put(`/customers/customers/${editCustomerId}`, payload);
+        // Ensure we have an id to update
+        if (!editCustomerId) {
+          showToastMessage("No customer selected for update.", "error");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const response = await axiosInstance.put(`/customers/customers/${editCustomerId}`, payload);
         showToastMessage("Customer updated successfully!", "success");
+
+        // Optimistically update local state without an extra fetch
+        if (response?.data?.data) {
+          const updated = response.data.data;
+          setCustomers((prev) => prev.map((c) => (c._id === updated._id ? updated : c)));
+        } else {
+          // Fallback: refresh list if response shape is unexpected
+          await fetchCustomers();
+        }
       } else {
         const response = await axiosInstance.post("/customers/customers", payload);
-        fetchCustomers();
+        if (response?.data?.data) {
+          setCustomers((prev) => [response.data.data, ...prev]);
+        } else {
+          await fetchCustomers();
+        }
         showToastMessage("Customer created successfully!", "success");
       }
 
-      await fetchCustomers();
       resetForm();
 
       // Clear session data after successful submission
       SessionManager.remove("formData");
       SessionManager.remove("lastSaveTime");
     } catch (error) {
-      showToastMessage(
-        error.response?.data?.message || "Failed to save customer.",
-        "error"
-      );
+      // Log detailed error for debugging
+      console.error("Customer save error:", error);
+      console.error("Error response:", error?.response?.data || error?.response);
+
+      const message =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        "Failed to save customer.";
+
+      // If validation errors were returned in a structured format, show them on the form
+      if (error?.response?.data?.errors && typeof error.response.data.errors === "object") {
+        setErrors(error.response.data.errors);
+      }
+
+      showToastMessage(message, "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -340,7 +371,7 @@ const CustomerManagement = () => {
       phone: customer.phone,
       billingAddress: customer.billingAddress,
       shippingAddress: customer.shippingAddress,
-      creditLimit: customer.creditLimit.toString(),
+      creditLimit: customer.creditLimit === undefined || customer.creditLimit === null ? "" : String(customer.creditLimit),
       paymentTerms: customer.paymentTerms,
       status: customer.status,
       trnNumber: customer.trnNumber || "", // <- ADDED

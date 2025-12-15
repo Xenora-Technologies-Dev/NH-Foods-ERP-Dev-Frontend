@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   TrendingUp,
@@ -73,6 +74,7 @@ import { formatAED, formatAmount } from "../../utils/currencyUtils.js";
 import DirhamIcon from "../../assets/dirham.svg";
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState("month");
@@ -104,17 +106,51 @@ const Dashboard = () => {
     try {
       // Fetch data in parallel
       const [transactions, stock, staff, vouchers, vendors, customers] = await Promise.all([
-        axiosInstance.get("/transactions/transactions").catch(() => ({ data: { data: [] } })),
-        axiosInstance.get("/stock/stock").catch(() => ({ data: { data: [] } })),
-        axiosInstance.get("/staff/staff").catch(() => ({ data: { data: [] } })),
-        axiosInstance.get("/vouchers/vouchers").catch(() => ({ data: { data: [] } })),
-        axiosInstance.get("/vendors/vendors").catch(() => ({ data: { data: [] } })),
-        axiosInstance.get("/customers/customers").catch(() => ({ data: { data: [] } })),
+        axiosInstance.get("/transactions/transactions").catch((err) => {
+          console.error("Error fetching transactions:", err.message);
+          return { data: [] };
+        }),
+        axiosInstance.get("/stock/stock").catch((err) => {
+          console.error("Error fetching stock:", err.message);
+          return { data: { stocks: [] } };
+        }),
+        axiosInstance.get("/staff/staff").catch((err) => {
+          console.error("Error fetching staff:", err.message);
+          return { data: { staff: [] } };
+        }),
+        axiosInstance.get("/vouchers/vouchers").catch((err) => {
+          console.error("Error fetching vouchers:", err.message);
+          return { data: [] };
+        }),
+        axiosInstance.get("/vendors/vendors").catch((err) => {
+          console.error("Error fetching vendors:", err.message);
+          return { data: [] };
+        }),
+        axiosInstance.get("/customers/customers").catch((err) => {
+          console.error("Error fetching customers:", err.message);
+          return { data: [] };
+        }),
       ]);
+
+      // Get current month name
+      const currentDate = new Date();
+      const monthName = currentDate.toLocaleString('default', { month: 'long' });
+      
+      // Debug log API responses
+      console.log("Dashboard API Responses:", { 
+        transactions: transactions.data, 
+        stock: stock.data, 
+        staff: staff.data, 
+        vouchers: vouchers.data 
+      });
 
       // Process KPI Data from real transactions
       const processKPIs = (transactionsData, stockData) => {
-        const txnList = transactionsData?.data?.data || [];
+        // Handle transaction response: could be array or {data: array}
+        const txnList = Array.isArray(transactionsData?.data) 
+          ? transactionsData.data 
+          : transactionsData?.data?.data || [];
+        
         const salesTransactions = txnList.filter(t => t.type === "sales_order" || t.transactionType === "sales");
         const purchaseTransactions = txnList.filter(t => t.type === "purchase_order" || t.transactionType === "purchase");
         
@@ -126,7 +162,7 @@ const Dashboard = () => {
         return [
           {
             id: 1,
-            title: "Sales (MTD)",
+            title: `Sales (${monthName})`,
             value: formatAED(totalSales),
             displayAmount: totalSales,
             change: "+12.5%",
@@ -134,12 +170,12 @@ const Dashboard = () => {
             icon: <TrendingUp className="w-6 h-6" />,
             bgColor: "bg-green-100/50",
             borderColor: "border-green-200/50",
-            description: "Month-to-date sales",
+            description: `${monthName} sales`,
             target: formatAED(totalSales * 1.2),
           },
           {
             id: 2,
-            title: "Purchases (MTD)",
+            title: `Purchases (${monthName})`,
             value: formatAED(totalPurchase),
             displayAmount: totalPurchase,
             change: "+6.1%",
@@ -147,12 +183,12 @@ const Dashboard = () => {
             icon: <TrendingDown className="w-6 h-6" />,
             bgColor: "bg-blue-100/50",
             borderColor: "border-blue-200/50",
-            description: "Month-to-date purchases",
+            description: `${monthName} purchases`,
             target: formatAED(totalPurchase * 1.15),
           },
           {
             id: 3,
-            title: "Gross Profit (MTD)",
+            title: `Gross Profit (${monthName})`,
             value: formatAED(profit),
             displayAmount: profit,
             change: `${profit > 0 ? '+' : ''}${((profit / (totalPurchase || 1)) * 100).toFixed(1)}%`,
@@ -160,7 +196,7 @@ const Dashboard = () => {
             icon: <Wallet className="w-6 h-6" />,
             bgColor: "bg-purple-100/50",
             borderColor: "border-purple-200/50",
-            description: "Sales - Purchases",
+            description: `${monthName} profit`,
             target: formatAED(profit * 1.2),
           },
           {
@@ -172,7 +208,7 @@ const Dashboard = () => {
             icon: <ShoppingCart className="w-6 h-6" />,
             bgColor: "bg-orange-100/50",
             borderColor: "border-orange-200/50",
-            description: "orders created",
+            description: `${monthName} orders created`,
             target: (salesTransactions.length * 1.2).toString(),
           },
           {
@@ -184,7 +220,7 @@ const Dashboard = () => {
             icon: <Truck className="w-6 h-6" />,
             bgColor: "bg-red-100/50",
             borderColor: "border-red-200/50",
-            description: "orders placed",
+            description: `${monthName} orders placed`,
             target: (purchaseTransactions.length * 1.3).toString(),
           },
           {
@@ -196,7 +232,7 @@ const Dashboard = () => {
             icon: <Scale className="w-6 h-6" />,
             bgColor: "bg-indigo-100/50",
             borderColor: "border-indigo-200/50",
-            description: "current month",
+            description: `${monthName} margin`,
             target: "25%",
           },
         ];
@@ -206,12 +242,25 @@ const Dashboard = () => {
 
       // Process Inventory Data
       const processInventory = (stockData) => {
-        const stocks = stockData?.data?.data || [];
-        if (stocks.length === 0) return [];
+        // Handle different response formats for stock data
+        let stocks = [];
+        if (Array.isArray(stockData?.data)) {
+          stocks = stockData.data;
+        } else if (stockData?.data?.stocks && Array.isArray(stockData.data.stocks)) {
+          stocks = stockData.data.stocks;
+        } else if (Array.isArray(stockData?.stocks)) {
+          stocks = stockData.stocks;
+        }
+        
+        console.log("Processed stocks for inventory:", stocks);
+        if (!Array.isArray(stocks) || stocks.length === 0) return [];
         
         const categoryMap = {};
         stocks.forEach(s => {
-          const category = s.category || "Uncategorized";
+          const categoryObj = s.category;
+          const category = typeof categoryObj === "string"
+            ? categoryObj
+            : categoryObj?.name || "Uncategorized";
           if (!categoryMap[category]) {
             categoryMap[category] = { count: 0, value: 0 };
           }
@@ -234,8 +283,18 @@ const Dashboard = () => {
 
       // Process Staff Data
       const processStaff = (staffData) => {
-        const staffList = staffData?.data?.data || [];
-        if (staffList.length === 0) return [];
+        // Handle different response formats for staff data
+        let staffList = [];
+        if (Array.isArray(staffData?.data)) {
+          staffList = staffData.data;
+        } else if (staffData?.data?.staff && Array.isArray(staffData.data.staff)) {
+          staffList = staffData.data.staff;
+        } else if (Array.isArray(staffData?.staff)) {
+          staffList = staffData.staff;
+        }
+        
+        console.log("Processed staff:", staffList);
+        if (!Array.isArray(staffList) || staffList.length === 0) return [];
         
         return staffList.slice(0, 5).map(s => ({
           department: s.department || s.name || "General",
@@ -249,15 +308,26 @@ const Dashboard = () => {
 
       // Process Top Items by Stock Value
       const processTopItems = (stockData) => {
-        const stocks = stockData?.data?.data || [];
+        // Handle different response formats for stock data
+        let stocks = [];
+        if (Array.isArray(stockData?.data)) {
+          stocks = stockData.data;
+        } else if (stockData?.data?.stocks && Array.isArray(stockData.data.stocks)) {
+          stocks = stockData.data.stocks;
+        } else if (Array.isArray(stockData?.stocks)) {
+          stocks = stockData.stocks;
+        }
+        
+        if (!Array.isArray(stocks)) stocks = [];
+        
         return stocks
           .map(s => ({
-            name: s.itemName || s.name,
+            name: typeof s.itemName === "string" ? s.itemName : (typeof s.name === "string" ? s.name : s.name?.name || "Unnamed"),
             sales: (s.quantity || 0) * (s.unitPrice || 0),
             units: s.quantity || 0,
             growth: (Math.random() * 25 + 5).toFixed(1),
-            category: s.category || "General",
-          }))
+            category: (typeof s.category === "string") ? s.category : s.category?.name || "General",
+          } ))
           .sort((a, b) => b.sales - a.sales)
           .slice(0, 5);
       };
@@ -266,7 +336,16 @@ const Dashboard = () => {
 
       // Process Financial Data
       const processFinancialData = (vouchersData) => {
-        const voucherList = vouchersData?.data?.data || [];
+        // Handle different response formats for vouchers data
+        let voucherList = [];
+        if (Array.isArray(vouchersData?.data)) {
+          voucherList = vouchersData.data;
+        } else if (vouchersData?.data?.data && Array.isArray(vouchersData.data.data)) {
+          voucherList = vouchersData.data.data;
+        }
+        
+        if (!Array.isArray(voucherList)) voucherList = [];
+        
         const groupedByType = {
           "Receipt Voucher": { count: 0, amount: 0 },
           "Payment Voucher": { count: 0, amount: 0 },
@@ -295,14 +374,18 @@ const Dashboard = () => {
 
       // Process Recent Activities from Transactions
       const processRecentActivities = (transactionsData) => {
-        const txnList = transactionsData?.data?.data || [];
+        // Handle transaction response: could be array or {data: array}
+        const txnList = Array.isArray(transactionsData?.data) 
+          ? transactionsData.data 
+          : transactionsData?.data?.data || [];
+        
         return txnList.slice(-6).reverse().map((t, idx) => ({
           id: idx + 1,
           type: t.type?.includes("sales") ? "sale" : t.type?.includes("purchase") ? "purchase" : "inventory",
           description: `${t.transactionType || t.type} #${t.referenceNumber || `TXN-${idx}`}`,
           time: t.createdAt ? `${Math.floor(Math.random() * 60)} minutes ago` : "Recently",
           status: t.status || "success",
-          amount: formatCurrencyAED(t.amount || t.totalAmount || 0),
+          amount: formatAED(t.amount || t.totalAmount || 0),
           user: t.createdBy || "System",
         }));
       };
@@ -311,8 +394,22 @@ const Dashboard = () => {
 
       // Process Alerts
       const processAlerts = (stockData, transactionsData) => {
-        const stocks = stockData?.data?.data || [];
-        const txns = transactionsData?.data?.data || [];
+        // Handle different response formats for stock data
+        let stocks = [];
+        if (Array.isArray(stockData?.data)) {
+          stocks = stockData.data;
+        } else if (stockData?.data?.stocks && Array.isArray(stockData.data.stocks)) {
+          stocks = stockData.data.stocks;
+        } else if (Array.isArray(stockData?.stocks)) {
+          stocks = stockData.stocks;
+        }
+        
+        if (!Array.isArray(stocks)) stocks = [];
+        
+        // Handle transaction response: could be array or {data: array}
+        const txns = Array.isArray(transactionsData?.data) 
+          ? transactionsData.data 
+          : transactionsData?.data?.data || [];
         
         const lowStockItems = stocks.filter(s => s.quantity < (s.reorderLevel || 50)).length;
         const pendingOrders = txns.filter(t => t.status === "pending").length;
@@ -349,7 +446,11 @@ const Dashboard = () => {
 
       // Process Sales Data for chart (group by date or month)
       const processSalesData = (transactionsData) => {
-        const txnList = transactionsData?.data?.data || [];
+        // Handle transaction response: could be array or {data: array}
+        const txnList = Array.isArray(transactionsData?.data) 
+          ? transactionsData.data 
+          : transactionsData?.data?.data || [];
+        
         const monthlyData = {};
         
         txnList.forEach(t => {
@@ -399,6 +500,14 @@ const Dashboard = () => {
       default:
         return "bg-gray-500";
     }
+  };
+
+  // Helper to safely get a display string from possible object/string values
+  const getDisplayName = (val) => {
+    if (val == null) return "";
+    if (typeof val === "string") return val;
+    if (typeof val === "object") return val.name || val.title || String(val);
+    return String(val);
   };
 
   const getAlertBgColor = (type) => {
@@ -689,7 +798,7 @@ const Dashboard = () => {
                               className="w-3 h-3 rounded-full"
                               style={{ backgroundColor: item.color }}
                             ></div>
-                            <span className="text-gray-700">{item.name}</span>
+                            <span className="text-gray-700">{getDisplayName(item.name)}</span>
                           </div>
                           <div className="text-right">
                             <span className="text-gray-800 font-medium">{item.value}%</span>
@@ -715,13 +824,14 @@ const Dashboard = () => {
               </div>
               <div className="p-6 grid grid-cols-2 gap-3">
                 {[
-                  { icon: <Receipt className="w-5 h-5" />, label: "New Invoice", bgColor: "bg-blue-100" },
-                  { icon: <ShoppingCart className="w-5 h-5" />, label: "Add Order", bgColor: "bg-green-100" },
-                  { icon: <Package className="w-5 h-5" />, label: "Stock Entry", bgColor: "bg-orange-100" },
-                  { icon: <Users className="w-5 h-5" />, label: "New Customer", bgColor: "bg-purple-100" },
+                  { icon: <Receipt className="w-5 h-5" />, label: "New Invoice", bgColor: "bg-blue-100", path: "/receipt-voucher" },
+                  { icon: <ShoppingCart className="w-5 h-5" />, label: "Add Order", bgColor: "bg-green-100", path: "/sales-order" },
+                  { icon: <Package className="w-5 h-5" />, label: "Stock Entry", bgColor: "bg-orange-100", path: "/stock-item-creation" },
+                  { icon: <Users className="w-5 h-5" />, label: "New Customer", bgColor: "bg-purple-100", path: "/customer-creation" },
                 ].map((action, index) => (
                   <button
                     key={index}
+                    onClick={() => navigate(action.path)}
                     className="group p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all duration-300 flex flex-col items-center space-y-3 border border-gray-200/50"
                   >
                     <div className={`p-3 rounded-lg ${action.bgColor} text-gray-800 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
@@ -777,7 +887,7 @@ const Dashboard = () => {
                     <div key={index} className="flex items-center justify-between text-sm p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center space-x-2">
                         <div className="w-3 h-3 rounded-full bg-indigo-600"></div>
-                        <span className="text-gray-700 font-medium">{item.department}</span>
+                        <span className="text-gray-700 font-medium">{getDisplayName(item.department)}</span>
                       </div>
                       <div className="text-right">
                         <span className="text-gray-800 font-bold">{item.performance}%</span>
@@ -809,12 +919,12 @@ const Dashboard = () => {
                           <Star className="w-4 h-4" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
-                          <p className="text-xs text-gray-600">{item.category}</p>
+                            <p className="text-sm font-medium text-gray-800 truncate">{getDisplayName(item.name)}</p>
+                          <p className="text-xs text-gray-600">{getDisplayName(item.category)}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-medium text-gray-800">{formatCurrencyAED(item.sales)}</p>
+                        <p className="text-sm font-medium text-gray-800">{formatAED(item.sales)}</p>
                         <p className="text-xs text-green-600">+{item.growth}%</p>
                       </div>
                     </div>

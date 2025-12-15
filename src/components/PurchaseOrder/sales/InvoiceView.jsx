@@ -157,13 +157,13 @@ const SaleInvoiceView = ({
     }
     await new Promise((r) => setTimeout(r, 80));
     const el = document.getElementById("invoice-content");
-    const canvas = await html2canvas(el, { scale: 3, useCORS: true, backgroundColor: "#fff" });
-    const img = canvas.toDataURL("image/png");
+    const canvas = await html2canvas(el, { scale: 2.5, useCORS: true, backgroundColor: "#fff" });
+    const img = canvas.toDataURL("image/jpeg", 0.92);
     const pdf = new jsPDF("p", "mm", "a4");
     const pdfW = 210, pdfH = 297;
     const ratio = Math.min(pdfW / canvas.width, pdfH / canvas.height);
     const w = canvas.width * ratio, h = canvas.height * ratio;
-    pdf.addImage(img, "PNG", (pdfW - w) / 2, (pdfH - h) / 2, w, h);
+    pdf.addImage(img, "JPEG", (pdfW - w) / 2, (pdfH - h) / 2, w, h, undefined, "FAST");
     const customerName = customer.customerName ? customer.customerName.replace(/\s+/g, "_") : "Customer";
     const docNumber = isApproved ? invoiceMeta.invoiceNo : invoiceMeta.soNo;
     const filenameSuffix = copyType ? `_${copyType.replace(/\s+/g, "_")}` : "";

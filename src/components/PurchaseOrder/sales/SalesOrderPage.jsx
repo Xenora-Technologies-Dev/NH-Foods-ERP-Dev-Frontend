@@ -771,13 +771,13 @@ const updateSalesOrderStatus = (id, newStatus) => {
         container.innerHTML = '';
         container.appendChild(temp);
 
-        const canvas = await html2canvas(temp, { scale: 3, useCORS: true, backgroundColor: '#fff' });
-        const img = canvas.toDataURL('image/png');
+        const canvas = await html2canvas(temp, { scale: 2.5, useCORS: true, backgroundColor: '#fff' });
+        const img = canvas.toDataURL('image/jpeg', 0.92);
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfW = 210, pdfH = 297;
         const ratio = Math.min(pdfW / canvas.width, pdfH / canvas.height);
         const w = canvas.width * ratio, h = canvas.height * ratio;
-        pdf.addImage(img, 'PNG', (pdfW - w) / 2, (pdfH - h) / 2, w, h);
+        pdf.addImage(img, 'JPEG', (pdfW - w) / 2, (pdfH - h) / 2, w, h, undefined, 'FAST');
         const fname = `${so.status === 'APPROVED' ? 'INV' : 'SO'}_${(so.displayTransactionNo || so.transactionNo)}_${copyType.replace(/\s+/g, '_')}.pdf`;
         pdf.save(fname);
         document.body.removeChild(container);
@@ -791,8 +791,8 @@ const updateSalesOrderStatus = (id, newStatus) => {
       if (copyLabel) copyLabel.innerText = copyType;
       await new Promise(r => setTimeout(r, 80));
       const node = document.getElementById('invoice-content');
-      const canvas = await html2canvas(node, { scale: 3, useCORS: true, backgroundColor: '#fff' });
-      const img = canvas.toDataURL('image/png');
+      const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: '#fff' });
+      const img = canvas.toDataURL('image/jpeg', 0.8);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfW = 210, pdfH = 297;
       const ratio = Math.min(pdfW / canvas.width, pdfH / canvas.height);

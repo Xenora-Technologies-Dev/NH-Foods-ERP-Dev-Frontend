@@ -1048,7 +1048,7 @@ const ExpenseVoucherManagement = () => {
           }
         },
       });
-      const imgData = canvas.toDataURL("image/png", 1.0);
+      const imgData = canvas.toDataURL("image/jpeg", 0.92);
       const pdf = new jsPDF("p", "mm", "a4");
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
@@ -1062,7 +1062,7 @@ const ExpenseVoucherManagement = () => {
       const imgY = 0;
       pdf.addImage(
         imgData,
-        "PNG",
+        "JPEG",
         imgX,
         imgY,
         imgWidth * 0.264583 * ratio,

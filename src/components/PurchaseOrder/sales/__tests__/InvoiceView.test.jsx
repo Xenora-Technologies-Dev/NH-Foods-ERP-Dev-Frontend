@@ -9,7 +9,7 @@ import SaleInvoiceView from '../InvoiceView.jsx';
 vi.mock('../../../axios/axios', () => ({ default: { get: vi.fn().mockResolvedValue({ data: { success: false } }) } }));
 
 // Mock dynamic imports for html2canvas and jspdf used in PDF generation
-vi.mock('html2canvas', () => ({ default: vi.fn(async () => ({ width: 800, height: 1200, toDataURL: vi.fn(() => 'data:image/png;base64,FAKE') })) }));
+vi.mock('html2canvas', () => ({ default: vi.fn(async () => ({ width: 800, height: 1200, toDataURL: vi.fn(() => 'data:image/jpeg;base64,FAKE') })) }));
 vi.mock('jspdf', () => ({ jsPDF: vi.fn().mockImplementation(() => ({ addImage: vi.fn(), save: vi.fn() })) }));
 
 // Provide a stub for document.getElementById('copy-label') used during PDF generation cleanup
