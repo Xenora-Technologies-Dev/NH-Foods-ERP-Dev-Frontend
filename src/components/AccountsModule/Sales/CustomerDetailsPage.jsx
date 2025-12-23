@@ -1,7 +1,29 @@
-import React, { useState, useEffect } from "react";
+// src/pages/credit-accounts/CustomerDetailsPage.jsx
+// Accounts Receivable Ledger - Asset Account (Debit Normal Balance)
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../../../axios/axios";
-import { ArrowLeft, Users, DollarSign, RefreshCw } from "lucide-react";
+import { ArrowLeft, Users, DollarSign, RefreshCw, BookOpen, ArrowUpRight, ArrowDownRight, Info } from "lucide-react";
+
+// Accounting Info Component
+const AccountingLegend = () => (
+  <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-xl p-4 mb-6">
+    <div className="flex items-center gap-2 mb-2">
+      <BookOpen size={16} className="text-purple-600" />
+      <span className="text-sm font-bold text-purple-800">Accounts Receivable - Asset Account</span>
+    </div>
+    <div className="flex flex-wrap gap-4 text-xs">
+      <div className="flex items-center gap-1">
+        <ArrowUpRight size={12} className="text-purple-600" />
+        <span className="text-gray-700"><strong>Debit</strong> = Sales Invoice (Increase Receivable)</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <ArrowDownRight size={12} className="text-blue-600" />
+        <span className="text-gray-700"><strong>Credit</strong> = Receipt/Return (Decrease Receivable)</span>
+      </div>
+    </div>
+  </div>
+);
 
 const CustomerDetailsPage = () => {
   const { customerId } = useParams();
@@ -83,18 +105,23 @@ console.log(customerId)
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-4 mb-3">
-              <Users size={28} /> {customer?.name || "Vendor Ledger"}
+              <Users size={28} /> {customer?.name || "Customer Ledger"}
             </h1>
-            <p className="text-purple-100 text-lg">Customer ID: <span className="font-mono">{customer.partyId}</span></p>
+            <p className="text-purple-100 text-lg">Customer ID: <span className="font-mono">{customer?.partyId}</span></p>
+            <p className="text-purple-200 text-sm mt-1">Account Type: Accounts Receivable (Asset)</p>
           </div>
           <div className="text-right">
             <p className="text-purple-100 text-sm uppercase tracking-wider">Outstanding Balance</p>
             <p className="text-4xl font-bold text-white mt-2">
-              AED {customer?.currentBalance?.toFixed(2).toLocaleString() || "0.00"}
+              AED {customer?.currentBalance?.toFixed(2) || "0.00"}
             </p>
+            <p className="text-purple-200 text-sm mt-1">{customer?.currentBalance > 0 ? "Debit Balance (Receivable)" : "Settled"}</p>
           </div>
         </div>
       </div>
+
+      {/* Accounting Legend */}
+      <AccountingLegend />
 
       {/* Filters */}
       <div className="bg-white/80 backdrop-blur-lg rounded-3xl shadow-xl p-8 mb-8 border border-gray-200">
@@ -169,78 +196,100 @@ console.log(customerId)
 
 
       <div className="bg-white rounded-3xl shadow-xl p-8">
-        <h3 className="text-2xl font-bold text-gray-800 mb-6">
-          Transaction History
-        </h3>
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-2xl font-bold text-gray-800">
+            Transaction Ledger
+          </h3>
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-1 text-purple-700 bg-purple-50 px-3 py-1 rounded-lg">
+              <ArrowUpRight size={12} /> Debit (Dr)
+            </div>
+            <div className="flex items-center gap-1 text-blue-700 bg-blue-50 px-3 py-1 rounded-lg">
+              <ArrowDownRight size={12} /> Credit (Cr)
+            </div>
+          </div>
+        </div>
 
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gradient-to-r from-purple-50 to-blue-50">
               <tr>
-                {[
-                  "Date",
-                  "Type",
-                  "Inv No",
-                  "Amount",
-                  "Paid",
-                  "Balance",
-                  "Ref",
-                  "Status",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase"
-                  >
-                    {h}
-                  </th>
-                ))}
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Date</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Type</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Inv No</th>
+                <th className="px-6 py-4 text-right text-xs font-bold text-purple-700 uppercase">Debit (Dr)</th>
+                <th className="px-6 py-4 text-right text-xs font-bold text-blue-700 uppercase">Credit (Cr)</th>
+                <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase">Balance</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Ref</th>
+                <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {ledger.map((log, i) => (
-                <tr key={i} className="hover:bg-purple-50 transition">
-                  <td className="px-6 py-4">
-                    {new Date(log.date).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        log.type.includes("Return")
-                          ? "bg-red-100 text-red-700"
-                          : "bg-emerald-100 text-emerald-700"
-                      }`}
-                    >
-                      {log.type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 font-mono font-bold">{log.invNo}</td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={
-                        log.drCr === "Dr" ? "text-emerald-600" : "text-red-600"
-                      }
-                    >
-                      AED {log.amount.toLocaleString()}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-emerald-600">
-                    AED {log.paid.toFixed(2)}
-                  </td>
-                  <td className="px-6 py-4 text-red-600 font-bold">
-                    AED {log.balance.toFixed(2)}
-                  </td>
-                  <td className="px-6 py-4 text-gray-600">{log.ref}</td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-bold text-white ${
-                        log.status === "PAID" ? "bg-emerald-500" : "bg-red-500"
-                      }`}
-                    >
-                      {log.status}
-                    </span>
+              {ledger.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                    No transactions found
                   </td>
                 </tr>
-              ))}
+              ) : (
+                ledger.map((log, i) => {
+                  // For A/R: Debit increases (invoice), Credit decreases (receipt/return)
+                  const isDebit = log.drCr === "Dr" && !log.type.includes("Return") && !log.type.includes("Receipt");
+                  const isCredit = log.drCr === "Cr" || log.type.includes("Return") || log.type.includes("Receipt");
+                  return (
+                    <tr key={i} className="hover:bg-purple-50 transition">
+                      <td className="px-6 py-4">
+                        {new Date(log.date).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-bold ${
+                            log.type.includes("Return") || log.type.includes("Receipt")
+                              ? "bg-blue-100 text-blue-700"
+                              : "bg-purple-100 text-purple-700"
+                          }`}
+                        >
+                          {log.type}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-mono font-bold text-gray-700">{log.invNo}</td>
+                      <td className="px-6 py-4 text-right">
+                        {isDebit ? (
+                          <span className="text-purple-700 font-semibold flex items-center justify-end gap-1">
+                            <ArrowUpRight size={14} />
+                            AED {log.amount?.toFixed(2)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        {isCredit ? (
+                          <span className="text-blue-700 font-semibold flex items-center justify-end gap-1">
+                            <ArrowDownRight size={14} />
+                            AED {log.amount?.toFixed(2)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right font-bold text-emerald-600">
+                        AED {log.balance?.toFixed(2)} <span className="text-xs opacity-70">Dr</span>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">{log.ref}</td>
+                      <td className="px-6 py-4 text-center">
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-bold text-white ${
+                            log.status === "PAID" ? "bg-emerald-500" : "bg-red-500"
+                          }`}
+                        >
+                          {log.status}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

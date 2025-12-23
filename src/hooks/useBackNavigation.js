@@ -35,7 +35,7 @@ export const useBackNavigation = () => {
     '/debit-accounts': '/debit-accounts',
     '/credit-accounts': '/credit-accounts',
     '/transactions': '/transactions',
-    '/transactors': '/transactors',
+    '/chart-of-accounts': '/chart-of-accounts',
     '/vat-reports': '/vat-reports',
   };
 

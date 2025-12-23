@@ -34,10 +34,14 @@ import {
   Eye,
   Download,
   Printer,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Wallet,
 } from "lucide-react";
 import axiosInstance from "../../../axios/axios";
 import VendorSelect from "./PartySelect";
 import PaymentInvoiceView from "./PaymentInvoiceView";
+import VoucherDocument from "../Receipt/VoucherDocument";
 
 const FormInput = ({ label, icon: Icon, error, ...props }) => (
   <div>
@@ -180,41 +184,6 @@ const takeArray = (resp) => {
   return [];
 };
 
-const displayMode = (mode) => {
-  const m = (mode || "").toString().toLowerCase();
-  return m === "cash"
-    ? "Cash"
-    : m === "bank"
-    ? "Bank"
-    : m === "cheque"
-    ? "Cheque"
-    : m === "online"
-    ? "Online"
-    : mode || "Unknown";
-};
-
-const badgeClassForMode = (mode) => {
-  const m = displayMode(mode);
-  const badges = {
-    Cash: "bg-emerald-100 text-emerald-800 border border-emerald-200",
-    Bank: "bg-blue-100 text-blue-800 border border-blue-200",
-    Cheque: "bg-purple-100 text-purple-800 border border-purple-200",
-    Online: "bg-indigo-100 text-indigo-800 border border-indigo-200",
-  };
-  return badges[m] || "bg-slate-100 text-slate-800 border border-slate-200";
-};
-
-const iconForMode = (mode) => {
-  const m = displayMode(mode);
-  const map = {
-    Cash: <DollarSign size={14} className="text-emerald-600" />,
-    Bank: <Building size={14} className="text-blue-600" />,
-    Cheque: <FileText size={14} className="text-purple-600" />,
-    Online: <CreditCard size={14} className="text-indigo-600" />,
-  };
-  return map[m] || <DollarSign size={14} className="text-slate-600" />;
-};
-
 const formatCurrency = (amount, colorClass = "text-gray-900") => {
   const numAmount = Number(amount) || 0;
   const absAmount = Math.abs(numAmount).toFixed(2);
@@ -260,6 +229,9 @@ const PaymentVoucherManagement = () => {
   const [payments, setPayments] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [availableInvoices, setAvailableInvoices] = useState([]);
+  const [allTransactors, setAllTransactors] = useState([]); // All transactors fetched at mount
+  const [transactorAccounts, setTransactorAccounts] = useState([]); // Filtered by category
+  const [accountsLoading, setAccountsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState(
     SessionManager.get("searchTerm") || ""
@@ -268,15 +240,16 @@ const PaymentVoucherManagement = () => {
   const [formData, setFormData] = useState({
     voucherNo: "",
     date: new Date().toISOString().split("T")[0],
+    // FROM Section
+    accountType: "",
+    fromAccountId: "",
+    // TO Section
     vendorName: "",
     vendorId: "",
     linkedInvoices: [],
-    paymentMode: "Cash",
+    // Payment Details
     amount: "",
     narration: "",
-    bankDetails: { accountNumber: "", accountName: "" },
-    chequeDetails: { chequeNumber: "", chequeDate: "" },
-    onlineDetails: { transactionId: "", transactionDate: "" },
     attachedProof: null,
   });
   const [selectedFile, setSelectedFile] = useState(null);
@@ -290,19 +263,12 @@ const PaymentVoucherManagement = () => {
     message: "",
     type: "success",
   });
-  const [filterPaymentMode, setFilterPaymentMode] = useState(
-    SessionManager.get("filters")?.paymentMode || ""
-  );
+  // Filter by account type removed - now using account directly
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [selectedPayment, setSelectedPayment] = useState(null);
-  const [deleteConfirmation, setDeleteConfirmation] = useState({
-    visible: false,
-    paymentId: null,
-    voucherNo: "",
-    isDeleting: false,
-  });
+  const [viewVoucher, setViewVoucher] = useState(null); // For viewing voucher document
 
   const formRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -315,6 +281,7 @@ const PaymentVoucherManagement = () => {
     fetchPayments();
     fetchVendors();
     fetchOutstandingInvoices();
+    fetchAllTransactors();
   }, []);
 
   useEffect(() => {
@@ -330,8 +297,7 @@ const PaymentVoucherManagement = () => {
 
   useEffect(() => {
     SessionManager.set("searchTerm", searchTerm);
-    SessionManager.set("filters", { paymentMode: filterPaymentMode });
-  }, [searchTerm, filterPaymentMode]);
+  }, [searchTerm]);
 
   useEffect(() => {
     return () => {
@@ -429,12 +395,99 @@ const PaymentVoucherManagement = () => {
     [showToastMessage]
   );
 
+  // Fetch all transactor accounts at mount
+  const fetchAllTransactors = useCallback(async () => {
+    try {
+      setAccountsLoading(true);
+      const response = await axiosInstance.get("/account-v2/Transactor");
+      const allAccounts = (response.data?.data || []).filter(acc => acc.isActive !== false);
+      setAllTransactors(
+        allAccounts.map((acc) => ({
+          ...acc,
+          value: acc._id,
+          label: `${acc.accountName} (${acc.accountCode})`,
+          accountName: acc.accountName || "",
+          accountCode: acc.accountCode || "",
+          transactorCategory: acc.transactorCategory,
+          balance: Number(acc.currentBalance || acc.openingBalance || 0),
+        }))
+      );
+    } catch (err) {
+      console.error("Error fetching transactors:", err);
+      showToastMessage("Failed to load accounts.", "error");
+      setAllTransactors([]);
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, [showToastMessage]);
+
+  // Filter transactor accounts based on category (cash, bank, other) - no API call
+  const filterTransactorsByCategory = useCallback(
+    (category) => {
+      if (!category) {
+        setTransactorAccounts([]);
+        return;
+      }
+
+      const filtered = allTransactors.filter((acc) => {
+        // Primary filter: use the transactorCategory field from the backend
+        if (acc.transactorCategory) {
+          const accountCategory = acc.transactorCategory.toLowerCase();
+          const selectedCategory = category.toLowerCase();
+          // Handle 'other'/'others' matching
+          if (selectedCategory === 'other' || selectedCategory === 'others') {
+            return accountCategory === 'other' || accountCategory === 'others';
+          }
+          return accountCategory === selectedCategory;
+        }
+        
+        // Fallback: match by name/code if transactorCategory is not set
+        const name = (acc.accountName || "").toLowerCase();
+        const code = (acc.accountCode || "").toUpperCase();
+        
+        if (category === "cash") {
+          return name.includes("cash") || name.includes("petty") || 
+                 code.startsWith("CAS") || code.startsWith("PET");
+        }
+        if (category === "bank") {
+          return name.includes("bank") || code.startsWith("BAN");
+        }
+        // "other" category - accounts that are not cash or bank
+        return !name.includes("cash") && !name.includes("bank") && !name.includes("petty");
+      });
+      
+      setTransactorAccounts(filtered);
+    },
+    [allTransactors]
+  );
+
+  // Re-filter accounts when allTransactors changes (in case category was selected before accounts loaded)
+  useEffect(() => {
+    if (formData.accountType && allTransactors.length > 0) {
+      filterTransactorsByCategory(formData.accountType);
+    }
+  }, [allTransactors, formData.accountType, filterTransactorsByCategory]);
+
   const handleChange = useCallback(
     (e) => {
       const { name, value } = e.target;
       const [section, field] = name.includes(".")
         ? name.split(".")
         : [name, null];
+      
+      // Handle account type and from account selection
+      if (name === "accountType") {
+        setFormData((prev) => ({
+          ...prev,
+          accountType: value,
+          fromAccountId: "",  // Reset account selection
+          linkedInvoices: [],
+          amount: "",
+        }));
+        filterTransactorsByCategory(value);
+        return;
+      }
+
       setFormData((prev) => ({
         ...prev,
         [field ? section : name]: field
@@ -540,24 +593,21 @@ const PaymentVoucherManagement = () => {
 
   const handleInvoiceAmountChange = useCallback(
     (invoiceId, value) => {
-      const numValue = Number(value) || 0;
-
+      // Allow free typing - don't clamp immediately
       setFormData((prev) => {
-        const invoice = availableInvoices.find((inv) => inv._id === invoiceId);
-        if (!invoice) return prev;
-
-        const maxAllowed = invoice.outstandingAmount;
-        const clampedAmount = Math.max(0, Math.min(numValue, maxAllowed));
-
-        const newList = prev.linkedInvoices.map((item) =>
-          item.invoiceId === invoiceId
-            ? {
-                ...item,
-                amount: String(clampedAmount),
-                balance: String((maxAllowed - clampedAmount).toFixed(2)),
-              }
-            : item
-        );
+        const newList = prev.linkedInvoices.map((item) => {
+          if (item.invoiceId === invoiceId) {
+            const invoice = availableInvoices.find((inv) => inv._id === invoiceId);
+            const maxAllowed = invoice?.outstandingAmount || 0;
+            const numValue = Number(value) || 0;
+            return {
+              ...item,
+              amount: value, // Keep raw value for free typing
+              balance: String((maxAllowed - numValue).toFixed(2)),
+            };
+          }
+          return item;
+        });
 
         const total = newList.reduce(
           (sum, item) => sum + Number(item.amount || 0),
@@ -576,31 +626,16 @@ const PaymentVoucherManagement = () => {
 
   const validateForm = useCallback(() => {
     const e = {};
+    // FROM Section validation
+    if (!formData.accountType) e.accountType = "Account type is required";
+    if (!formData.fromAccountId) e.fromAccountId = "Account selection is required";
+    // TO Section validation
     if (!formData.vendorId) e.vendorId = "Vendor is required";
     if (!formData.date) e.date = "Date is required";
-    if (!formData.paymentMode) e.paymentMode = "Payment mode is required";
     if (!formData.amount || Number(formData.amount) <= 0)
       e.amount = "Amount must be greater than 0";
     if (!asArray(formData.linkedInvoices).length)
       e.linkedInvoices = "At least one invoice must be selected";
-    if (formData.paymentMode === "Bank") {
-      if (!formData.bankDetails.accountNumber)
-        e["bankDetails.accountNumber"] = "Account number is required";
-      if (!formData.bankDetails.accountName)
-        e["bankDetails.accountName"] = "Account name is required";
-    }
-    if (formData.paymentMode === "Cheque") {
-      if (!formData.chequeDetails.chequeNumber)
-        e["chequeDetails.chequeNumber"] = "Cheque number is required";
-      if (!formData.chequeDetails.chequeDate)
-        e["chequeDetails.chequeDate"] = "Cheque date is required";
-    }
-    if (formData.paymentMode === "Online") {
-      if (!formData.onlineDetails.transactionId)
-        e["onlineDetails.transactionId"] = "Transaction ID is required";
-      if (!formData.onlineDetails.transactionDate)
-        e["onlineDetails.transactionDate"] = "Transaction date is required";
-    }
     return e;
   }, [formData]);
 
@@ -609,21 +644,20 @@ const PaymentVoucherManagement = () => {
     setFormData({
       voucherNo: "",
       date: new Date().toISOString().split("T")[0],
+      accountType: "",
+      fromAccountId: "",
       vendorName: "",
       vendorId: "",
       linkedInvoices: [],
-      paymentMode: "Cash",
       amount: "",
       narration: "",
-      bankDetails: { accountNumber: "", accountName: "" },
-      chequeDetails: { chequeNumber: "", chequeDate: "" },
-      onlineDetails: { transactionId: "", transactionDate: "" },
       attachedProof: null,
     });
     setSelectedFile(null);
     setPreviewUrl(null);
     setExistingProof(null);
     setErrors({});
+    setTransactorAccounts([]);
     setShowModal(false);
     setAvailableInvoices([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -641,25 +675,22 @@ const PaymentVoucherManagement = () => {
     try {
       const payload = {
         date: formData.date,
+        // FROM Section
+        accountType: formData.accountType,
+        fromAccountId: formData.fromAccountId,
+        // TO Section
         vendorId: formData.vendorId,
         vendorName: formData.vendorName,
         linkedInvoices: formData.linkedInvoices.map((inv) => ({
           invoiceId: inv.invoiceId,
+          transactionNo: inv.transactionNo,
           amount: Number(inv.amount),
           balance: Number(inv.balance),
         })),
-        paymentMode: formData.paymentMode.toLowerCase(),
+        // Payment Details
         totalAmount: Number(formData.amount),
         narration: formData.narration,
         voucherType: "payment",
-        paymentDetails: {
-          bankDetails:
-            formData.paymentMode === "Bank" ? formData.bankDetails : null,
-          chequeDetails:
-            formData.paymentMode === "Cheque" ? formData.chequeDetails : null,
-          onlineDetails:
-            formData.paymentMode === "Online" ? formData.onlineDetails : null,
-        },
         attachedProof: existingProof?._id || null,
       };
       const fd = new FormData();
@@ -712,12 +743,23 @@ const PaymentVoucherManagement = () => {
               : payment.totalAmount) || 0) - (inv.amount || 0)
         ),
       }));
-      const paymentDetails = payment.paymentDetails || {};
+      
+      // Extract FROM section fields
+      const accountType = payment.accountType || "";
+      const fromAccountId =
+        typeof payment.fromAccountId === "object"
+          ? payment.fromAccountId?._id
+          : payment.fromAccountId || "";
+      
       setFormData({
         voucherNo: payment.voucherNo || "",
         date: payment.date
           ? new Date(payment.date).toISOString().split("T")[0]
           : new Date().toISOString().split("T")[0],
+        // FROM Section
+        accountType: accountType,
+        fromAccountId: fromAccountId,
+        // TO Section
         vendorName:
           payment.partyName ||
           payment.vendorName ||
@@ -730,23 +772,16 @@ const PaymentVoucherManagement = () => {
             ? payment.partyId?._id
             : payment.partyId || payment.vendorId || "",
         linkedInvoices,
-        paymentMode: displayMode(payment.paymentMode) || "Cash",
         amount: String(payment.totalAmount || payment.amount || 0),
         narration: payment.narration || payment.remarks || "",
-        bankDetails: paymentDetails.bankDetails || {
-          accountNumber: "",
-          accountName: "",
-        },
-        chequeDetails: paymentDetails.chequeDetails || {
-          chequeNumber: "",
-          chequeDate: "",
-        },
-        onlineDetails: paymentDetails.onlineDetails || {
-          transactionId: "",
-          transactionDate: "",
-        },
         attachedProof: null,
       });
+      
+      // Fetch accounts for the account type if present
+      if (accountType) {
+        filterTransactorsByCategory(accountType);
+      }
+      
       const proof = asArray(payment.attachments)[0] || null;
       setExistingProof(proof);
       setPreviewUrl(proof?.filePath || null);
@@ -760,52 +795,8 @@ const PaymentVoucherManagement = () => {
       SessionManager.remove("formData");
       SessionManager.remove("lastSaveTime");
     },
-    [fetchOutstandingInvoices]
+    [fetchOutstandingInvoices, filterTransactorsByCategory]
   );
-
-  const showDeleteConfirmation = useCallback((payment) => {
-    setDeleteConfirmation({
-      visible: true,
-      paymentId: payment._id,
-      voucherNo: payment.voucherNo,
-      isDeleting: false,
-    });
-  }, []);
-
-  const hideDeleteConfirmation = useCallback(() => {
-    setDeleteConfirmation({
-      visible: false,
-      paymentId: null,
-      voucherNo: "",
-      isDeleting: false,
-    });
-  }, []);
-
-  const confirmDelete = useCallback(async () => {
-    setDeleteConfirmation((prev) => ({ ...prev, isDeleting: true }));
-    try {
-      await axiosInstance.delete(
-        `/vouchers/vouchers/${deleteConfirmation.paymentId}`
-      );
-      setPayments((prev) =>
-        asArray(prev).filter((p) => p._id !== deleteConfirmation.paymentId)
-      );
-      showToastMessage("Payment voucher deleted successfully!", "success");
-      hideDeleteConfirmation();
-      await fetchPayments();
-    } catch (err) {
-      showToastMessage(
-        err.response?.data?.message || "Failed to delete payment voucher.",
-        "error"
-      );
-      setDeleteConfirmation((prev) => ({ ...prev, isDeleting: false }));
-    }
-  }, [
-    deleteConfirmation.paymentId,
-    fetchPayments,
-    hideDeleteConfirmation,
-    showToastMessage,
-  ]);
 
   const openAddModal = useCallback(() => {
     resetForm();
@@ -867,14 +858,10 @@ const PaymentVoucherManagement = () => {
       const voucherNo = p.voucherNo?.toLowerCase() || "";
       const vendorName = (p.partyName || p.vendorName || "").toLowerCase();
       const narration = p.narration?.toLowerCase() || "";
-      const modeOk = filterPaymentMode
-        ? displayMode(p.paymentMode) === filterPaymentMode
-        : true;
       return (
-        (voucherNo.includes(term) ||
-          vendorName.includes(term) ||
-          narration.includes(term)) &&
-        modeOk
+        voucherNo.includes(term) ||
+        vendorName.includes(term) ||
+        narration.includes(term)
       );
     });
     if (sortConfig.key) {
@@ -886,6 +873,8 @@ const PaymentVoucherManagement = () => {
             ? new Date(a.date).getTime()
             : sortConfig.key === "linkedInvoices"
             ? asArray(a.linkedInvoices).length
+            : sortConfig.key === "fromAccountId"
+            ? (a.fromAccountId?.accountName || "").toLowerCase()
             : by(a[sortConfig.key]);
         const bv =
           sortConfig.key === "amount"
@@ -894,6 +883,8 @@ const PaymentVoucherManagement = () => {
             ? new Date(b.date).getTime()
             : sortConfig.key === "linkedInvoices"
             ? asArray(b.linkedInvoices).length
+            : sortConfig.key === "fromAccountId"
+            ? (b.fromAccountId?.accountName || "").toLowerCase()
             : by(b[sortConfig.key]);
         return av < bv
           ? sortConfig.direction === "asc"
@@ -907,7 +898,7 @@ const PaymentVoucherManagement = () => {
       });
     }
     return filtered;
-  }, [safePayments, searchTerm, filterPaymentMode, sortConfig]);
+  }, [safePayments, searchTerm, sortConfig]);
 
   if (selectedPayment) {
     return (
@@ -944,7 +935,7 @@ const PaymentVoucherManagement = () => {
         No payment vouchers found
       </h3>
       <p className="text-gray-600 text-center mb-8 max-w-md">
-        {searchTerm || filterPaymentMode
+        {searchTerm
           ? "No payment vouchers match your current filters. Try adjusting your search criteria."
           : "Start recording payments by creating your first payment voucher."}
       </p>
@@ -1094,22 +1085,8 @@ const PaymentVoucherManagement = () => {
             </div>
             {showFilters && (
               <div className="flex flex-col sm:flex-row gap-4 p-4 bg-gray-50 rounded-lg">
-                <FormSelect
-                  label="Payment Mode"
-                  icon={CreditCard}
-                  value={filterPaymentMode}
-                  onChange={(e) => setFilterPaymentMode(e.target.value)}
-                  options={[
-                    { value: "", label: "All Payment Modes" },
-                    { value: "Cash", label: "Cash" },
-                    { value: "Bank", label: "Bank" },
-                    { value: "Cheque", label: "Cheque" },
-                    { value: "Online", label: "Online" },
-                  ]}
-                />
                 <button
                   onClick={() => {
-                    setFilterPaymentMode("");
                     setSearchTerm("");
                   }}
                   className="px-4 py-2 text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
@@ -1132,7 +1109,7 @@ const PaymentVoucherManagement = () => {
                     { key: "date", label: "Date" },
                     { key: "vendorName", label: "Vendor" },
                     { key: "linkedInvoices", label: "Linked Invoices" },
-                    { key: "paymentMode", label: "Payment Mode" },
+                    { key: "fromAccountId", label: "Spend Account" },
                     { key: "amount", label: "Amount" },
                     { key: "narration", label: "Narration" },
                     { key: null, label: "Actions" },
@@ -1191,7 +1168,7 @@ const PaymentVoucherManagement = () => {
                             <LinkIcon size={10} className="mr-1" />
                             {inv.invoiceId?.transactionNo ||
                               inv.transactionNo ||
-                              inv.invoiceId ||
+                              (typeof inv.invoiceId === 'string' ? inv.invoiceId : null) ||
                               "N/A"}
                             {inv.amount && (
                               <span className="ml-1">
@@ -1204,13 +1181,9 @@ const PaymentVoucherManagement = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-2">
-                        {iconForMode(p.paymentMode)}
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${badgeClassForMode(
-                            p.paymentMode
-                          )}`}
-                        >
-                          {displayMode(p.paymentMode)}
+                        <Wallet size={16} className="text-red-600" />
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                          {p.fromAccountId?.accountName || p.accountType || "-"}
                         </span>
                       </div>
                     </td>
@@ -1222,33 +1195,12 @@ const PaymentVoucherManagement = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-3">
-                        {asArray(p.attachments).length > 0 && (
-                          <button
-                            onClick={() =>
-                              window.open(
-                                asArray(p.attachments)[0].filePath,
-                                "_blank"
-                              )
-                            }
-                            className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                            title="View attachment"
-                          >
-                            <Eye size={16} />
-                          </button>
-                        )}
                         <button
-                          onClick={() => handleEdit(p)}
+                          onClick={() => setViewVoucher(p)}
                           className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                          title="Edit payment"
+                          title="View voucher"
                         >
-                          <Edit size={16} />
-                        </button>
-                        <button
-                          onClick={() => showDeleteConfirmation(p)}
-                          className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-all duration-200"
-                          title="Delete payment"
-                        >
-                          <Trash2 size={16} />
+                          <Eye size={16} />
                         </button>
                       </div>
                     </td>
@@ -1259,55 +1211,12 @@ const PaymentVoucherManagement = () => {
           </div>
         )}
       </div>
-      {deleteConfirmation.visible && (
-        <div className="fixed inset-0 bg-white/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-            <div className="p-6">
-              <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
-                  <AlertTriangle size={32} className="text-red-600" />
-                </div>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 text-center mb-2">
-                Delete Payment Voucher
-              </h3>
-              <p className="text-gray-600 text-center mb-2">
-                Are you sure you want to delete
-              </p>
-              <p className="text-gray-900 font-semibold text-center mb-6">
-                "{deleteConfirmation.voucherNo}"?
-              </p>
-              <p className="text-sm text-gray-500 text-center mb-8">
-                This action cannot be undone.
-              </p>
-              <div className="flex space-x-3">
-                <button
-                  onClick={hideDeleteConfirmation}
-                  disabled={deleteConfirmation.isDeleting}
-                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-200 font-medium disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  disabled={deleteConfirmation.isDeleting}
-                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 font-medium disabled:opacity-50 flex items-center justify-center"
-                >
-                  {deleteConfirmation.isDeleting ? (
-                    <>
-                      <Loader2 size={16} className="mr-2 animate-spin" />{" "}
-                      Deleting...
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 size={16} className="mr-2" /> Delete
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {viewVoucher && (
+        <VoucherDocument
+          voucher={viewVoucher}
+          type="payment"
+          onClose={() => setViewVoucher(null)}
+        />
       )}
       {showModal && (
         <div className="fixed inset-0 bg-white/50 flex items-center justify-center p-4 z-50 modal-container transform scale-95 transition-transform duration-300">
@@ -1361,128 +1270,252 @@ const PaymentVoucherManagement = () => {
                   error={errors.date}
                   required
                 />
-                <VendorSelect
-                  vendor={vendors}
-                  value={formData.vendorId}
-                  onChange={handleChange}
-                  error={errors.vendorId}
-                />
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Linked Invoice(s) *
-                  </label>
-                  <div
-                    className={`border rounded-xl p-4 max-h-64 overflow-y-auto ${
-                      errors.linkedInvoices
-                        ? "border-red-300 bg-red-50"
-                        : "border-gray-300"
-                    }`}
-                  >
-                    {availableInvoices.length === 0 ? (
-                      <p className="text-gray-500 text-center py-8">
-                        {formData.vendorId
-                          ? "No outstanding invoices found for this vendor"
-                          : "Please select a vendor to view outstanding invoices"}
-                      </p>
-                    ) : (
-                      <div className="space-y-3">
-                        {availableInvoices.map((inv) => {
-                          const linkedItem = formData.linkedInvoices.find(
-                            (i) => i.invoiceId === inv._id
-                          );
-                          const isSelected = !!linkedItem;
-                          const enteredAmount = Number(linkedItem?.amount || 0);
+                
+                {/* ========== FROM SECTION - Account (Money Source) ========== */}
+                <div className="md:col-span-2 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+                  <h4 className="text-sm font-bold text-blue-700 mb-4 flex items-center">
+                    <ArrowDownLeft size={18} className="mr-2" />
+                    FROM - Paying From Account
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Account Type Selection */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <Wallet size={16} className="inline mr-2" /> Account Type <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="accountType"
+                        value={formData.accountType}
+                        onChange={handleChange}
+                        className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-300 transition-all duration-200 ${
+                          errors.accountType ? "border-red-300 bg-red-50" : "border-gray-300"
+                        }`}
+                      >
+                        <option value="">Select Account Type</option>
+                        <option value="cash">💵 Cash</option>
+                        <option value="bank">🏦 Bank</option>
+                        <option value="other">📁 Other</option>
+                      </select>
+                      {errors.accountType && (
+                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                          <AlertCircle size={12} className="mr-1" /> {errors.accountType}
+                        </p>
+                      )}
+                    </div>
 
-                          return (
-                            <div
-                              key={inv._id}
-                              className={`p-4 rounded-lg border ${
-                                isSelected
-                                  ? "border-purple-300 bg-purple-50"
-                                  : "border-gray-200 bg-white"
-                              } transition-all`}
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex items-start space-x-3">
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() =>
-                                      handleInvoiceSelection(inv._id)
-                                    }
-                                    className="mt-1 h-4 w-4 text-purple-600 rounded focus:ring-purple-500"
-                                  />
-                                  <div>
-                                    <p className="font-semibold text-gray-900">
-                                      {inv.transactionNo}
-                                    </p>
-                                    <p className="text-sm text-gray-500">
-                                      {new Date(inv.date).toLocaleDateString()}{" "}
-                                      • Total: {formatCurrency(inv.totalAmount)}
-                                    </p>
-                                    <p className="text-sm text-gray-600">
-                                      Paid: {formatCurrency(inv.paidAmount)} •{" "}
-                                      <span className="text-red-600 font-medium">
-                                        Due:{" "}
-                                        {formatCurrency(inv.outstandingAmount)}
-                                      </span>
-                                    </p>
-                                  </div>
+                    {/* Transactor Account Selection - Filtered by Type */}
+                    {formData.accountType && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          <Building size={16} className="inline mr-2" /> Select Account <span className="text-red-500">*</span>
+                        </label>
+                        {accountsLoading ? (
+                          <div className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 flex items-center">
+                            <Loader2 size={16} className="animate-spin mr-2" />
+                            Loading accounts...
+                          </div>
+                        ) : (
+                          <select
+                            name="fromAccountId"
+                            value={formData.fromAccountId}
+                            onChange={handleChange}
+                            className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-300 transition-all duration-200 ${
+                              errors.fromAccountId ? "border-red-300 bg-red-50" : "border-gray-300"
+                            }`}
+                          >
+                            <option value="">Select Account</option>
+                            {transactorAccounts.map((acc) => (
+                              <option key={acc.value} value={acc.value}>
+                                {acc.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        {errors.fromAccountId && (
+                          <p className="mt-1 text-sm text-red-600 flex items-center">
+                            <AlertCircle size={12} className="mr-1" /> {errors.fromAccountId}
+                          </p>
+                        )}
+                        {transactorAccounts.length === 0 && formData.accountType && !accountsLoading && (
+                          <p className="mt-1 text-sm text-amber-600 flex items-center">
+                            <AlertTriangle size={12} className="mr-1" /> No accounts found for this type
+                          </p>
+                        )}
+                        {/* Show selected account balance */}
+                        {formData.fromAccountId && (() => {
+                          const selectedAccount = transactorAccounts.find(acc => acc.value === formData.fromAccountId);
+                          if (selectedAccount) {
+                            return (
+                              <div className="mt-2 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-purple-700 font-medium">Available Balance:</span>
+                                  <span className="text-lg font-bold text-purple-800">
+                                    AED {(selectedAccount.balance || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
                                 </div>
-
-                                {isSelected && (
-                                  <div className="flex items-center space-x-3">
-                                    <div className="text-right">
-                                      <input
-                                        type="number"
-                                        value={linkedItem.amount || ""}
-                                        onChange={(e) =>
-                                          handleInvoiceAmountChange(
-                                            inv._id,
-                                            e.target.value
-                                          )
-                                        }
-                                        className="w-24 px-2 py-1 border border-gray-300 rounded-md text-sm"
-                                        placeholder="0.00"
-                                        step="0.01"
-                                        max={inv.outstandingAmount}
-                                      />
-                                      <p className="text-xs text-gray-500 mt-1">
-                                        Max:{" "}
-                                        {formatCurrency(inv.outstandingAmount)}
-                                      </p>
-                                    </div>
-                                  </div>
-                                )}
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
                     )}
                   </div>
-                  {errors.linkedInvoices && (
-                    <p className="mt-1 text-sm text-red-600 flex items-center">
-                      <AlertCircle size={12} className="mr-1" />{" "}
-                      {errors.linkedInvoices}
-                    </p>
-                  )}
                 </div>
 
-                <FormSelect
-                  label="Payment Mode"
-                  icon={CreditCard}
-                  name="paymentMode"
-                  value={formData.paymentMode}
-                  onChange={handleChange}
-                  error={errors.paymentMode}
-                  options={[
-                    { value: "Cash", label: "Cash" },
-                    { value: "Bank", label: "Bank" },
-                    { value: "Cheque", label: "Cheque" },
-                    { value: "Online", label: "Online" },
-                  ]}
-                />
+                {/* ========== TO SECTION - Vendor (Payment Recipient) ========== */}
+                <div className="md:col-span-2 p-4 bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl border border-emerald-200">
+                  <h4 className="text-sm font-bold text-emerald-700 mb-4 flex items-center">
+                    <ArrowUpRight size={18} className="mr-2" />
+                    TO - Paying To Vendor
+                  </h4>
+                  <div className="grid grid-cols-1 gap-4">
+                    <VendorSelect
+                      vendor={vendors}
+                      value={formData.vendorId}
+                      onChange={handleChange}
+                      error={errors.vendorId}
+                    />
+                    
+                    {/* Linked Invoices */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <LinkIcon size={16} className="inline mr-2" /> Linked Invoice(s) <span className="text-red-500">*</span>
+                      </label>
+                      <div
+                        className={`border rounded-xl p-4 max-h-64 overflow-y-auto ${
+                          errors.linkedInvoices
+                            ? "border-red-300 bg-red-50"
+                            : "border-gray-300 bg-white"
+                        }`}
+                      >
+                        {availableInvoices.length === 0 ? (
+                          <p className="text-gray-500 text-center py-8">
+                            {formData.vendorId
+                              ? "No outstanding invoices found for this vendor"
+                              : "Please select a vendor to view outstanding invoices"}
+                          </p>
+                        ) : (
+                          <div className="space-y-3">
+                            {availableInvoices.map((inv) => {
+                              const linkedItem = formData.linkedInvoices.find(
+                                (i) => i.invoiceId === inv._id
+                              );
+                              const isSelected = !!linkedItem;
+
+                              return (
+                                <div
+                                  key={inv._id}
+                                  className={`p-4 rounded-lg border ${
+                                    isSelected
+                                      ? "border-emerald-300 bg-emerald-50"
+                                      : "border-gray-200 bg-white"
+                                  } transition-all`}
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex items-start space-x-3">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() =>
+                                          handleInvoiceSelection(inv._id)
+                                        }
+                                        className="mt-1 h-4 w-4 text-emerald-600 rounded focus:ring-emerald-500"
+                                      />
+                                      <div>
+                                        <p className="font-semibold text-gray-900">
+                                          {inv.transactionNo}
+                                        </p>
+                                        <p className="text-sm text-gray-500">
+                                          {new Date(inv.date).toLocaleDateString()}{" "}
+                                          • Total: {formatCurrency(inv.totalAmount)}
+                                        </p>
+                                        <p className="text-sm text-gray-600">
+                                          Paid: {formatCurrency(inv.paidAmount)} •{" "}
+                                          <span className="text-red-600 font-medium">
+                                            Due:{" "}
+                                            {formatCurrency(inv.outstandingAmount)}
+                                          </span>
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {isSelected && (
+                                      <div className="mt-3 p-3 bg-purple-50 rounded-lg border border-purple-100">
+                                        <div className="grid grid-cols-2 gap-3 text-sm">
+                                          <div>
+                                            <span className="text-gray-500">Outstanding:</span>
+                                            <span className="ml-2 font-semibold text-gray-900">
+                                              {formatCurrency(inv.outstandingAmount)}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">New Balance:</span>
+                                            <span className={`ml-2 font-semibold ${Number(linkedItem.balance) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                              {formatCurrency(linkedItem.balance || inv.outstandingAmount)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="mt-3 flex items-center gap-2">
+                                          <div className="relative flex-1">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-medium">AED</span>
+                                            <input
+                                              type="text"
+                                              inputMode="decimal"
+                                              value={linkedItem.amount || ""}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                                  handleInvoiceAmountChange(inv._id, val);
+                                                }
+                                              }}
+                                              onBlur={(e) => {
+                                                const numVal = Number(e.target.value) || 0;
+                                                const maxAllowed = inv.outstandingAmount;
+                                                const clamped = Math.max(0, Math.min(numVal, maxAllowed));
+                                                if (numVal !== clamped) {
+                                                  handleInvoiceAmountChange(inv._id, String(clamped));
+                                                }
+                                              }}
+                                              className="w-full pl-12 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                              placeholder="0.00"
+                                            />
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleInvoiceAmountChange(inv._id, String(inv.outstandingAmount))}
+                                            className="px-3 py-2 bg-purple-600 text-white text-xs font-medium rounded-lg hover:bg-purple-700 transition-colors whitespace-nowrap"
+                                          >
+                                            Pay Full
+                                          </button>
+                                        </div>
+                                        {Number(linkedItem.balance) < 0 && (
+                                          <p className="mt-2 text-xs text-red-600 flex items-center">
+                                            <AlertCircle size={12} className="mr-1" />
+                                            Amount exceeds outstanding balance
+                                          </p>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      {errors.linkedInvoices && (
+                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                          <AlertCircle size={12} className="mr-1" />{" "}
+                          {errors.linkedInvoices}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ========== AMOUNT & ATTACHMENTS SECTION ========== */}
+
                 <FormInput
                   label="Total Amount"
                   icon={DollarSign}
@@ -1493,74 +1526,6 @@ const PaymentVoucherManagement = () => {
                   error={errors.amount}
                   className="bg-gray-50 text-gray-500"
                 />
-                {formData.paymentMode === "Bank" && (
-                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormInput
-                      label="Account Number"
-                      icon={Building}
-                      name="bankDetails.accountNumber"
-                      value={formData.bankDetails.accountNumber}
-                      onChange={handleChange}
-                      error={errors["bankDetails.accountNumber"]}
-                      required
-                    />
-                    <FormInput
-                      label="Account Name"
-                      icon={User}
-                      name="bankDetails.accountName"
-                      value={formData.bankDetails.accountName}
-                      onChange={handleChange}
-                      error={errors["bankDetails.accountName"]}
-                      required
-                    />
-                  </div>
-                )}
-                {formData.paymentMode === "Cheque" && (
-                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormInput
-                      label="Cheque Number"
-                      icon={FileText}
-                      name="chequeDetails.chequeNumber"
-                      value={formData.chequeDetails.chequeNumber}
-                      onChange={handleChange}
-                      error={errors["chequeDetails.chequeNumber"]}
-                      required
-                    />
-                    <FormInput
-                      label="Cheque Date"
-                      icon={Calendar}
-                      type="date"
-                      name="chequeDetails.chequeDate"
-                      value={formData.chequeDetails.chequeDate}
-                      onChange={handleChange}
-                      error={errors["chequeDetails.chequeDate"]}
-                      required
-                    />
-                  </div>
-                )}
-                {formData.paymentMode === "Online" && (
-                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormInput
-                      label="Transaction ID"
-                      icon={CreditCard}
-                      name="onlineDetails.transactionId"
-                      value={formData.onlineDetails.transactionId}
-                      onChange={handleChange}
-                      error={errors["onlineDetails.transactionId"]}
-                      required
-                    />
-                    <FormInput
-                      label="Transaction Date"
-                      icon={Calendar}
-                      type="date"
-                      name="onlineDetails.transactionDate"
-                      value={formData.onlineDetails.transactionDate}
-                      onChange={handleChange}
-                      error={errors["onlineDetails.transactionDate"]}
-                      required
-                    />
-                  </div>
-                )}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     <FileText size={16} className="inline mr-2" /> Payment Proof

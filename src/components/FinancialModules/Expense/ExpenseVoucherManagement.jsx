@@ -441,16 +441,22 @@ const ExpenseVoucherManagement = () => {
   });
   const [categoryErrors, setCategoryErrors] = useState({});
   const [formData, setFormData] = useState({
-    mainExpenseCategory: "",
-    expenseCategory: "",
-    transactor: "",
+    // From Section - Payment Source
+    transactorType: "", // "cash", "bank", or "other"
+    fromTransactor: "",
+    // To Section - Expense Account
+    expenseAccountId: "",
+    expenseTypeId: "",
+    // Expense Details
     amount: "",
-    description: "",
+    narration: "", // Renamed from description
     attachReceipt: null,
     date: new Date().toISOString().split("T")[0],
     submittedBy: "Logged-in User",
     approvalStatus: "Pending",
+    // VAT
     includeVAT: false,
+    vatRequired: false,
     vatRate: 5,
   });
   const [errors, setErrors] = useState({});
@@ -481,16 +487,28 @@ const ExpenseVoucherManagement = () => {
     errorMessage: "",
   });
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  // New state for expense accounts and types
+  const [expenseAccounts, setExpenseAccounts] = useState([]);
+  const [expenseTypes, setExpenseTypes] = useState([]);
   const formRef = useRef(null);
   const categoryFormRef = useRef(null);
 
   const vatAmount = useMemo(() => {
     const amountNum = Number(formData.amount) || 0;
     const vatRateNum = Number(formData.vatRate) || 0;
-    return formData.includeVAT
+    // Calculate VAT from VAT-inclusive amount
+    return (formData.includeVAT || formData.vatRequired)
       ? (amountNum * vatRateNum) / (100 + vatRateNum)
       : 0;
-  }, [formData.amount, formData.vatRate, formData.includeVAT]);
+  }, [formData.amount, formData.vatRate, formData.includeVAT, formData.vatRequired]);
+
+  // Calculate net amount (VAT-exclusive)
+  const netAmount = useMemo(() => {
+    const amountNum = Number(formData.amount) || 0;
+    return (formData.includeVAT || formData.vatRequired)
+      ? amountNum - vatAmount
+      : amountNum;
+  }, [formData.amount, vatAmount, formData.includeVAT, formData.vatRequired]);
 
   useEffect(() => {
     const savedFormData = SessionManager.get("formData");
@@ -500,6 +518,7 @@ const ExpenseVoucherManagement = () => {
     fetchVouchers();
     fetchExpenseCategories();
     fetchTransactors();
+    fetchExpenseAccounts(); // Fetch new expense accounts
   }, []);
   useEffect(() => {
     let timer;
@@ -576,10 +595,14 @@ const ExpenseVoucherManagement = () => {
     try {
       setIsLoading(true);
       const res = await axiosInstance.get("/account-v2/Transactor");
-      const transactorData = res.data.data.map((t) => ({
+      const transactorData = (res.data.data || []).filter(t => t.isActive !== false).map((t) => ({
         value: t._id,
         label: `${t.accountName} (${t.accountCode})`,
+        accountName: t.accountName || "",
+        accountCode: t.accountCode || "",
         accountType: t.accountType,
+        transactorCategory: t.transactorCategory,
+        balance: Number(t.currentBalance || t.openingBalance || 0),
       }));
       setTransactors(transactorData);
       if (!formData.transactor && transactorData.length > 0) {
@@ -600,6 +623,58 @@ const ExpenseVoucherManagement = () => {
       setIsLoading(false);
     }
   }, [showToastMessage]);
+
+  // Fetch expense accounts for new expense account management
+  const fetchExpenseAccounts = useCallback(async () => {
+    try {
+      const res = await axiosInstance.get("/expense-accounts");
+      const accountsData = (res.data?.data?.accounts || []).map((a) => ({
+        value: a._id,
+        label: `${a.accountName} (${a.accountCode || "N/A"})`,
+        accountName: a.accountName,
+        accountCode: a.accountCode,
+      }));
+      setExpenseAccounts(accountsData);
+    } catch (err) {
+      console.error("Failed to fetch expense accounts:", err);
+      setExpenseAccounts([]);
+    }
+  }, []);
+
+  // Fetch expense types when expense account changes
+  const fetchExpenseTypesByAccount = useCallback(async (accountId) => {
+    if (!accountId) {
+      setExpenseTypes([]);
+      return;
+    }
+    try {
+      const res = await axiosInstance.get(`/expense-accounts/${accountId}/types`);
+      const typesData = (res.data?.data?.expenseTypes || []).map((t) => ({
+        value: t._id,
+        label: t.name,
+        isDefault: t.isDefault,
+      }));
+      setExpenseTypes(typesData);
+      // Auto-select default "General" type if available
+      const defaultType = typesData.find((t) => t.isDefault);
+      if (defaultType && !formData.expenseTypeId) {
+        setFormData((prev) => ({ ...prev, expenseTypeId: defaultType.value }));
+      }
+    } catch (err) {
+      console.error("Failed to fetch expense types:", err);
+      setExpenseTypes([]);
+    }
+  }, [formData.expenseTypeId]);
+
+  // Effect to fetch expense types when account changes
+  useEffect(() => {
+    if (formData.expenseAccountId) {
+      fetchExpenseTypesByAccount(formData.expenseAccountId);
+    } else {
+      setExpenseTypes([]);
+    }
+  }, [formData.expenseAccountId, fetchExpenseTypesByAccount]);
+
   const fetchAssociatedVouchers = useCallback(async (categoryId) => {
     try {
       const response = await axiosInstance.get("/vouchers/vouchers", {
@@ -630,14 +705,16 @@ const ExpenseVoucherManagement = () => {
   }, []);
   const validateForm = useCallback(() => {
     const e = {};
-    if (!formData.mainExpenseCategory)
-      e.mainExpenseCategory = "Main category is required";
-    if (!formData.transactor) e.transactor = "Transactor is required";
-    if (!formData.amount || Number(formData.amount) <= 0)
-      e.amount = "Amount must be greater than 0";
+    // From Section Validation
+    if (!formData.transactorType) e.transactorType = "Payment source type is required";
+    if (!formData.fromTransactor) e.fromTransactor = "Payment source account is required";
+    // To Section Validation
+    if (!formData.expenseAccountId) e.expenseAccountId = "Expense account is required";
+    if (!formData.amount || Number(formData.amount) <= 0) e.amount = "Amount must be greater than 0";
+    // Narration is mandatory
+    if (!formData.narration || !formData.narration.trim()) e.narration = "Narration is required";
     if (!formData.date) e.date = "Date is required";
-    if (formData.includeVAT && Number(formData.vatRate) <= 0)
-      e.vatRate = "VAT rate must be greater than 0";
+    if (formData.includeVAT && Number(formData.vatRate) <= 0) e.vatRate = "VAT rate must be greater than 0";
     return e;
   }, [formData]);
   const validateCategoryForm = useCallback(() => {
@@ -651,23 +728,26 @@ const ExpenseVoucherManagement = () => {
   const resetForm = useCallback(() => {
     setEditVoucherId(null);
     setFormData({
-      mainExpenseCategory: "",
-      expenseCategory: "",
-      transactor: transactors[0]?.value || "",
+      transactorType: "",
+      fromTransactor: "",
+      expenseAccountId: "",
+      expenseTypeId: "",
       amount: "",
-      description: "",
+      narration: "",
       attachReceipt: null,
       date: new Date().toISOString().split("T")[0],
       submittedBy: "Logged-in User",
       approvalStatus: "Pending",
       includeVAT: false,
+      vatRequired: false,
       vatRate: 5,
     });
+    setExpenseTypes([]);
     setErrors({});
     setShowModal(false);
     SessionManager.remove("formData");
     SessionManager.remove("lastSaveTime");
-  }, [transactors]);
+  }, []);
   const resetCategoryForm = useCallback(() => {
     setEditCategoryId(null);
     setCategoryForm({ name: "", isSubCategory: false, parentCategory: "" });
@@ -682,26 +762,36 @@ const ExpenseVoucherManagement = () => {
     }
     setIsSubmitting(true);
     try {
-      const selectedMainId = formData.mainExpenseCategory;
-      const selectedExpenseId = formData.expenseCategory || selectedMainId;
-      const mainExpenseCategoryId = selectedMainId;
       const vatRateNum = Number(formData.vatRate) || 0;
       const amountNum = Number(formData.amount) || 0;
-      const calculatedVatAmount = formData.includeVAT
+      
+      // Calculate VAT based on VAT Required toggle (VAT-inclusive amount)
+      const isVatApplicable = formData.includeVAT || formData.vatRequired;
+      const calculatedVatAmount = isVatApplicable
         ? (amountNum * vatRateNum) / (100 + vatRateNum)
         : 0;
+      const calculatedNetAmount = isVatApplicable
+        ? amountNum - calculatedVatAmount
+        : amountNum;
 
       const payload = {
-        mainExpenseCategoryId,
-        expenseCategoryId: selectedExpenseId,
-        transactorId: formData.transactor,
+        // From Section - Payment Source
+        transactorType: formData.transactorType,
+        transactorId: formData.fromTransactor,
+        // To Section - Expense Account
+        expenseAccountId: formData.expenseAccountId,
+        expenseTypeId: formData.expenseTypeId || null,
+        // Expense Details
         voucherType: "expense",
         totalAmount: amountNum,
-        description: formData.description,
+        netAmount: calculatedNetAmount,
+        narration: formData.narration, // Renamed from description
         date: formData.date,
         submittedBy: formData.submittedBy,
         approvalStatus: formData.approvalStatus,
-        vatRate: formData.includeVAT ? vatRateNum : 0,
+        // VAT
+        vatRequired: isVatApplicable,
+        vatRate: isVatApplicable ? vatRateNum : 0,
         vatAmount: calculatedVatAmount,
       };
       if (formData.attachReceipt) {
@@ -815,28 +905,26 @@ const ExpenseVoucherManagement = () => {
   ]);
   const handleEdit = useCallback(
     (voucher) => {
-      const expenseCat = voucher.expenseCategoryId || {};
-      const mainCat =
-        voucher.mainExpenseCategoryId || expenseCat.parentCategory || {};
       setEditVoucherId(voucher._id);
       setFormData({
-        expenseCategory: expenseCat.parentCategory ? expenseCat._id : "",
-        mainExpenseCategory:
-          mainCat._id || expenseCat.parentCategory?._id || expenseCat._id || "",
-        transactor:
-          voucher.transactorId?._id ||
-          voucher.transactorId ||
-          transactors[0]?.value ||
-          "",
+        // From Section
+        transactorType: voucher.transactorType || "",
+        fromTransactor: voucher.transactorId?._id || voucher.transactorId || "",
+        // To Section
+        expenseAccountId: voucher.expenseAccountId?._id || voucher.expenseAccountId || "",
+        expenseTypeId: voucher.expenseTypeId?._id || voucher.expenseTypeId || "",
+        // Details
         amount: String(voucher.totalAmount || 0),
-        description: voucher.description || "",
+        narration: voucher.narration || voucher.description || "", // Handle both old and new field names
         attachReceipt: null,
         date: voucher.date
           ? new Date(voucher.date).toISOString().split("T")[0]
           : new Date().toISOString().split("T")[0],
         submittedBy: voucher.submittedBy || "Logged-in User",
         approvalStatus: voucher.approvalStatus || "Pending",
+        // VAT
         includeVAT: !!voucher.vatAmount,
+        vatRequired: !!voucher.vatAmount,
         vatRate: voucher.vatRate || 5,
       });
       setShowModal(true);
@@ -1358,30 +1446,39 @@ const ExpenseVoucherManagement = () => {
                   </div>
                   <div style={{ fontSize: "10px" }}>
                     <p style={{ margin: "2px 0" }}>
-                      <strong>Main Category:</strong>{" "}
-                      {categoryDetails?.type === "sub"
-                        ? categoryDetails.parent
-                        : categoryDetails?.name || "N/A"}
+                      <strong>Voucher No:</strong> {selectedVoucher.voucherNo}
                     </p>
                     <p style={{ margin: "2px 0" }}>
-                      <strong>Expense Category:</strong>{" "}
-                      {categoryDetails?.name || "N/A"}
-                    </p>
-                    <p style={{ margin: "2px 0" }}>
-                      <strong>Transactor:</strong>{" "}
-                      {transactors.find(
-                        (t) => t.value === selectedVoucher.transactorId?._id
-                      )?.label ||
+                      <strong>From Account:</strong>{" "}
+                      {selectedVoucher.transactorName ||
+                        transactors.find(
+                          (t) => t.value === selectedVoucher.transactorId?._id
+                        )?.label ||
                         selectedVoucher.transactorId?.accountName ||
-                        selectedVoucher.transactorId}
+                        selectedVoucher.transactorId ||
+                        "N/A"}
                     </p>
                     <p style={{ margin: "2px 0" }}>
-                      <strong>Submitted By:</strong>{" "}
-                      {selectedVoucher.submittedBy}
+                      <strong>Expense Account:</strong>{" "}
+                      {selectedVoucher.expenseAccountName ||
+                        selectedVoucher.expenseAccountId?.accountName ||
+                        "N/A"}
                     </p>
                     <p style={{ margin: "2px 0" }}>
-                      <strong>Approval Status:</strong>{" "}
-                      {selectedVoucher.approvalStatus}
+                      <strong>Narration:</strong>{" "}
+                      {selectedVoucher.narration ||
+                        selectedVoucher.description ||
+                        "N/A"}
+                    </p>
+                    <p style={{ margin: "2px 0" }}>
+                      <strong>Amount:</strong>{" "}
+                      {selectedVoucher.totalAmount}
+                    </p>
+                    <p style={{ margin: "2px 0" }}>
+                      <strong>VAT:</strong>{" "}
+                      {selectedVoucher.vatAmount && selectedVoucher.vatAmount > 0
+                        ? selectedVoucher.vatAmount
+                        : "NA"}
                     </p>
                   </div>
                 </div>
@@ -1822,16 +1919,14 @@ const ExpenseVoucherManagement = () => {
               <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                 <tr>
                   {[
-                    { key: "mainExpenseCategory", label: "Main Category" },
-                    { key: "expenseCategory", label: "Category" },
-                    { key: "transactor", label: "Transactor" },
+                    { key: "voucherNo", label: "Voucher #" },
                     { key: "date", label: "Date" },
-                    { key: "totalAmount", label: "Total Amount" },
-                    { key: "entries", label: "Debit" },
-                    { key: "entries", label: "Credit" },
-                    { key: "description", label: "Description" },
-                    { key: "submittedBy", label: "Submitted By" },
-                    { key: "approvalStatus", label: "Approval Status" },
+                    { key: "transactorName", label: "From Account" },
+                    { key: "expenseAccountName", label: "Expense Account" },
+                    { key: "narration", label: "Narration" },
+                    { key: "totalAmount", label: "Amount" },
+                    { key: "vatAmount", label: "VAT" },
+                    { key: "approvalStatus", label: "Status" },
                     { key: null, label: "Actions" },
                   ].map((col) => (
                     <th
@@ -1852,85 +1947,74 @@ const ExpenseVoucherManagement = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {sortedAndFilteredVouchers.map((p) => {
-                  const debitTotal = p.entries?.reduce(
-                    (sum, entry) => sum + (Number(entry.debitAmount) || 0),
-                    0
-                  );
-                  const creditTotal = p.entries?.reduce(
-                    (sum, entry) => sum + (Number(entry.creditAmount) || 0),
-                    0
-                  );
-                  // Find category details for display
-                  const categoryDetails = findCategoryDetails(
-                    p.expenseCategoryId,
-                    p.mainExpenseCategoryId
-                  );
-                  return (
-                    <tr
-                      key={p._id}
-                      className="hover:bg-gradient-to-r hover:from-purple-50 hover:to-blue-50 transition-all duration-200"
-                    >
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                        <button
-                          onClick={() => handleViewVoucher(p)}
-                          className="text-blue-600 hover:underline"
-                        >
-                          {categoryDetails?.type === "sub"
-                            ? categoryDetails.parent
-                            : categoryDetails?.name ||
-                              p.mainExpenseCategoryName ||
-                              "-"}
-                        </button>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {categoryDetails?.name || p.expenseCategoryName || "-"}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {p.transactorName || "-"}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {new Date(p.date).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900 font-medium">
-                        {formatCurrency(p.totalAmount)}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900 font-medium">
-                        {formatCurrency(debitTotal)}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900 font-medium">
-                        {formatCurrency(creditTotal)}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
-                        {p.description || "-"}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {p.submittedBy || "-"}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
+                {sortedAndFilteredVouchers.map((p) => (
+                  <tr
+                    key={p._id}
+                    className="hover:bg-gradient-to-r hover:from-purple-50 hover:to-blue-50 transition-all duration-200"
+                  >
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      <button
+                        onClick={() => handleViewVoucher(p)}
+                        className="text-blue-600 hover:underline"
+                      >
+                        {p.voucherNo || "-"}
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {new Date(p.date).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {p.transactorName || "-"}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {p.expenseAccountName ||
+                        (p.expenseAccountId?.accountName) ||
+                        "-"}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
+                      {p.narration || p.description || "-"}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900 font-medium">
+                      {formatCurrency(p.totalAmount)}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900 font-medium">
+                      {p.vatAmount && p.vatAmount > 0
+                        ? formatCurrency(p.vatAmount)
+                        : "NA"}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          p.approvalStatus === "approved"
+                            ? "bg-green-100 text-green-800"
+                            : p.approvalStatus === "pending"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
                         {p.approvalStatus || "-"}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center space-x-3">
-                          <button
-                            onClick={() => handleEdit(p)}
-                            className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                            title="Edit expense"
-                          >
-                            <Edit size={16} />
-                          </button>
-                          <button
-                            onClick={() => showDeleteConfirmation(p)}
-                            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-all duration-200"
-                            title="Delete expense"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-3">
+                        <button
+                          onClick={() => handleEdit(p)}
+                          className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                          title="Edit expense"
+                        >
+                          <Edit size={16} />
+                        </button>
+                        <button
+                          onClick={() => showDeleteConfirmation(p)}
+                          className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-all duration-200"
+                          title="Delete expense"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -1970,51 +2054,170 @@ const ExpenseVoucherManagement = () => {
             </div>
             <div className="p-6" ref={formRef}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormSelect
-                  label="Main Expense Category"
-                  icon={Building}
-                  name="mainExpenseCategory"
-                  value={formData.mainExpenseCategory}
-                  onChange={(e) => {
-                    handleChange(e);
-                    setFormData((prev) => ({ ...prev, expenseCategory: "" }));
-                  }}
-                  error={errors.mainExpenseCategory}
-                  options={expenseCategories}
-                  hierarchical={false}
-                  data={true}
-                  onAddNew={() => openCategoryModal(false)}
-                />
-                {subOptions.length > 0 && (
-                  <FormSelect
-                    label="Sub Expense Category (optional)"
-                    icon={Building}
-                    name="expenseCategory"
-                    value={formData.expenseCategory}
-                    onChange={handleChange}
-                    error={errors.expenseCategory}
-                    options={subOptions}
-                    hierarchical={false}
-                    data={true}
-                    onAddNew={() =>
-                      openCategoryModal(true, formData.mainExpenseCategory)
-                    }
-                  />
-                )}
-                <FormSelect
-                  label="Transactor"
-                  icon={CreditCard}
-                  name="transactor"
-                  value={formData.transactor}
-                  onChange={handleChange}
-                  error={errors.transactor}
-                  options={transactors.filter(
-                    (t) => t.accountType === "expense"
-                  )}
-                  data={false}
-                />
+                
+                {/* ========== FROM SECTION - Payment Source ========== */}
+                <div className="md:col-span-2 p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-200">
+                  <h4 className="text-sm font-bold text-blue-700 mb-4 flex items-center">
+                    <ArrowLeft size={16} className="mr-2" /> FROM - Payment Source
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Transactor Type Selection */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <CreditCard size={16} className="inline mr-2" /> Payment Source Type <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="transactorType"
+                        value={formData.transactorType}
+                        onChange={(e) => {
+                          handleChange(e);
+                          setFormData((prev) => ({ ...prev, fromTransactor: "" }));
+                        }}
+                        className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-300 transition-all duration-200 ${
+                          errors.transactorType ? "border-red-300 bg-red-50" : "border-gray-300"
+                        }`}
+                      >
+                        <option value="">Select Payment Source Type</option>
+                        <option value="cash">💵 Cash Account</option>
+                        <option value="bank">🏦 Bank Account</option>
+                        <option value="other">📱 Other Accounts</option>
+                      </select>
+                      {errors.transactorType && (
+                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                          <AlertCircle size={12} className="mr-1" /> {errors.transactorType}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Transactor Account Selection - Filtered by Type */}
+                    {formData.transactorType && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          <Building size={16} className="inline mr-2" /> Select Account <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          name="fromTransactor"
+                          value={formData.fromTransactor}
+                          onChange={handleChange}
+                          className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-300 transition-all duration-200 ${
+                            errors.fromTransactor ? "border-red-300 bg-red-50" : "border-gray-300"
+                          }`}
+                        >
+                          <option value="">Select Account</option>
+                          {transactors
+                            .filter((t) => {
+                              // Primary filter: use transactorCategory from backend
+                              if (t.transactorCategory) {
+                                const category = t.transactorCategory.toLowerCase();
+                                const selectedType = formData.transactorType.toLowerCase();
+                                // Handle 'other'/'others' matching for backwards compatibility
+                                if (selectedType === 'other' || selectedType === 'others') {
+                                  return category === 'other' || category === 'others';
+                                }
+                                return category === selectedType;
+                              }
+                              // Fallback: match by name
+                              const name = (t.accountName || t.label || "").toLowerCase();
+                              if (formData.transactorType === "cash") return name.includes("cash");
+                              if (formData.transactorType === "bank") return name.includes("bank");
+                              return !name.includes("cash") && !name.includes("bank");
+                            })
+                            .map((transactor) => (
+                              <option key={transactor.value} value={transactor.value}>
+                                {transactor.label}
+                              </option>
+                            ))}
+                        </select>
+                        {errors.fromTransactor && (
+                          <p className="mt-1 text-sm text-red-600 flex items-center">
+                            <AlertCircle size={12} className="mr-1" /> {errors.fromTransactor}
+                          </p>
+                        )}
+                        {/* Show selected account balance */}
+                        {formData.fromTransactor && (() => {
+                          const selectedAccount = transactors.find(acc => acc.value === formData.fromTransactor);
+                          if (selectedAccount) {
+                            return (
+                              <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-blue-700 font-medium">Available Balance:</span>
+                                  <span className="text-lg font-bold text-blue-800">
+                                    AED {(selectedAccount.balance || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* ========== TO SECTION - Expense Account ========== */}
+                <div className="md:col-span-2 p-4 bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl border border-emerald-200">
+                  <h4 className="text-sm font-bold text-emerald-700 mb-4 flex items-center">
+                    <TrendingUp size={16} className="mr-2" /> TO - Expense Account
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Expense Account Selection */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <Building size={16} className="inline mr-2" /> Expense Account <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="expenseAccountId"
+                        value={formData.expenseAccountId}
+                        onChange={(e) => {
+                          handleChange(e);
+                          setFormData((prev) => ({ ...prev, expenseTypeId: "" }));
+                        }}
+                        className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 transition-all duration-200 ${
+                          errors.expenseAccountId ? "border-red-300 bg-red-50" : "border-gray-300"
+                        }`}
+                      >
+                        <option value="">Select Expense Account</option>
+                        {expenseAccounts.map((acc) => (
+                          <option key={acc.value} value={acc.value}>
+                            {acc.label}
+                          </option>
+                        ))}
+                      </select>
+                      {errors.expenseAccountId && (
+                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                          <AlertCircle size={12} className="mr-1" /> {errors.expenseAccountId}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Expense Type Selection */}
+                    {expenseTypes.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          <Receipt size={16} className="inline mr-2" /> Expense Type
+                        </label>
+                        <select
+                          name="expenseTypeId"
+                          value={formData.expenseTypeId}
+                          onChange={handleChange}
+                          className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 transition-all duration-200 border-gray-300"
+                        >
+                          <option value="">Select Expense Type (default: General)</option>
+                          {expenseTypes.map((type) => (
+                            <option key={type.value} value={type.value}>
+                              {type.label} {type.isDefault ? "(Default)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* ========== EXPENSE DETAILS ========== */}
                 <FormInput
-                  label="Amount"
+                  label="Amount (VAT Inclusive if VAT Required)"
                   icon={DollarSign}
                   type="number"
                   name="amount"
@@ -2022,60 +2225,9 @@ const ExpenseVoucherManagement = () => {
                   onChange={handleChange}
                   error={errors.amount}
                   required
+                  step="0.01"
                 />
-                <div className="md:col-span-2">
-                  <FormTextArea
-                    label="Description"
-                    icon={FileText}
-                    name="description"
-                    value={formData.description}
-                    onChange={handleChange}
-                    placeholder="Enter details or justification for the expense..."
-                  />
-                </div>
-                <div className="md:col-span-2 flex items-center gap-4">
-                  <label className="flex items-center space-x-2 text-sm font-semibold text-gray-700">
-                    <input
-                      type="checkbox"
-                      name="includeVAT"
-                      checked={formData.includeVAT}
-                      onChange={handleChange}
-                      className="rounded border-gray-300 text-purple-500 focus:ring-purple-500"
-                    />
-                    <span>VAT Included</span>
-                  </label>
-                </div>
-                {formData.includeVAT && (
-                  <>
-                    <FormInput
-                      label="VAT Rate (%)"
-                      icon={DollarSign}
-                      type="number"
-                      name="vatRate"
-                      value={formData.vatRate}
-                      onChange={handleChange}
-                      error={errors.vatRate}
-                      required
-                      min="0"
-                      step="0.01"
-                    />
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        <DollarSign size={16} className="inline mr-2" /> VAT
-                        Amount
-                      </label>
-                      <div className="w-full px-4 py-3 border rounded-xl bg-gray-50 text-gray-900 font-medium">
-                        {formatCurrency(vatAmount)}
-                      </div>
-                    </div>
-                  </>
-                )}
-                <FormFileUpload
-                  label="Attach Receipt"
-                  icon={Upload}
-                  name="attachReceipt"
-                  onChange={handleChange}
-                />
+                
                 <FormInput
                   label="Date"
                   icon={Calendar}
@@ -2086,6 +2238,97 @@ const ExpenseVoucherManagement = () => {
                   error={errors.date}
                   required
                 />
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <FileText size={16} className="inline mr-2" /> Narration <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    name="narration"
+                    value={formData.narration}
+                    onChange={handleChange}
+                    placeholder="Enter expense details and justification (mandatory)"
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-300 transition-all duration-200 resize-none ${
+                      errors.narration ? "border-red-300 bg-red-50" : "border-gray-300"
+                    }`}
+                    rows="4"
+                  />
+                  {errors.narration && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center">
+                      <AlertCircle size={12} className="mr-1" /> {errors.narration}
+                    </p>
+                  )}
+                </div>
+                
+                {/* VAT Configuration */}
+                <div className="md:col-span-2 p-4 bg-emerald-50 rounded-xl border border-emerald-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-bold text-emerald-700">💰 VAT Configuration</h4>
+                    <label className="flex items-center space-x-2">
+                      <span className="text-sm font-medium text-gray-700">VAT Required</span>
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          name="vatRequired"
+                          checked={formData.vatRequired || formData.includeVAT}
+                          onChange={(e) => {
+                            const isChecked = e.target.checked;
+                            setFormData((prev) => ({
+                              ...prev,
+                              vatRequired: isChecked,
+                              includeVAT: isChecked,
+                            }));
+                          }}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                      </div>
+                    </label>
+                  </div>
+                  
+                  {(formData.vatRequired || formData.includeVAT) ? (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">VAT Rate (%)</label>
+                        <input
+                          type="number"
+                          name="vatRate"
+                          value={formData.vatRate}
+                          onChange={handleChange}
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 transition-all duration-200 border-gray-300"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">VAT Amount</label>
+                        <div className="w-full px-4 py-3 border rounded-xl bg-emerald-50 text-emerald-700 font-medium border-emerald-200">
+                          {formatCurrency(vatAmount, "text-emerald-700")}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Net Amount (Excl. VAT)</label>
+                        <div className="w-full px-4 py-3 border rounded-xl bg-blue-50 text-blue-700 font-medium border-blue-200">
+                          {formatCurrency(netAmount, "text-blue-700")}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">
+                      VAT is OFF - This expense will NOT appear in VAT reports
+                    </p>
+                  )}
+                </div>
+                
+                {/* File Upload */}
+                <FormFileUpload
+                  label="Attach Receipt"
+                  icon={Upload}
+                  name="attachReceipt"
+                  onChange={handleChange}
+                />
+
                 <FormInput
                   label="Submitted By"
                   icon={User}

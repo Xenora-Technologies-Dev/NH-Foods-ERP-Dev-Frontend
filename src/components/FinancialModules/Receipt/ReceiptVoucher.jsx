@@ -3,8 +3,7 @@ import {
   ArrowLeft,
   Plus,
   Search,
-  Edit,
-  Trash2,
+  Eye,
   X,
   User,
   TrendingUp,
@@ -24,17 +23,18 @@ import {
   AlertTriangle,
   Link2,
   Loader2,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Wallet,
 } from "lucide-react";
 import axios from "../../../axios/axios";
 import InvoiceSelection from "./InvoiceSelection";
 import PaymentInvoiceView from "../Payment/PaymentInvoiceView";
 import CustomerSelect from "./CustomerSelect";
+import VoucherDocument from "./VoucherDocument";
 import {
   asArray,
   takeArray,
-  displayMode,
-  badgeClassForMode,
-  iconForMode,
   formatCurrency,
   by,
   SessionManager,
@@ -132,6 +132,9 @@ const ReceiptVoucherManagement = () => {
   const [receipts, setReceipts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [availableInvoices, setAvailableInvoices] = useState([]);
+  const [allChartOfAccounts, setAllChartOfAccounts] = useState([]); // All chart of accounts fetched at mount
+  const [chartOfAccountsAccounts, setChartOfAccountsAccounts] = useState([]); // Filtered by category
+  const [accountsLoading, setAccountsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState(
     SessionManager.get("searchTerm") || ""
@@ -140,15 +143,16 @@ const ReceiptVoucherManagement = () => {
   const [formData, setFormData] = useState({
     voucherNo: "",
     date: new Date().toISOString().split("T")[0],
+    // FROM Section - Where money comes from (Customer)
     customerName: "",
     customerId: "",
     linkedInvoices: [],
-    paymentMode: "Cash",
+    // TO Section - Where money goes to (Account)
+    accountType: "", // cash, bank, other
+    toAccountId: "",
+    // Payment Details
     amount: "",
     narration: "",
-    bankDetails: { accountNumber: "", accountName: "" },
-    chequeDetails: { chequeNumber: "", chequeDate: "" },
-    onlineDetails: { transactionId: "", transactionDate: "" },
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -158,19 +162,12 @@ const ReceiptVoucherManagement = () => {
     message: "",
     type: "success",
   });
-  const [filterPaymentMode, setFilterPaymentMode] = useState(
-    SessionManager.get("filters")?.paymentMode || ""
-  );
+  // Filter by account type removed - now using account directly
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [selectedReceipt, setSelectedReceipt] = useState(null);
-  const [deleteConfirmation, setDeleteConfirmation] = useState({
-    visible: false,
-    receiptId: null,
-    voucherNo: "",
-    isDeleting: false,
-  });
+  const [viewVoucher, setViewVoucher] = useState(null); // For viewing voucher document
 
   const formRef = useRef(null);
 
@@ -182,6 +179,7 @@ const ReceiptVoucherManagement = () => {
     fetchReceipts();
     fetchCustomers();
     fetchUnpaidInvoices();
+    fetchAllChartOfAccounts(); // Fetch all chart of accounts at mount
   }, []);
 
   useEffect(() => {
@@ -197,8 +195,7 @@ const ReceiptVoucherManagement = () => {
 
   useEffect(() => {
     SessionManager.set("searchTerm", searchTerm);
-    SessionManager.set("filters", { paymentMode: filterPaymentMode });
-  }, [searchTerm, filterPaymentMode]);
+  }, [searchTerm]);
 
   const showToastMessage = useCallback((message, type = "success") => {
     setShowToast({ visible: true, message, type });
@@ -241,6 +238,79 @@ const ReceiptVoucherManagement = () => {
     }
   }, [showToastMessage]);
 
+  // Fetch all chart of accounts at mount
+  const fetchAllChartOfAccounts = useCallback(async () => {
+    try {
+      setAccountsLoading(true);
+      const response = await axios.get("/account-v2/Transactor");
+      const allAccounts = (response.data?.data || []).filter(acc => acc.isActive !== false);
+      setAllChartOfAccounts(
+        allAccounts.map((acc) => ({
+          ...acc,
+          value: acc._id,
+          label: `${acc.accountName} (${acc.accountCode})`,
+          accountName: acc.accountName || "",
+          accountCode: acc.accountCode || "",
+          transactorCategory: acc.transactorCategory,
+          balance: Number(acc.currentBalance || acc.openingBalance || 0),
+        }))
+      );
+    } catch (err) {
+      console.error("Error fetching chart of accounts:", err);
+      showToastMessage("Failed to load accounts.", "error");
+      setAllChartOfAccounts([]);
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, [showToastMessage]);
+
+  // Filter chart of accounts based on category (cash, bank, other) - no API call
+  const filterChartOfAccountsByCategory = useCallback(
+    (category) => {
+      if (!category) {
+        setChartOfAccountsAccounts([]);
+        return;
+      }
+
+      const filtered = allChartOfAccounts.filter((acc) => {
+        // Primary filter: use the transactorCategory field from the backend
+        if (acc.transactorCategory) {
+          const accountCategory = acc.transactorCategory.toLowerCase();
+          const selectedCategory = category.toLowerCase();
+          // Handle 'other'/'others' matching
+          if (selectedCategory === 'other' || selectedCategory === 'others') {
+            return accountCategory === 'other' || accountCategory === 'others';
+          }
+          return accountCategory === selectedCategory;
+        }
+        
+        // Fallback: match by name/code if transactorCategory is not set
+        const name = (acc.accountName || "").toLowerCase();
+        const code = (acc.accountCode || "").toUpperCase();
+        
+        if (category === "cash") {
+          return name.includes("cash") || name.includes("petty") || 
+                 code.startsWith("CAS") || code.startsWith("PET");
+        }
+        if (category === "bank") {
+          return name.includes("bank") || code.startsWith("BAN");
+        }
+        // "other" category - accounts that are not cash or bank
+        return !name.includes("cash") && !name.includes("bank") && !name.includes("petty");
+      });
+      
+      setChartOfAccountsAccounts(filtered);
+    },
+    [allChartOfAccounts]
+  );
+
+  // Re-filter accounts when allChartOfAccounts changes (in case category was selected before accounts loaded)
+  useEffect(() => {
+    if (formData.accountType && allChartOfAccounts.length > 0) {
+      filterChartOfAccountsByCategory(formData.accountType);
+    }
+  }, [allChartOfAccounts, formData.accountType, filterChartOfAccountsByCategory]);
+
 const fetchUnpaidInvoices = useCallback(
   async (customerId = null) => {
     if (!customerId) {
@@ -258,11 +328,12 @@ const fetchUnpaidInvoices = useCallback(
 
       let invoices = takeArray(response);
 
-      // Filter only invoices that have outstanding balance
+      // Filter only APPROVED invoices that have outstanding balance
       const outstandingInvoices = invoices
         .filter((inv) => {
           const outstanding = Number(inv.outstandingAmount || 0);
-          return outstanding > 0;
+          const isApproved = (inv.status || "").toLowerCase() === "approved";
+          return outstanding > 0 && isApproved;
         })
         .map((inv) => ({
           _id: inv._id,
@@ -290,6 +361,18 @@ const fetchUnpaidInvoices = useCallback(
       const [section, field] = name.includes(".")
         ? name.split(".")
         : [name, null];
+      
+      // Handle account type change - filter accounts locally
+      if (name === "accountType") {
+        setFormData((prev) => ({
+          ...prev,
+          accountType: value,
+          toAccountId: "", // Reset account selection
+        }));
+        filterChartOfAccountsByCategory(value);
+        return;
+      }
+      
       setFormData((prev) => ({
         ...prev,
         [field ? section : name]: field
@@ -308,7 +391,7 @@ const fetchUnpaidInvoices = useCallback(
         fetchUnpaidInvoices(value);
       }
     },
-    [customers, fetchUnpaidInvoices]
+    [customers, fetchUnpaidInvoices, filterChartOfAccountsByCategory]
   );
 
 const handleInvoiceSelection = useCallback((invoiceId) => {
@@ -347,26 +430,24 @@ const handleInvoiceSelection = useCallback((invoiceId) => {
 
 const handleInvoiceAmountChange = useCallback(
   (invoiceId, value) => {
-    const numValue = Number(value) || 0;
-
     setFormData((prev) => {
       const invoice = availableInvoices.find((inv) => inv._id === invoiceId);
       if (!invoice) return prev;
 
       const maxAllowed = invoice.outstandingAmount;
-      const clampedAmount = Math.max(0, Math.min(numValue, maxAllowed));
+      const numValue = parseFloat(value) || 0;
 
       const newList = prev.linkedInvoices.map((item) =>
         item.invoiceId === invoiceId
           ? {
               ...item,
-              amount: String(clampedAmount.toFixed(2)),
-              balance: String((maxAllowed - clampedAmount).toFixed(2)),
+              amount: value, // Keep raw value for input
+              balance: String((maxAllowed - numValue).toFixed(2)),
             }
           : item
       );
 
-      const total = newList.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const total = newList.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
       return {
         ...prev,
@@ -380,31 +461,17 @@ const handleInvoiceAmountChange = useCallback(
 
   const validateForm = useCallback(() => {
     const e = {};
+    // FROM Section validation
     if (!formData.customerId) e.customerId = "Customer is required";
+    // TO Section validation
+    if (!formData.accountType) e.accountType = "Account type is required";
+    if (!formData.toAccountId) e.toAccountId = "Account selection is required";
+    // Basic validation
     if (!formData.date) e.date = "Date is required";
-    if (!formData.paymentMode) e.paymentMode = "Payment mode is required";
     if (!formData.amount || Number(formData.amount) <= 0)
       e.amount = "Amount must be greater than 0";
     if (!asArray(formData.linkedInvoices).length)
       e.linkedInvoices = "At least one invoice must be selected";
-    if (formData.paymentMode === "Bank") {
-      if (!formData.bankDetails.accountNumber)
-        e["bankDetails.accountNumber"] = "Account number is required";
-      if (!formData.bankDetails.accountName)
-        e["bankDetails.accountName"] = "Account name is required";
-    }
-    if (formData.paymentMode === "Cheque") {
-      if (!formData.chequeDetails.chequeNumber)
-        e["chequeDetails.chequeNumber"] = "Cheque number is required";
-      if (!formData.chequeDetails.chequeDate)
-        e["chequeDetails.chequeDate"] = "Cheque date is required";
-    }
-    if (formData.paymentMode === "Online") {
-      if (!formData.onlineDetails.transactionId)
-        e["onlineDetails.transactionId"] = "Transaction ID is required";
-      if (!formData.onlineDetails.transactionDate)
-        e["onlineDetails.transactionDate"] = "Transaction date is required";
-    }
     return e;
   }, [formData]);
 
@@ -413,17 +480,19 @@ const handleInvoiceAmountChange = useCallback(
     setFormData({
       voucherNo: "",
       date: new Date().toISOString().split("T")[0],
+      // FROM Section
       customerName: "",
       customerId: "",
       linkedInvoices: [],
-      paymentMode: "Cash",
+      // TO Section
+      accountType: "",
+      toAccountId: "",
+      // Payment Details
       amount: "",
       narration: "",
-      bankDetails: { accountNumber: "", accountName: "" },
-      chequeDetails: { chequeNumber: "", chequeDate: "" },
-      onlineDetails: { transactionId: "", transactionDate: "" },
     });
     setErrors({});
+    setChartOfAccountsAccounts([]);
     setShowModal(false);
     setAvailableInvoices([]);
     SessionManager.remove("formData");
@@ -440,25 +509,22 @@ const handleInvoiceAmountChange = useCallback(
     try {
       const payload = {
         date: formData.date,
+        // FROM Section - Customer
         customerId: formData.customerId,
         customerName: formData.customerName,
         linkedInvoices: formData.linkedInvoices.map((inv) => ({
           invoiceId: inv.invoiceId,
+          transactionNo: inv.transactionNo,
           amount: Number(inv.amount),
           balance: Number(inv.balance),
         })),
-        paymentMode: formData.paymentMode.toLowerCase(),
+        // TO Section - Account
+        accountType: formData.accountType,
+        toAccountId: formData.toAccountId,
+        // Payment Details
         totalAmount: Number(formData.amount),
         narration: formData.narration,
         voucherType: "receipt",
-        paymentDetails: {
-          bankDetails:
-            formData.paymentMode === "Bank" ? formData.bankDetails : null,
-          chequeDetails:
-            formData.paymentMode === "Cheque" ? formData.chequeDetails : null,
-          onlineDetails:
-            formData.paymentMode === "Online" ? formData.onlineDetails : null,
-        },
       };
       if (editReceiptId) {
         await axios.put(`/vouchers/vouchers/${editReceiptId}`, payload);
@@ -500,12 +566,20 @@ const handleInvoiceAmountChange = useCallback(
               : 0) - (inv.amount || 0)
         ),
       }));
-      const paymentDetails = receipt.paymentDetails || {};
+      
+      // Extract TO section fields
+      const accountType = receipt.accountType || "";
+      const toAccountId =
+        typeof receipt.toAccountId === "object"
+          ? receipt.toAccountId?._id
+          : receipt.toAccountId || "";
+      
       setFormData({
         voucherNo: receipt.voucherNo || "",
         date: receipt.date
           ? new Date(receipt.date).toISOString().split("T")[0]
           : new Date().toISOString().split("T")[0],
+        // FROM Section - Customer
         customerName:
           receipt.partyName ||
           receipt.customerName ||
@@ -518,22 +592,19 @@ const handleInvoiceAmountChange = useCallback(
             ? receipt.partyId._id
             : receipt.partyId || receipt.customerId || "",
         linkedInvoices,
-        paymentMode: displayMode(receipt.paymentMode) || "Cash",
+        // TO Section - Account
+        accountType: accountType,
+        toAccountId: toAccountId,
+        // Payment Details
         amount: String(receipt.totalAmount || receipt.amount || 0),
         narration: receipt.narration || "",
-        bankDetails: paymentDetails.bankDetails || {
-          accountNumber: "",
-          accountName: "",
-        },
-        chequeDetails: paymentDetails.chequeDetails || {
-          chequeNumber: "",
-          chequeDate: "",
-        },
-        onlineDetails: paymentDetails.onlineDetails || {
-          transactionId: "",
-          transactionDate: "",
-        },
       });
+      
+      // Fetch accounts for the account type if present (local filter)
+      if (accountType) {
+        filterChartOfAccountsByCategory(accountType);
+      }
+      
       setShowModal(true);
       const customerId =
         typeof receipt.partyId === "object"
@@ -543,50 +614,8 @@ const handleInvoiceAmountChange = useCallback(
       SessionManager.remove("formData");
       SessionManager.remove("lastSaveTime");
     },
-    [fetchUnpaidInvoices]
+    [fetchUnpaidInvoices, filterChartOfAccountsByCategory]
   );
-
-  const showDeleteConfirmation = useCallback((receipt) => {
-    setDeleteConfirmation({
-      visible: true,
-      receiptId: receipt._id,
-      voucherNo: receipt.voucherNo,
-      isDeleting: false,
-    });
-  }, []);
-
-  const hideDeleteConfirmation = useCallback(() => {
-    setDeleteConfirmation({
-      visible: false,
-      receiptId: null,
-      voucherNo: "",
-      isDeleting: false,
-    });
-  }, []);
-
-  const confirmDelete = useCallback(async () => {
-    setDeleteConfirmation((prev) => ({ ...prev, isDeleting: true }));
-    try {
-      await axios.delete(`/vouchers/vouchers/${deleteConfirmation.receiptId}`);
-      setReceipts((prev) =>
-        asArray(prev).filter((r) => r._id !== deleteConfirmation.receiptId)
-      );
-      showToastMessage("Receipt voucher deleted successfully!", "success");
-      hideDeleteConfirmation();
-      await fetchReceipts();
-    } catch (err) {
-      showToastMessage(
-        err.response?.data?.message || "Failed to delete receipt voucher.",
-        "error"
-      );
-      setDeleteConfirmation((prev) => ({ ...prev, isDeleting: false }));
-    }
-  }, [
-    deleteConfirmation.receiptId,
-    fetchReceipts,
-    hideDeleteConfirmation,
-    showToastMessage,
-  ]);
 
   const openAddModal = useCallback(() => {
     resetForm();
@@ -647,14 +676,10 @@ const handleInvoiceAmountChange = useCallback(
       const voucherNo = r.voucherNo?.toLowerCase() || "";
       const customerName = (r.partyName || r.customerName || "").toLowerCase();
       const narration = r.narration?.toLowerCase() || "";
-      const modeOk = filterPaymentMode
-        ? displayMode(r.paymentMode) === filterPaymentMode
-        : true;
       return (
-        (voucherNo.includes(term) ||
-          customerName.includes(term) ||
-          narration.includes(term)) &&
-        modeOk
+        voucherNo.includes(term) ||
+        customerName.includes(term) ||
+        narration.includes(term)
       );
     });
     if (sortConfig.key) {
@@ -666,6 +691,8 @@ const handleInvoiceAmountChange = useCallback(
             ? new Date(a.date).getTime()
             : sortConfig.key === "linkedInvoices"
             ? asArray(a.linkedInvoices).length
+            : sortConfig.key === "toAccountId"
+            ? (a.toAccountId?.accountName || "").toLowerCase()
             : by(a[sortConfig.key]);
         const bv =
           sortConfig.key === "amount"
@@ -674,6 +701,8 @@ const handleInvoiceAmountChange = useCallback(
             ? new Date(b.date).getTime()
             : sortConfig.key === "linkedInvoices"
             ? asArray(b.linkedInvoices).length
+            : sortConfig.key === "toAccountId"
+            ? (b.toAccountId?.accountName || "").toLowerCase()
             : by(b[sortConfig.key]);
         return av < bv
           ? sortConfig.direction === "asc"
@@ -687,7 +716,7 @@ const handleInvoiceAmountChange = useCallback(
       });
     }
     return filtered;
-  }, [safeReceipts, searchTerm, filterPaymentMode, sortConfig]);
+  }, [safeReceipts, searchTerm, sortConfig]);
 
   if (selectedReceipt) {
     return (
@@ -724,7 +753,7 @@ const handleInvoiceAmountChange = useCallback(
         No receipt vouchers found
       </h3>
       <p className="text-gray-600 text-center mb-8 max-w-md">
-        {searchTerm || filterPaymentMode
+        {searchTerm
           ? "No receipt vouchers match your current filters. Try adjusting your search criteria."
           : "Start recording payments by creating your first receipt voucher."}
       </p>
@@ -874,21 +903,8 @@ const handleInvoiceAmountChange = useCallback(
             </div>
             {showFilters && (
               <div className="flex flex-col sm:flex-row gap-4 p-4 bg-gray-50 rounded-lg">
-                <FormSelect
-                  label="Payment Mode"
-                  value={filterPaymentMode}
-                  onChange={(e) => setFilterPaymentMode(e.target.value)}
-                  options={[
-                    { value: "", label: "All Payment Modes" },
-                    { value: "Cash", label: "Cash" },
-                    { value: "Bank", label: "Bank" },
-                    { value: "Cheque", label: "Cheque" },
-                    { value: "Online", label: "Online" },
-                  ]}
-                />
                 <button
                   onClick={() => {
-                    setFilterPaymentMode("");
                     setSearchTerm("");
                   }}
                   className="px-4 py-2 text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
@@ -911,7 +927,7 @@ const handleInvoiceAmountChange = useCallback(
                     { key: "date", label: "Date" },
                     { key: "customerName", label: "Customer" },
                     { key: "linkedInvoices", label: "Linked Invoices" },
-                    { key: "paymentMode", label: "Payment Mode" },
+                    { key: "toAccountId", label: "Deposit Account" },
                     { key: "amount", label: "Amount" },
                     { key: "narration", label: "Narration" },
                     { key: null, label: "Actions" },
@@ -970,7 +986,7 @@ const handleInvoiceAmountChange = useCallback(
                             <Link2 size={10} className="mr-1" />
                             {invoice.invoiceId?.transactionNo ||
                               invoice.transactionNo ||
-                              invoice.invoiceId ||
+                              (typeof invoice.invoiceId === 'string' ? invoice.invoiceId : null) ||
                               "N/A"}
                             {invoice.amount && (
                               <span className="ml-1">
@@ -983,18 +999,9 @@ const handleInvoiceAmountChange = useCallback(
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-2">
-                        {iconForMode(r.paymentMode, {
-                          DollarSign,
-                          Building,
-                          FileText,
-                          CreditCard,
-                        })}
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${badgeClassForMode(
-                            r.paymentMode
-                          )}`}
-                        >
-                          {displayMode(r.paymentMode)}
+                        <Wallet size={16} className="text-emerald-600" />
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                          {r.toAccountId?.accountName || r.accountType || "-"}
                         </span>
                       </div>
                     </td>
@@ -1005,20 +1012,13 @@ const handleInvoiceAmountChange = useCallback(
                       {r.narration || "-"}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center space-x-3">
+                      <div className="flex items-center justify-center">
                         <button
-                          onClick={() => handleEdit(r)}
+                          onClick={() => setViewVoucher(r)}
                           className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                          title="Edit receipt"
+                          title="View receipt voucher"
                         >
-                          <Edit size={16} />
-                        </button>
-                        <button
-                          onClick={() => showDeleteConfirmation(r)}
-                          className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-all duration-200"
-                          title="Delete receipt"
-                        >
-                          <Trash2 size={16} />
+                          <Eye size={18} />
                         </button>
                       </div>
                     </td>
@@ -1029,56 +1029,16 @@ const handleInvoiceAmountChange = useCallback(
           </div>
         )}
       </div>
-      {deleteConfirmation.visible && (
-        <div className="fixed inset-0 bg-white/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-            <div className="p-6">
-              <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
-                  <AlertTriangle size={32} className="text-red-600" />
-                </div>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 text-center mb-2">
-                Delete Receipt Voucher
-              </h3>
-              <p className="text-gray-600 text-center mb-2">
-                Are you sure you want to delete
-              </p>
-              <p className="text-gray-900 font-semibold text-center mb-6">
-                "{deleteConfirmation.voucherNo}"?
-              </p>
-              <p className="text-sm text-gray-500 text-center mb-8">
-                This action cannot be undone.
-              </p>
-              <div className="flex space-x-3">
-                <button
-                  onClick={hideDeleteConfirmation}
-                  disabled={deleteConfirmation.isDeleting}
-                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-200 font-medium disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  disabled={deleteConfirmation.isDeleting}
-                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 font-medium disabled:opacity-50 flex items-center justify-center"
-                >
-                  {deleteConfirmation.isDeleting ? (
-                    <>
-                      <Loader2 size={16} className="mr-2 animate-spin" />{" "}
-                      Deleting...
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 size={16} className="mr-2" /> Delete
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+
+      {/* View Voucher Document Modal */}
+      {viewVoucher && (
+        <VoucherDocument
+          voucher={viewVoucher}
+          type="receipt"
+          onClose={() => setViewVoucher(null)}
+        />
       )}
+
       {showModal && (
         <div className="fixed inset-0 bg-white/50 flex items-center justify-center p-4 z-50 modal-container transform scale-95 transition-transform duration-300">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -1131,34 +1091,111 @@ const handleInvoiceAmountChange = useCallback(
                   error={errors.date}
                   required
                 />
-                <CustomerSelect
-                  customers={customers}
-                  value={formData.customerId}
-                  onChange={handleChange}
-                  error={errors.customerId}
-                />
-                <InvoiceSelection
-                  availableInvoices={availableInvoices}
-                  linkedInvoices={formData.linkedInvoices}
-                  onInvoiceSelection={handleInvoiceSelection}
-                  onInvoiceAmountChange={handleInvoiceAmountChange}
-                  customerId={formData.customerId}
-                  error={errors.linkedInvoices}
-                />
-                <FormSelect
-                  label="Payment Mode"
-                  icon={CreditCard}
-                  name="paymentMode"
-                  value={formData.paymentMode}
-                  onChange={handleChange}
-                  error={errors.paymentMode}
-                  options={[
-                    { value: "Cash", label: "Cash" },
-                    { value: "Bank", label: "Bank" },
-                    { value: "Cheque", label: "Cheque" },
-                    { value: "Online", label: "Online" },
-                  ]}
-                />
+                
+                {/* ========== FROM SECTION - Customer (Money Source) ========== */}
+                <div className="md:col-span-2 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+                  <h4 className="text-sm font-bold text-blue-700 mb-4 flex items-center">
+                    <ArrowDownLeft size={18} className="mr-2" />
+                    FROM - Receiving Payment From
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <CustomerSelect
+                      customers={customers}
+                      value={formData.customerId}
+                      onChange={handleChange}
+                      error={errors.customerId}
+                    />
+                  </div>
+                  
+                  {/* Invoice Selection */}
+                  <div className="mt-4">
+                    <InvoiceSelection
+                      availableInvoices={availableInvoices}
+                      linkedInvoices={formData.linkedInvoices}
+                      onInvoiceSelection={handleInvoiceSelection}
+                      onInvoiceAmountChange={handleInvoiceAmountChange}
+                      customerId={formData.customerId}
+                      error={errors.linkedInvoices}
+                    />
+                  </div>
+                </div>
+
+                {/* ========== TO SECTION - Account (Money Destination) ========== */}
+                <div className="md:col-span-2 p-4 bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl border border-emerald-200">
+                  <h4 className="text-sm font-bold text-emerald-700 mb-4 flex items-center">
+                    <ArrowUpRight size={18} className="mr-2" />
+                    TO - Depositing Into Account
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Account Type Selection */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <Wallet size={16} className="inline mr-2" /> Account Type <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="accountType"
+                        value={formData.accountType}
+                        onChange={handleChange}
+                        className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 transition-all duration-200 ${
+                          errors.accountType ? "border-red-300 bg-red-50" : "border-gray-300"
+                        }`}
+                      >
+                        <option value="">Select Account Type</option>
+                        <option value="cash">💵 Cash</option>
+                        <option value="bank">🏦 Bank</option>
+                        <option value="other">📁 Other</option>
+                      </select>
+                      {errors.accountType && (
+                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                          <AlertCircle size={12} className="mr-1" /> {errors.accountType}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Transactor Account Selection - Filtered by Type */}
+                    {formData.accountType && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          <Building size={16} className="inline mr-2" /> Select Account <span className="text-red-500">*</span>
+                        </label>
+                        {accountsLoading ? (
+                          <div className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 flex items-center">
+                            <Loader2 size={16} className="animate-spin mr-2" />
+                            Loading accounts...
+                          </div>
+                        ) : (
+                          <select
+                            name="toAccountId"
+                            value={formData.toAccountId}
+                            onChange={handleChange}
+                            className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 transition-all duration-200 ${
+                              errors.toAccountId ? "border-red-300 bg-red-50" : "border-gray-300"
+                            }`}
+                          >
+                            <option value="">Select Account</option>
+                            {chartOfAccountsAccounts.map((acc) => (
+                              <option key={acc.value} value={acc.value}>
+                                {acc.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        {errors.toAccountId && (
+                          <p className="mt-1 text-sm text-red-600 flex items-center">
+                            <AlertCircle size={12} className="mr-1" /> {errors.toAccountId}
+                          </p>
+                        )}
+                        {chartOfAccountsAccounts.length === 0 && formData.accountType && !accountsLoading && (
+                          <p className="mt-1 text-sm text-amber-600 flex items-center">
+                            <AlertTriangle size={12} className="mr-1" /> No accounts found for this type
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* ========== AMOUNT & NARRATION SECTION ========== */}
                 <FormInput
                   label="Total Amount"
                   icon={DollarSign}
@@ -1169,74 +1206,6 @@ const handleInvoiceAmountChange = useCallback(
                   error={errors.amount}
                   className="bg-gray-50 text-gray-500"
                 />
-                {formData.paymentMode === "Bank" && (
-                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormInput
-                      label="Account Number"
-                      icon={Building}
-                      name="bankDetails.accountNumber"
-                      value={formData.bankDetails.accountNumber}
-                      onChange={handleChange}
-                      error={errors["bankDetails.accountNumber"]}
-                      required
-                    />
-                    <FormInput
-                      label="Account Name"
-                      icon={User}
-                      name="bankDetails.accountName"
-                      value={formData.bankDetails.accountName}
-                      onChange={handleChange}
-                      error={errors["bankDetails.accountName"]}
-                      required
-                    />
-                  </div>
-                )}
-                {formData.paymentMode === "Cheque" && (
-                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormInput
-                      label="Cheque Number"
-                      icon={FileText}
-                      name="chequeDetails.chequeNumber"
-                      value={formData.chequeDetails.chequeNumber}
-                      onChange={handleChange}
-                      error={errors["chequeDetails.chequeNumber"]}
-                      required
-                    />
-                    <FormInput
-                      label="Cheque Date"
-                      icon={Calendar}
-                      type="date"
-                      name="chequeDetails.chequeDate"
-                      value={formData.chequeDetails.chequeDate}
-                      onChange={handleChange}
-                      error={errors["chequeDetails.chequeDate"]}
-                      required
-                    />
-                  </div>
-                )}
-                {formData.paymentMode === "Online" && (
-                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormInput
-                      label="Transaction ID"
-                      icon={CreditCard}
-                      name="onlineDetails.transactionId"
-                      value={formData.onlineDetails.transactionId}
-                      onChange={handleChange}
-                      error={errors["onlineDetails.transactionId"]}
-                      required
-                    />
-                    <FormInput
-                      label="Transaction Date"
-                      icon={Calendar}
-                      type="date"
-                      name="onlineDetails.transactionDate"
-                      value={formData.onlineDetails.transactionDate}
-                      onChange={handleChange}
-                      error={errors["onlineDetails.transactionDate"]}
-                      required
-                    />
-                  </div>
-                )}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     <FileText size={16} className="inline mr-2" /> Narration

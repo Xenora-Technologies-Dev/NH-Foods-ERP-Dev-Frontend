@@ -342,6 +342,7 @@ const ContraVoucherManagement = () => {
           openingBalance: t.openingBalance || 0,
           currentBalance: t.currentBalance || 0,
           accountType: t.accountType,
+          transactorCategory: t.transactorCategory,
           status: t.status,
           isTransactor: true,
         }))

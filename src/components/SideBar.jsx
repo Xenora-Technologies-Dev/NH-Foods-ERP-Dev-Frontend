@@ -108,8 +108,13 @@ const Sidebar = () => {
           },
           {
             icon: <Users strokeWidth={1.5} size={20} />,
-            text: "Transactors",
-            to: "/transactors",
+            text: "Chart Of Accounts",
+            to: "/chart-of-accounts",
+          },
+          {
+            icon: <TrendingUp strokeWidth={1.5} size={20} />,
+            text: "Expense Accounts",
+            to: "/expense-accounts",
           },
         ].filter((item) => userRole === "Admin" || userRole === "Accountant"),
       },

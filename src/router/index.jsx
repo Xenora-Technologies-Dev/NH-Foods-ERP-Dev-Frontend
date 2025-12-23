@@ -24,7 +24,10 @@ import PaymentVoucherManagement from "../components/FinancialModules/Payment/Pay
 import PurchaseAccounts from "../components/AccountsModule/Purchase/PurchaseAccount.jsx";
 import SaleAccountsManagement from "../components/AccountsModule//Sales/SaleAccountsManagement.jsx";
 import TransactionsManagement from "../components/AccountsModule/Transaction/TransactionsManagement.jsx";
-import TransactorsManagement from "../components/AccountsModule/Transactors/TransactorsManagement.jsx";
+import ChartOfAccountsManagement from "../components/AccountsModule/ChartOfAccounts/ChartOfAccountsManagement.jsx";
+import ExpenseAccountsPage from "../components/AccountsModule/Expense/ExpenseAccountsPage.jsx";
+import ExpenseTypesPage from "../components/AccountsModule/Expense/ExpenseTypesPage.jsx";
+import ExpenseHistoryPage from "../components/AccountsModule/Expense/ExpenseHistoryPage.jsx";
 import JournalVoucherManagement from "../components/FinancialModules/Journal/JournalVoucherManagement.jsx";
 import ContraVoucherManagement from "../components/FinancialModules/Contra/ContraVoucherManagement.jsx";
 import ExpenseVoucherManagement from "../components/FinancialModules/Expense/ExpenseVoucherManagement.jsx";
@@ -75,7 +78,10 @@ export default function AdminRouter() {
           element={<CustomerDetailsPage />}
         />
         <Route path="/transactions" element={<TransactionsManagement />} />{" "}
-        <Route path="/transactors" element={<TransactorsManagement />} />{" "}
+        <Route path="/chart-of-accounts" element={<ChartOfAccountsManagement />} />{" "}
+        <Route path="/expense-accounts" element={<ExpenseAccountsPage />} />{" "}
+        <Route path="/expense-accounts/:accountId/types" element={<ExpenseTypesPage />} />{" "}
+        <Route path="/expense-accounts/types/:typeId/history" element={<ExpenseHistoryPage />} />{" "}
         <Route path="/payment-voucher" element={<PaymentVoucherManagement />} />{" "}
         {/* reports */}
         <Route path="/vat-reports" element={<VatReports />} />{" "}
