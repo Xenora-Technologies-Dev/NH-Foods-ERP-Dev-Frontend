@@ -46,6 +46,7 @@ import TableView from "./TableView";
 import GridView from "./GridView";
 import SaleInvoiceView from "./InvoiceView";
 import { exportSalesOrdersToExcel } from "../../../utils/excelExport";
+import PaginationControl from "../../Pagination/PaginationControl";
 
 const SalesOrderManagement = () => {
   const [activeView, setActiveView] = useState("dashboard");
@@ -190,6 +191,7 @@ const SalesOrderManagement = () => {
           status: statusFilter !== "ALL" ? statusFilter : undefined,
           partyId: customerFilter !== "ALL" ? customerFilter : undefined,
           dateFilter: dateFilter !== "ALL" ? dateFilter : undefined,
+          limit: 1000, // Fetch up to 1000 records for display
         },
       });
 
@@ -255,6 +257,78 @@ const SalesOrderManagement = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const fetchAllForExport = async () => {
+    try {
+      // Fetch all sales orders from database (no pagination limit)
+      const response = await axiosInstance.get("/transactions/transactions", {
+        params: {
+          type: "sales_order",
+          limit: 10000, // Fetch up to 10000 records
+        },
+      });
+      return response.data?.data || [];
+    } catch (error) {
+      console.error("Error fetching data for export:", error);
+      addNotification("Failed to export data", "error");
+      return [];
+    }
+  };
+
+  const handleExportAll = async () => {
+    addNotification("Preparing export...", "info");
+    const allData = await fetchAllForExport();
+    
+    if (allData.length === 0) {
+      addNotification("No data to export", "error");
+      return;
+    }
+
+    const formatDisplayTransactionNo = (t) => {
+      try {
+        const tx = t.transactionNo || '';
+        if (t.status === 'APPROVED' && tx) {
+          const m = String(tx).match(/^SO\d{6}-(\d{5})$/i);
+          if (m) return m[1];
+          const digits = String(tx).replace(/\D/g, '');
+          if (!digits) return tx;
+          return digits.slice(-5).padStart(5, '0');
+        }
+        return tx;
+      } catch (e) {
+        return t.transactionNo;
+      }
+    };
+
+    const formattedData = allData.map((t) => {
+      const displayTransactionNo = formatDisplayTransactionNo(t);
+      return {
+        id: t._id,
+        transactionNo: t.transactionNo,
+        displayTransactionNo,
+        customerId: t.partyId,
+        customerName: t.party?.customerName || t.partyName,
+        date: t.date,
+        deliveryDate: t.deliveryDate,
+        status: t.status,
+        totalAmount: parseFloat(t.totalAmount).toFixed(2),
+        items: t.items,
+        terms: t.terms || "",
+        notes: t.notes || "",
+        createdBy: t.createdBy,
+        createdAt: t.createdAt,
+        invoiceGenerated: t.invoiceGenerated,
+        priority: t.priority || "Medium",
+        refNo: t.lpono ?? t.refNo ?? "",
+        docNo: t.docno ?? t.docNo ?? "",
+        discount: typeof t.discount === "number" ? t.discount : 0,
+        orderNumber: t.orderNumber || t.transactionNo,
+      };
+    });
+
+    exportSalesOrdersToExcel(formattedData, "Sales_Orders_All");
+    addNotification("Sales orders exported to Excel successfully", "success");
   };
 
   const generateTransactionNumber = () => {
@@ -1046,71 +1120,19 @@ const updateSalesOrderStatus = (id, newStatus) => {
   );
 
   const Pagination = () => {
-    const startItem = (currentPage - 1) * itemsPerPage + 1;
-    const endItem = Math.min(currentPage * itemsPerPage, filteredSOs.length);
-
     return (
-      <div className="flex items-center justify-between bg-white/80 backdrop-blur-sm rounded-2xl px-6 py-4 border border-white/20">
-        <div className="flex items-center space-x-4">
-          <span className="text-sm text-slate-600">
-            Showing {startItem} to {endItem} of {filteredSOs.length} orders
-          </span>
-          <select
-            value={itemsPerPage}
-            onChange={(e) => {
-              setItemsPerPage(Number(e.target.value));
-              setCurrentPage(1);
-            }}
-            className="px-3 py-1 border border-slate-300 rounded-lg text-sm"
-          >
-            <option value={10}>10 per page</option>
-            <option value={25}>25 per page</option>
-            <option value={50}>50 per page</option>
-            <option value={100}>100 per page</option>
-          </select>
-        </div>
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-            disabled={currentPage === 1}
-            className="px-3 py-2 text-sm text-slate-600 hover:text-slate-900 disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <div className="flex space-x-1">
-            {[...Array(Math.min(5, totalPages))].map((_, i) => {
-              let pageNum =
-                totalPages <= 5
-                  ? i + 1
-                  : currentPage <= 3
-                  ? i + 1
-                  : currentPage >= totalPages - 2
-                  ? totalPages - 4 + i
-                  : currentPage - 2 + i;
-              return (
-                <button
-                  key={pageNum}
-                  onClick={() => setCurrentPage(pageNum)}
-                  className={`px-3 py-2 text-sm rounded-lg ${
-                    currentPage === pageNum
-                      ? "bg-blue-600 text-white"
-                      : "text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
-          </div>
-          <button
-            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-            disabled={currentPage === totalPages}
-            className="px-3 py-2 text-sm text-slate-600 hover:text-slate-900 disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
-      </div>
+      <PaginationControl
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalItems={filteredSOs.length}
+        itemsPerPage={itemsPerPage}
+        onPageChange={(page) => setCurrentPage(page)}
+        onItemsPerPageChange={(newItemsPerPage) => {
+          setItemsPerPage(newItemsPerPage);
+          setCurrentPage(1);
+        }}
+        isLoading={isLoading}
+      />
     );
   };
 
@@ -1252,12 +1274,9 @@ const updateSalesOrderStatus = (id, newStatus) => {
                   <Grid className="w-5 h-5" />
                 </button>
                 <button
-                  onClick={() => {
-                    exportSalesOrdersToExcel(salesOrders, "Sales_Orders_All");
-                    addNotification("All sales orders exported to Excel successfully", "success");
-                  }}
+                  onClick={handleExportAll}
                   className="flex items-center space-x-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
-                  title="Export all sales orders"
+                  title="Export all sales orders from database"
                 >
                   <FileDown className="w-4 h-4" />
                   <span>Export All</span>
