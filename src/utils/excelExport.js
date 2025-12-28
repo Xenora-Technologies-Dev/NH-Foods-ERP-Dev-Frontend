@@ -333,3 +333,283 @@ export const exportBalanceSheetExcel = (report) => {
   
   XLSX.writeFile(wb, filename);
 };
+
+/**
+ * Export Sales Order data to Excel with complete item details
+ */
+export const exportSalesOrdersToExcel = (salesOrders, fileName = 'Sales_Orders') => {
+  if (!salesOrders || salesOrders.length === 0) {
+    console.warn('No sales orders to export');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+  
+  // Summary sheet
+  const summaryData = salesOrders.map((so) => ({
+    'SO Number': so.orderNumber || so.transactionNo || '-',
+    'Transaction No': so.transactionNo || '-',
+    'Customer': so.customerName || so.partyName || '-',
+    'Date': so.date ? new Date(so.date).toLocaleDateString() : '-',
+    'Delivery Date': so.deliveryDate ? new Date(so.deliveryDate).toLocaleDateString() : '-',
+    'Status': so.status || '-',
+    'Priority': so.priority || '-',
+    'Total Amount': so.totalAmount ? String(so.totalAmount) : '-',
+    'Items Count': Array.isArray(so.items) ? so.items.length : 0,
+    'Notes': so.notes || '-',
+    'Created By': so.createdBy || '-',
+  }));
+  
+  // Detailed sheet with all items
+  const detailedData = [];
+  salesOrders.forEach((so) => {
+    if (Array.isArray(so.items) && so.items.length > 0) {
+      so.items.forEach((item, idx) => {
+        detailedData.push({
+          'SO Number': idx === 0 ? (so.orderNumber || so.transactionNo || '-') : '',
+          'Customer': idx === 0 ? (so.customerName || so.partyName || '-') : '',
+          'Date': idx === 0 ? (so.date ? new Date(so.date).toLocaleDateString() : '-') : '',
+          'Status': idx === 0 ? (so.status || '-') : '',
+          'Item Name': item.description || item.itemName || item.name || '-',
+          'Item Qty': item.quantity ? String(item.quantity) : '0',
+          'Unit Price': item.price ? String(item.price) : '0',
+          'Item Total': item.total ? String(item.total) : String((item.quantity || 0) * (item.price || 0)),
+          'UOM': item.uom || item.unit || '-',
+          'Item Description': item.notes || item.remarks || '-',
+        });
+      });
+    } else {
+      detailedData.push({
+        'SO Number': so.orderNumber || so.transactionNo || '-',
+        'Customer': so.customerName || so.partyName || '-',
+        'Date': so.date ? new Date(so.date).toLocaleDateString() : '-',
+        'Status': so.status || '-',
+        'Item Name': 'No items',
+        'Item Qty': '0',
+        'Unit Price': '0',
+        'Item Total': '0',
+        'UOM': '-',
+        'Item Description': '-',
+      });
+    }
+  });
+
+  const summaryWs = XLSX.utils.json_to_sheet(summaryData);
+  const detailedWs = XLSX.utils.json_to_sheet(detailedData);
+  XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+  XLSX.utils.book_append_sheet(wb, detailedWs, 'Items Detail');
+
+  const timestamp = new Date().toISOString().split('T')[0];
+  const fullFileName = `${fileName}_${timestamp}.xlsx`;
+  XLSX.writeFile(wb, fullFileName);
+};
+
+/**
+ * Export Sales Invoice data to Excel with complete item details
+ */
+export const exportSalesInvoicesToExcel = (salesInvoices, fileName = 'Sales_Invoices') => {
+  if (!salesInvoices || salesInvoices.length === 0) {
+    console.warn('No sales invoices to export');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+  
+  // Summary sheet
+  const summaryData = salesInvoices.map((invoice) => ({
+    'Invoice Number': invoice.transactionNo || '-',
+    'Order Number': invoice.orderNumber || '-',
+    'Customer': invoice.customerName || invoice.partyName || '-',
+    'Invoice Date': invoice.date ? new Date(invoice.date).toLocaleDateString() : '-',
+    'Status': invoice.status || '-',
+    'Total Amount': invoice.totalAmount ? String(invoice.totalAmount) : '-',
+    'Paid Amount': invoice.paidAmount ? String(invoice.paidAmount) : '0',
+    'Outstanding': invoice.outstandingAmount ? String(invoice.outstandingAmount) : String((invoice.totalAmount || 0) - (invoice.paidAmount || 0)),
+    'Items Count': Array.isArray(invoice.items) ? invoice.items.length : 0,
+    'Terms': invoice.terms || '-',
+    'Created By': invoice.createdBy || '-',
+  }));
+  
+  // Detailed sheet with all items
+  const detailedData = [];
+  salesInvoices.forEach((invoice) => {
+    if (Array.isArray(invoice.items) && invoice.items.length > 0) {
+      invoice.items.forEach((item, idx) => {
+        detailedData.push({
+          'Invoice Number': idx === 0 ? (invoice.transactionNo || '-') : '',
+          'Customer': idx === 0 ? (invoice.customerName || invoice.partyName || '-') : '',
+          'Invoice Date': idx === 0 ? (invoice.date ? new Date(invoice.date).toLocaleDateString() : '-') : '',
+          'Status': idx === 0 ? (invoice.status || '-') : '',
+          'Item Name': item.description || item.itemName || item.name || '-',
+          'Item Qty': item.quantity ? String(item.quantity) : '0',
+          'Unit Price': item.price ? String(item.price) : '0',
+          'Item Total': item.total ? String(item.total) : String((item.quantity || 0) * (item.price || 0)),
+          'UOM': item.uom || item.unit || '-',
+          'Item Description': item.notes || item.remarks || '-',
+        });
+      });
+    } else {
+      detailedData.push({
+        'Invoice Number': invoice.transactionNo || '-',
+        'Customer': invoice.customerName || invoice.partyName || '-',
+        'Invoice Date': invoice.date ? new Date(invoice.date).toLocaleDateString() : '-',
+        'Status': invoice.status || '-',
+        'Item Name': 'No items',
+        'Item Qty': '0',
+        'Unit Price': '0',
+        'Item Total': '0',
+        'UOM': '-',
+        'Item Description': '-',
+      });
+    }
+  });
+
+  const summaryWs = XLSX.utils.json_to_sheet(summaryData);
+  const detailedWs = XLSX.utils.json_to_sheet(detailedData);
+  XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+  XLSX.utils.book_append_sheet(wb, detailedWs, 'Items Detail');
+
+  const timestamp = new Date().toISOString().split('T')[0];
+  const fullFileName = `${fileName}_${timestamp}.xlsx`;
+  XLSX.writeFile(wb, fullFileName);
+};
+
+/**
+ * Export Purchase Order data to Excel with complete item details
+ */
+export const exportPurchaseOrdersToExcel = (purchaseOrders, fileName = 'Purchase_Orders') => {
+  if (!purchaseOrders || purchaseOrders.length === 0) {
+    console.warn('No purchase orders to export');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+  
+  // Summary sheet
+  const summaryData = purchaseOrders.map((po) => ({
+    'PO Number': po.orderNumber || po.transactionNo || '-',
+    'Transaction No': po.transactionNo || '-',
+    'Vendor': po.vendorName || po.partyName || '-',
+    'Vendor Reference': po.vendorReference || '-',
+    'Date': po.date ? new Date(po.date).toLocaleDateString() : '-',
+    'Delivery Date': po.deliveryDate ? new Date(po.deliveryDate).toLocaleDateString() : '-',
+    'Status': po.status || '-',
+    'Total Amount': po.totalAmount ? String(po.totalAmount) : '-',
+    'Items Count': Array.isArray(po.items) ? po.items.length : 0,
+    'Notes': po.notes || '-',
+    'Created By': po.createdBy || '-',
+  }));
+  
+  // Detailed sheet with all items
+  const detailedData = [];
+  purchaseOrders.forEach((po) => {
+    if (Array.isArray(po.items) && po.items.length > 0) {
+      po.items.forEach((item, idx) => {
+        detailedData.push({
+          'PO Number': idx === 0 ? (po.orderNumber || po.transactionNo || '-') : '',
+          'Vendor': idx === 0 ? (po.vendorName || po.partyName || '-') : '',
+          'Date': idx === 0 ? (po.date ? new Date(po.date).toLocaleDateString() : '-') : '',
+          'Status': idx === 0 ? (po.status || '-') : '',
+          'Item Name': item.description || item.itemName || item.name || '-',
+          'Item Qty': item.quantity ? String(item.quantity) : '0',
+          'Unit Price': item.price ? String(item.price) : '0',
+          'Item Total': item.total ? String(item.total) : String((item.quantity || 0) * (item.price || 0)),
+          'UOM': item.uom || item.unit || '-',
+          'Item Description': item.notes || item.remarks || '-',
+        });
+      });
+    } else {
+      detailedData.push({
+        'PO Number': po.orderNumber || po.transactionNo || '-',
+        'Vendor': po.vendorName || po.partyName || '-',
+        'Date': po.date ? new Date(po.date).toLocaleDateString() : '-',
+        'Status': po.status || '-',
+        'Item Name': 'No items',
+        'Item Qty': '0',
+        'Unit Price': '0',
+        'Item Total': '0',
+        'UOM': '-',
+        'Item Description': '-',
+      });
+    }
+  });
+
+  const summaryWs = XLSX.utils.json_to_sheet(summaryData);
+  const detailedWs = XLSX.utils.json_to_sheet(detailedData);
+  XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+  XLSX.utils.book_append_sheet(wb, detailedWs, 'Items Detail');
+
+  const timestamp = new Date().toISOString().split('T')[0];
+  const fullFileName = `${fileName}_${timestamp}.xlsx`;
+  XLSX.writeFile(wb, fullFileName);
+};
+
+/**
+ * Export Purchase Entry (Invoices) data to Excel with complete item details
+ */
+export const exportPurchaseInvoicesToExcel = (purchaseInvoices, fileName = 'Purchase_Invoices') => {
+  if (!purchaseInvoices || purchaseInvoices.length === 0) {
+    console.warn('No purchase invoices to export');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+  
+  // Summary sheet
+  const summaryData = purchaseInvoices.map((invoice) => ({
+    'Invoice Number': invoice.transactionNo || '-',
+    'PO Number': invoice.orderNumber || '-',
+    'Vendor': invoice.vendorName || invoice.partyName || '-',
+    'Invoice Date': invoice.date ? new Date(invoice.date).toLocaleDateString() : '-',
+    'Status': invoice.status || '-',
+    'Total Amount': invoice.totalAmount ? String(invoice.totalAmount) : '-',
+    'Paid Amount': invoice.paidAmount ? String(invoice.paidAmount) : '0',
+    'Outstanding': invoice.outstandingAmount ? String(invoice.outstandingAmount) : String((invoice.totalAmount || 0) - (invoice.paidAmount || 0)),
+    'Items Count': Array.isArray(invoice.items) ? invoice.items.length : 0,
+    'Terms': invoice.terms || '-',
+    'Created By': invoice.createdBy || '-',
+  }));
+  
+  // Detailed sheet with all items
+  const detailedData = [];
+  purchaseInvoices.forEach((invoice) => {
+    if (Array.isArray(invoice.items) && invoice.items.length > 0) {
+      invoice.items.forEach((item, idx) => {
+        detailedData.push({
+          'Invoice Number': idx === 0 ? (invoice.transactionNo || '-') : '',
+          'Vendor': idx === 0 ? (invoice.vendorName || invoice.partyName || '-') : '',
+          'Invoice Date': idx === 0 ? (invoice.date ? new Date(invoice.date).toLocaleDateString() : '-') : '',
+          'Status': idx === 0 ? (invoice.status || '-') : '',
+          'Item Name': item.description || item.itemName || item.name || '-',
+          'Item Qty': item.quantity ? String(item.quantity) : '0',
+          'Unit Price': item.price ? String(item.price) : '0',
+          'Item Total': item.total ? String(item.total) : String((item.quantity || 0) * (item.price || 0)),
+          'UOM': item.uom || item.unit || '-',
+          'Item Description': item.notes || item.remarks || '-',
+        });
+      });
+    } else {
+      detailedData.push({
+        'Invoice Number': invoice.transactionNo || '-',
+        'Vendor': invoice.vendorName || invoice.partyName || '-',
+        'Invoice Date': invoice.date ? new Date(invoice.date).toLocaleDateString() : '-',
+        'Status': invoice.status || '-',
+        'Item Name': 'No items',
+        'Item Qty': '0',
+        'Unit Price': '0',
+        'Item Total': '0',
+        'UOM': '-',
+        'Item Description': '-',
+      });
+    }
+  });
+
+  const summaryWs = XLSX.utils.json_to_sheet(summaryData);
+  const detailedWs = XLSX.utils.json_to_sheet(detailedData);
+  XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+  XLSX.utils.book_append_sheet(wb, detailedWs, 'Items Detail');
+
+  const timestamp = new Date().toISOString().split('T')[0];
+  const fullFileName = `${fileName}_${timestamp}.xlsx`;
+  XLSX.writeFile(wb, fullFileName);
+};

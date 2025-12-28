@@ -38,18 +38,21 @@ import {
   BarChart3,
   Users,
   Archive,
+  FileDown,
 } from "lucide-react";
 import axiosInstance from "../../../axios/axios";
 import SOForm from "./SOForm";
 import TableView from "./TableView";
 import GridView from "./GridView";
 import SaleInvoiceView from "./InvoiceView";
+import { exportSalesOrdersToExcel } from "../../../utils/excelExport";
 
 const SalesOrderManagement = () => {
   const [activeView, setActiveView] = useState("dashboard");
   const [viewMode, setViewMode] = useState("table");
   const [selectedSO, setSelectedSO] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [dateFilter, setDateFilter] = useState("ALL");
   const [customerFilter, setCustomerFilter] = useState("ALL");
@@ -108,10 +111,18 @@ const SalesOrderManagement = () => {
     fetchTransactions();
   }, []);
 
-  // Refetch on filter change
+  // Debounce search term to prevent excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Refetch on filter change (using debounced search)
   useEffect(() => {
     fetchTransactions();
-  }, [searchTerm, statusFilter, customerFilter, dateFilter]);
+  }, [debouncedSearchTerm, statusFilter, customerFilter, dateFilter]);
 
   // Generate SO number on create
   useEffect(() => {
@@ -175,7 +186,7 @@ const SalesOrderManagement = () => {
       const response = await axiosInstance.get("/transactions/transactions", {
         params: {
           type: "sales_order",
-          search: searchTerm,
+          search: debouncedSearchTerm,
           status: statusFilter !== "ALL" ? statusFilter : undefined,
           partyId: customerFilter !== "ALL" ? customerFilter : undefined,
           dateFilter: dateFilter !== "ALL" ? dateFilter : undefined,
@@ -630,21 +641,11 @@ const editSO = (so) => {
           addNotification(`${selectedSOs.length} orders deleted`, "success");
         }
       } else if (action === "export") {
-        const csv = [
-  "TransactionNo,Customer,Date,DeliveryDate,Status,TotalAmount,Priority",
-  ...selectedSOs.map((soId) => {
-    const so = salesOrders.find((s) => s.id === soId);
-    const tx = so?.displayTransactionNo || so?.transactionNo || "";
-    return `${tx},${so.customerName},${so.date},${so.deliveryDate},${so.status},${so.totalAmount},${so.priority}`;
-  }),
-].join("\n");
-
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = "selected_sales_orders.csv";
-        link.click();
-        addNotification("Orders exported successfully", "success");
+        const selectedOrders = salesOrders.filter((so) =>
+          selectedSOs.includes(so._id)
+        );
+        exportSalesOrdersToExcel(selectedOrders, "Sales_Orders_Selected");
+        addNotification("Orders exported to Excel successfully", "success");
       }
       setSelectedSOs([]);
       fetchTransactions();
@@ -1250,6 +1251,17 @@ const updateSalesOrderStatus = (id, newStatus) => {
                 >
                   <Grid className="w-5 h-5" />
                 </button>
+                <button
+                  onClick={() => {
+                    exportSalesOrdersToExcel(salesOrders, "Sales_Orders_All");
+                    addNotification("All sales orders exported to Excel successfully", "success");
+                  }}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
+                  title="Export all sales orders"
+                >
+                  <FileDown className="w-4 h-4" />
+                  <span>Export All</span>
+                </button>
                 {selectedSOs.length > 0 && (
                   <div className="flex items-center space-x-2">
                     <button
@@ -1271,7 +1283,7 @@ const updateSalesOrderStatus = (id, newStatus) => {
                       className="flex items-center space-x-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200"
                     >
                       <Download className="w-4 h-4" />
-                      <span>Export</span>
+                      <span>Export Selected</span>
                     </button>
                   </div>
                 )}

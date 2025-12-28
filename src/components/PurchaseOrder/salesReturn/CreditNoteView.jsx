@@ -184,6 +184,7 @@ const CreditNoteView = ({ returnData, customer, onBack }) => {
             fontSize: "11px",
             color: "#000",
             boxSizing: "border-box",
+            overflow: "visible",
           }}
         >
           {/* Header */}
@@ -263,29 +264,44 @@ const CreditNoteView = ({ returnData, customer, onBack }) => {
               <p style={{ margin: "4px 0" }}>
                 <strong>Return No:</strong> {ret.transactionNo}
               </p>
+              <p style={{ margin: "4px 0" }}>
+                <strong>Returned Date:</strong> {formatDate(ret.date)}
+              </p>
+            </div>
+            <div style={{ 
+              background: "#e0f2fe", 
+              padding: "10px 15px", 
+              borderRadius: "8px",
+              border: "1px solid #7dd3fc"
+            }}>
+              <p style={{ margin: "0 0 4px 0", fontSize: "10px", color: "#0369a1", fontWeight: "bold" }}>
+                ORIGINAL INVOICE DETAILS
+              </p>
+              <p style={{ margin: "4px 0" }}>
+                <strong>Invoice No:</strong>{" "}
+                <span style={{ color: "#1e40af", fontWeight: "bold" }}>
+                  {ret.originalInvoiceNo}
+                </span>
+              </p>
+              <p style={{ margin: "4px 0" }}>
+                <strong>Invoice Date:</strong> {formatDate(ret.originalInvoiceDate || ret.invoiceDate)}
+              </p>
             </div>
             <div>
-              <p style={{ margin: "4px 0" }}>
-                <strong>Date:</strong> {formatDate(ret.date)}
-              </p>
               <p style={{ margin: "4px 0" }}>
                 <strong>Status:</strong>{" "}
                 <span
                   style={{
                     background: "#22c55e",
                     color: "#fff",
-                    padding: "2px 10px",
+                    padding: "4px 12px",
                     borderRadius: "12px",
                     fontSize: "10px",
+                    display: "inline-block",
                   }}
                 >
-                  ✓ Confirmed
+                  ✓ CONFIRMED
                 </span>
-              </p>
-            </div>
-            <div>
-              <p style={{ margin: "4px 0" }}>
-                <strong>Original Invoice:</strong> {ret.originalInvoiceNo}
               </p>
               {ret.reference && (
                 <p style={{ margin: "4px 0" }}>
@@ -495,6 +511,32 @@ const CreditNoteView = ({ returnData, customer, onBack }) => {
               <strong>Notes:</strong> {ret.notes}
             </div>
           )}
+
+          {/* Status Confirmation */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              marginBottom: "20px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "12px 24px",
+                background: "#dcfce7",
+                border: "2px solid #22c55e",
+                borderRadius: "8px",
+              }}
+            >
+              <span style={{ fontSize: "16px" }}>✓</span>
+              <span style={{ fontWeight: "bold", color: "#166534", fontSize: "12px" }}>
+                CREDIT NOTE CONFIRMED
+              </span>
+            </div>
+          </div>
 
           {/* Footer */}
           <div

@@ -13,10 +13,13 @@ const InvoiceSelection = ({
     <div className="md:col-span-2">
       <label className="block text-sm font-semibold text-gray-700 mb-2">
         <LinkIcon size={16} className="inline mr-2" /> Linked Invoice(s) *
+        <span className="ml-2 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">
+          {availableInvoices.length} Available
+        </span>
       </label>
 
       <div
-        className={`border rounded-xl p-4 max-h-80 overflow-y-auto transition-all ${
+        className={`border rounded-xl p-4 max-h-screen overflow-y-auto transition-all ${
           error ? "border-red-300 bg-red-50" : "border-gray-300 bg-white"
         }`}
       >

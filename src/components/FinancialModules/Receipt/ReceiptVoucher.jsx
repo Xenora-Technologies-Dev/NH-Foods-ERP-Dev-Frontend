@@ -323,6 +323,7 @@ const fetchUnpaidInvoices = useCallback(
       params.append("partyId", customerId);
       params.append("partyType", "Customer");
       params.append("type", "sales_order"); // or "sales_invoice" if you use that
+      params.append("limit", "500"); // Fetch up to 500 invoices for selection
 
       const response = await axios.get(`/transactions/transactions?${params.toString()}`);
 

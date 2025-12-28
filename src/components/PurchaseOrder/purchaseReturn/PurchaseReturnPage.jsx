@@ -18,6 +18,7 @@ import {
   Loader2,
   Receipt,
 } from "lucide-react";
+import Select from "react-select";
 import axiosInstance from "../../../axios/axios";
 import DebitNoteView from "./DebitNoteView";
 
@@ -168,20 +169,33 @@ const PurchaseReturnPage = () => {
     });
   }, []);
 
-  // Handle return quantity change
-  const handleReturnQtyChange = useCallback((index, qty) => {
+  // Handle return quantity change - separate raw input from validated quantity
+  const handleReturnQtyChange = useCallback((index, value, isBlur = false) => {
     setInvoiceDetails((prev) => {
       if (!prev) return prev;
       const newItems = [...prev.items];
       const item = newItems[index];
       const maxQty = item.availableForReturn || item.qty;
-      const validQty = Math.min(Math.max(0, parseFloat(qty) || 0), maxQty);
       
-      newItems[index] = {
-        ...item,
-        returnQty: validQty,
-        selectedForReturn: validQty > 0,
-      };
+      if (isBlur) {
+        // On blur, validate and set final value
+        const validQty = Math.min(Math.max(0, parseFloat(value) || 0), maxQty);
+        newItems[index] = {
+          ...item,
+          returnQty: validQty,
+          returnQtyInput: validQty.toString(),
+          selectedForReturn: validQty > 0,
+        };
+      } else {
+        // During typing, allow any input but store raw value
+        const numValue = parseFloat(value);
+        const isValidNumber = !isNaN(numValue) && numValue > 0;
+        newItems[index] = {
+          ...item,
+          returnQtyInput: value,
+          returnQty: isValidNumber ? Math.min(numValue, maxQty) : item.returnQty,
+        };
+      }
       return { ...prev, items: newItems };
     });
   }, []);
@@ -450,18 +464,52 @@ const PurchaseReturnPage = () => {
                 <span className="w-8 h-8 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mr-3 text-sm font-bold">1</span>
                 Select Vendor
               </h3>
-              <select
-                value={selectedVendor?._id || ""}
-                onChange={(e) => handleVendorSelect(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500"
-              >
-                <option value="">Select a vendor...</option>
-                {vendors.map((v) => (
-                  <option key={v._id} value={v._id}>
-                    {v.vendorId} - {v.vendorName}
-                  </option>
-                ))}
-              </select>
+              <Select
+                value={selectedVendor ? {
+                  value: selectedVendor._id,
+                  label: `${selectedVendor.vendorId} - ${selectedVendor.vendorName}`
+                } : null}
+                onChange={(option) => handleVendorSelect(option?.value || "")}
+                options={vendors.map((v) => ({
+                  value: v._id,
+                  label: `${v.vendorId} - ${v.vendorName}`,
+                  vendor: v
+                }))}
+                placeholder="Search and select vendor..."
+                isClearable
+                isSearchable
+                classNamePrefix="react-select"
+                className="react-select-container"
+                styles={{
+                  control: (base, state) => ({
+                    ...base,
+                    minHeight: '48px',
+                    borderRadius: '12px',
+                    backgroundColor: '#f8fafc',
+                    borderColor: state.isFocused ? '#f97316' : '#e2e8f0',
+                    boxShadow: state.isFocused ? '0 0 0 2px rgba(249, 115, 22, 0.3)' : 'none',
+                    '&:hover': { borderColor: '#f97316' }
+                  }),
+                  menu: (base) => ({
+                    ...base,
+                    borderRadius: '12px',
+                    boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+                    zIndex: 9999
+                  }),
+                  option: (base, state) => ({
+                    ...base,
+                    backgroundColor: state.isSelected ? '#f97316' : state.isFocused ? '#fff7ed' : 'white',
+                    color: state.isSelected ? 'white' : '#1e293b',
+                    padding: '12px 16px',
+                    cursor: 'pointer'
+                  }),
+                  placeholder: (base) => ({
+                    ...base,
+                    color: '#94a3b8'
+                  })
+                }}
+                noOptionsMessage={() => "No vendors found"}
+              />
             </div>
 
             {/* Step 2: Select Invoice */}
@@ -592,11 +640,13 @@ const PurchaseReturnPage = () => {
                             </td>
                             <td className="px-3 py-2 text-right">
                               <input
-                                type="number"
+                                type="text"
+                                inputMode="decimal"
                                 min="0"
                                 max={item.availableForReturn}
-                                value={item.returnQty || ""}
-                                onChange={(e) => handleReturnQtyChange(index, e.target.value)}
+                                value={item.returnQtyInput !== undefined ? item.returnQtyInput : (item.returnQty || "")}
+                                onChange={(e) => handleReturnQtyChange(index, e.target.value, false)}
+                                onBlur={(e) => handleReturnQtyChange(index, e.target.value, true)}
                                 disabled={!item.selectedForReturn}
                                 className="w-20 px-2 py-1 text-right bg-white rounded border border-slate-200 focus:ring-2 focus:ring-orange-500 disabled:bg-slate-100"
                               />
@@ -646,13 +696,16 @@ const PurchaseReturnPage = () => {
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Return Date</label>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                    Returned Date <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="date"
                     value={returnDate}
                     onChange={(e) => setReturnDate(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500"
+                    className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500 focus:outline-none"
                   />
+                  <p className="text-xs text-slate-500 mt-1">Date when goods were returned to vendor</p>
                 </div>
                 
                 <div>
@@ -661,19 +714,19 @@ const PurchaseReturnPage = () => {
                     type="text"
                     value={reference}
                     onChange={(e) => setReference(e.target.value)}
-                    placeholder="Enter reference number"
-                    className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500"
+                    placeholder="e.g., RMA-12345"
+                    className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500 focus:outline-none"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Notes (Optional)</label>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Reason for Return (Optional)</label>
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Additional notes"
+                    placeholder="Describe the reason for return..."
                     rows={3}
-                    className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500 resize-none"
+                    className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500 resize-none focus:outline-none"
                   />
                 </div>
               </div>

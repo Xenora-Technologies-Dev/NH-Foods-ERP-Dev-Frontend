@@ -50,6 +50,7 @@ const SalesReturnOrderManagement = () => {
   const [viewMode, setViewMode] = useState("table"); // table, grid
   const [selectedSO, setSelectedSO] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [dateFilter, setDateFilter] = useState("ALL");
   const [customerFilter, setCustomerFilter] = useState("ALL");
@@ -96,10 +97,18 @@ const SalesReturnOrderManagement = () => {
     fetchTransactions();
   }, []);
 
-  // Refetch transactions when filters change
+  // Debounce search term to prevent excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Refetch transactions when filters change (using debounced search)
   useEffect(() => {
     fetchTransactions();
-  }, [searchTerm, statusFilter, customerFilter, dateFilter]);
+  }, [debouncedSearchTerm, statusFilter, customerFilter, dateFilter]);
 
   // Fetch customers from backend
   const fetchCustomers = async () => {
@@ -161,7 +170,7 @@ const SalesReturnOrderManagement = () => {
       const response = await axiosInstance.get("/transactions/transactions", {
         params: {
           type: "sales_return",
-          search: searchTerm,
+          search: debouncedSearchTerm,
           status: statusFilter !== "ALL" ? statusFilter : undefined,
           partyId: customerFilter !== "ALL" ? customerFilter : undefined,
           dateFilter: dateFilter !== "ALL" ? dateFilter : undefined,

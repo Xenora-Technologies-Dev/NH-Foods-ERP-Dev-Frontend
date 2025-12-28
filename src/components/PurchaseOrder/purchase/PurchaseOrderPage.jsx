@@ -38,18 +38,21 @@ import {
   BarChart3,
   Users,
   Archive,
+  FileDown,
 } from "lucide-react";
 import axiosInstance from "../../../axios/axios";
 import POForm from "./POForm";
 import TableView from "./TableView";
 import GridView from "./GridView";
 import InvoiceView from "./InvoiceView";
+import { exportPurchaseOrdersToExcel } from "../../../utils/excelExport";
 
 const PurchaseOrderManagement = () => {
   const [activeView, setActiveView] = useState("dashboard");
   const [viewMode, setViewMode] = useState("table");
   const [selectedPO, setSelectedPO] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [dateFilter, setDateFilter] = useState("ALL");
   const [vendorFilter, setVendorFilter] = useState("ALL");
@@ -101,10 +104,18 @@ const PurchaseOrderManagement = () => {
     fetchTransactions();
   }, []);
 
-  // Refresh list when filters change
+  // Debounce search term to prevent excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Refresh list when filters change (using debounced search)
   useEffect(() => {
     fetchTransactions();
-  }, [searchTerm, statusFilter, vendorFilter, dateFilter]);
+  }, [debouncedSearchTerm, statusFilter, vendorFilter, dateFilter]);
 
   const fetchVendors = async () => {
     setIsLoading(true);
@@ -160,7 +171,7 @@ const PurchaseOrderManagement = () => {
       const { data } = await axiosInstance.get("/transactions/transactions", {
         params: {
           type: "purchase_order",
-          search: searchTerm,
+          search: debouncedSearchTerm,
           status: statusFilter !== "ALL" ? statusFilter : undefined,
           partyId: vendorFilter !== "ALL" ? vendorFilter : undefined,
           dateFilter: dateFilter !== "ALL" ? dateFilter : undefined,
@@ -544,20 +555,11 @@ const PurchaseOrderManagement = () => {
           fetchTransactions();
         }
       } else if (action === "export") {
-        addNotification(`Exporting ${selectedPOs.length} orders...`, "info");
-        const csv = [
-          "TransactionNo,Vendor,Date,DeliveryDate,Status,TotalAmount,Priority",
-          ...selectedPOs.map((poId) => {
-            const po = purchaseOrders.find((p) => p.id === poId);
-            return `${po.transactionNo},${po.vendorName},${po.date},${po.deliveryDate},${po.status},${po.totalAmount},${po.priority}`;
-          }),
-        ].join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = "selected_purchase_orders.csv";
-        link.click();
-        addNotification("Orders exported successfully", "success");
+        const selectedOrders = purchaseOrders.filter((po) =>
+          selectedPOs.includes(po._id)
+        );
+        exportPurchaseOrdersToExcel(selectedOrders, "Purchase_Orders_Selected");
+        addNotification("Orders exported to Excel successfully", "success");
       }
       setSelectedPOs([]);
     } catch (error) {
@@ -1219,6 +1221,17 @@ const updatePurchaseOrderStatus = (id, newStatus) => {
                   }`}
                 >
                   <Grid className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => {
+                    exportPurchaseOrdersToExcel(purchaseOrders, "Purchase_Orders_All");
+                    addNotification("All purchase orders exported to Excel successfully", "success");
+                  }}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
+                  title="Export all purchase orders"
+                >
+                  <FileDown className="w-4 h-4" />
+                  <span>Export All</span>
                 </button>
                 {selectedPOs.length > 0 && (
                   <div className="flex items-center space-x-2">

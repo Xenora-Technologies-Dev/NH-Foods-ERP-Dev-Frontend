@@ -50,6 +50,7 @@ const PurchaseReturnOrderManagement = () => {
   const [viewMode, setViewMode] = useState("table"); // table, grid
   const [selectedPO, setSelectedPO] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [dateFilter, setDateFilter] = useState("ALL");
   const [vendorFilter, setVendorFilter] = useState("ALL");
@@ -94,10 +95,18 @@ const PurchaseReturnOrderManagement = () => {
     fetchTransactions();
   }, []);
 
-  // Refetch transactions when filters change
+  // Debounce search term to prevent excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Refetch transactions when filters change (using debounced search)
   useEffect(() => {
     fetchTransactions();
-  }, [searchTerm, statusFilter, vendorFilter, dateFilter]);
+  }, [debouncedSearchTerm, statusFilter, vendorFilter, dateFilter]);
 
   // Fetch vendors from backend
   const fetchVendors = async () => {
@@ -159,7 +168,7 @@ const PurchaseReturnOrderManagement = () => {
       const response = await axiosInstance.get("/transactions/transactions", {
         params: {
           type: "purchase_return",
-          search: searchTerm,
+          search: debouncedSearchTerm,
           status: statusFilter !== "ALL" ? statusFilter : undefined,
           partyId: vendorFilter !== "ALL" ? vendorFilter : undefined,
           dateFilter: dateFilter !== "ALL" ? dateFilter : undefined,

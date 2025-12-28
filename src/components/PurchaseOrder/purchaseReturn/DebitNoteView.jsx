@@ -11,15 +11,15 @@ import {
   Mail,
   MapPin,
   CheckCircle,
+  Loader2,
 } from "lucide-react";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
 import axiosInstance from "../../../axios/axios";
 
 const DebitNoteView = ({ returnData, vendor, onBack }) => {
   const debitNoteRef = useRef(null);
   const [companyInfo, setCompanyInfo] = useState(null);
   const [fullVendor, setFullVendor] = useState(vendor);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   // Fetch company info
   useEffect(() => {
@@ -28,7 +28,15 @@ const DebitNoteView = ({ returnData, vendor, onBack }) => {
         const response = await axiosInstance.get("/company-profile");
         setCompanyInfo(response.data.data || response.data);
       } catch (error) {
-        console.error("Error fetching company info:", error);
+        // Try alternate endpoint
+        try {
+          const response2 = await axiosInstance.get("/profile/me");
+          if (response2.data.success) {
+            setCompanyInfo(response2.data.data?.companyInfo || {});
+          }
+        } catch (e) {
+          console.error("Error fetching company info:", e);
+        }
       }
     };
     fetchCompanyInfo();
@@ -52,24 +60,78 @@ const DebitNoteView = ({ returnData, vendor, onBack }) => {
 
   const handleDownloadPDF = async () => {
     if (!debitNoteRef.current) return;
+    setIsGeneratingPDF(true);
 
-    const canvas = await html2canvas(debitNoteRef.current, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-    });
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const { jsPDF } = await import("jspdf");
 
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF("p", "mm", "a4");
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const canvas = await html2canvas(debitNoteRef.current, {
+        scale: 2.5,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#fff",
+      });
 
-    pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`Debit_Note_${returnData?.debitNoteNo || returnData?.transactionNo || "DN"}.pdf`);
+      const imgData = canvas.toDataURL("image/jpeg", 0.92);
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = 210;
+      const pdfHeight = 297;
+      const ratio = Math.min(pdfWidth / canvas.width, pdfHeight / canvas.height);
+      const width = canvas.width * ratio;
+      const height = canvas.height * ratio;
+
+      pdf.addImage(imgData, "JPEG", (pdfWidth - width) / 2, 10, width, height);
+
+      const vendorName = fullVendor?.vendorName?.replace(/\s+/g, "_") || "Vendor";
+      const filename = `DebitNote_${returnData?.debitNoteNo || returnData?.transactionNo || "DN"}_${vendorName}.pdf`;
+      pdf.save(filename);
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      alert("Failed to generate PDF. Please try again.");
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   const handlePrint = () => {
-    window.print();
+    const printWindow = window.open("", "_blank");
+    const element = debitNoteRef.current;
+
+    if (!printWindow || !element) return;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Debit Note - ${returnData?.debitNoteNo || returnData?.transactionNo}</title>
+          <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+          <style>
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { margin: 0; padding: 20px; font-family: Arial, sans-serif; background: #fff; }
+            @media print { 
+              body { margin: 0; padding: 10mm; } 
+              .no-print { display: none !important; }
+            }
+            table { border-collapse: collapse; width: 100%; }
+            th, td { padding: 8px; text-align: left; }
+            .print-content { max-width: 800px; margin: 0 auto; }
+          </style>
+        </head>
+        <body>
+          <div class="print-content">${element.innerHTML}</div>
+          <script>
+            setTimeout(function() {
+              window.focus();
+              window.print();
+              window.close();
+            }, 500);
+          </script>
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
   };
 
   // Calculate totals from return items
@@ -115,10 +177,15 @@ const DebitNoteView = ({ returnData, vendor, onBack }) => {
           <div className="flex items-center space-x-3">
             <button
               onClick={handleDownloadPDF}
-              className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors"
+              disabled={isGeneratingPDF}
+              className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Download className="w-5 h-5" />
-              <span>Download PDF</span>
+              {isGeneratingPDF ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Download className="w-5 h-5" />
+              )}
+              <span>{isGeneratingPDF ? "Generating..." : "Download PDF"}</span>
             </button>
             <button
               onClick={handlePrint}
@@ -245,21 +312,38 @@ const DebitNoteView = ({ returnData, vendor, onBack }) => {
                   <p className="font-semibold text-slate-800">{returnData?.transactionNo}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">Date</p>
+                  <p className="text-xs text-slate-500">Returned Date</p>
                   <p className="font-semibold text-slate-800">
                     {new Date(returnData?.date).toLocaleDateString("en-GB")}
                   </p>
                 </div>
-                <div>
-                  <p className="text-xs text-slate-500">Original Invoice</p>
-                  <p className="font-semibold text-slate-800">{returnData?.originalInvoiceNo}</p>
-                </div>
                 {returnData?.reference && (
-                  <div>
+                  <div className="col-span-2">
                     <p className="text-xs text-slate-500">Reference</p>
                     <p className="font-semibold text-slate-800">{returnData.reference}</p>
                   </div>
                 )}
+              </div>
+              
+              {/* Original Invoice Section */}
+              <div className="mt-4 pt-4 border-t border-orange-200">
+                <p className="text-xs font-semibold text-orange-600 uppercase tracking-wider mb-2">
+                  ORIGINAL INVOICE DETAILS
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-slate-500">Invoice No</p>
+                    <p className="font-semibold text-orange-700">{returnData?.originalInvoiceNo}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Invoice Date</p>
+                    <p className="font-semibold text-slate-800">
+                      {returnData?.originalInvoiceDate 
+                        ? new Date(returnData.originalInvoiceDate).toLocaleDateString("en-GB")
+                        : "-"}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
