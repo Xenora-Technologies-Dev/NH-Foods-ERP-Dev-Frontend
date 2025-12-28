@@ -31,6 +31,7 @@ import {
   Edit,
   Trash2,
   Eye,
+  Wallet,
 } from "lucide-react";
 import Select from "react-select";
 import axiosInstance from "../../../axios/axios";
@@ -166,6 +167,7 @@ const ChartOfAccountsManagement = () => {
   const [chartOfAccounts, setChartOfAccounts] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [expenseAccounts, setExpenseAccounts] = useState([]);
   const [selectedType, setSelectedType] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -175,6 +177,10 @@ const ChartOfAccountsManagement = () => {
   const [accountTransactions, setAccountTransactions] = useState([]);
   const [transactionLoading, setTransactionLoading] = useState(false);
   const [viewingAccount, setViewingAccount] = useState(null); // Track which account's transactions are being viewed
+  // Date filter states for transaction modal
+  const [transactionDateFilter, setTransactionDateFilter] = useState("all");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const [formData, setFormData] = useState({
     accountName: "",
     openingBalance: "0.00",
@@ -279,14 +285,43 @@ const ChartOfAccountsManagement = () => {
     }
   }, [showToastMessage]);
 
+  const fetchExpenseAccounts = useCallback(async () => {
+    try {
+      // Fetch expense accounts from the new COA endpoint
+      const response = await axiosInstance.get("/expense-accounts/coa/list");
+      const data = response?.data?.data || [];
+      setExpenseAccounts(
+        data.map((e) => ({
+          _id: e._id,
+          id: e.accountCode || e.id,
+          name: e.accountName || e.name,
+          type: "Expense",
+          openingBalance: e.openingBalance || 0,
+          currentBalance: e.currentBalance || e.totalExpense || 0,
+          accountType: "Expense",
+          accountCategory: "expense",
+          status: e.status || "Active",
+          isChartOfAccounts: false,
+          isExpenseAccount: true,
+          partyType: null,
+          voucherCount: e.voucherCount || 0,
+        }))
+      );
+    } catch (err) {
+      console.error("Failed to fetch expense accounts:", err);
+      showToastMessage("Failed to fetch expense accounts.", "error");
+      setExpenseAccounts([]);
+    }
+  }, [showToastMessage]);
+
   useEffect(() => {
     const load = async () => {
       setIsLoading(true);
-      await Promise.all([fetchChartOfAccounts(), fetchVendors(), fetchCustomers()]);
+      await Promise.all([fetchChartOfAccounts(), fetchVendors(), fetchCustomers(), fetchExpenseAccounts()]);
       setIsLoading(false);
     };
     load();
-  }, [fetchChartOfAccounts, fetchVendors, fetchCustomers]);
+  }, [fetchChartOfAccounts, fetchVendors, fetchCustomers, fetchExpenseAccounts]);
 
   const openAddModal = useCallback(() => {
     setModalMode("add");
@@ -423,22 +458,72 @@ const ChartOfAccountsManagement = () => {
     [showToastMessage, fetchChartOfAccounts]
   );
 
-  const handleViewTransactions = useCallback(async (item) => {
+  const handleViewTransactions = useCallback(async (item, filterType = null) => {
     setTransactionLoading(true);
     setViewingAccount(item);
     try {
       let transactions = [];
       
-      if (item.isChartOfAccounts) {
+      // Helper function to filter transactions by date
+      const filterByDate = (txns, fType) => {
+        if (!fType || fType === "all") return txns;
+        
+        const now = new Date();
+        let startDate, endDate;
+        
+        if (fType === "day") {
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        } else if (fType === "month") {
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        } else if (fType === "year") {
+          startDate = new Date(now.getFullYear(), 0, 1);
+          endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+        } else if (fType === "custom") {
+          startDate = customStartDate ? new Date(customStartDate) : null;
+          endDate = customEndDate ? new Date(customEndDate + "T23:59:59.999") : null;
+        }
+        
+        return txns.filter(t => {
+          const txDate = new Date(t.date);
+          if (startDate && txDate < startDate) return false;
+          if (endDate && txDate > endDate) return false;
+          return true;
+        });
+      };
+      
+      if (item.isExpenseAccount) {
+        // Fetch from expense accounts API for COA
+        const params = new URLSearchParams();
+        if (filterType && filterType !== "all") {
+          params.append("filterType", filterType);
+        }
+        if (filterType === "custom" && customStartDate) {
+          params.append("startDate", customStartDate);
+        }
+        if (filterType === "custom" && customEndDate) {
+          params.append("endDate", customEndDate);
+        }
+        
+        const res = await axiosInstance.get(
+          `/expense-accounts/coa/${item._id}/transactions?${params.toString()}`
+        );
+        const data = res.data?.data || {};
+        transactions = data.transactions || [];
+      } else if (item.isChartOfAccounts) {
         // Fetch from transactor transaction log for Chart of Accounts
         const res = await axiosInstance.get(
           `/account-v2/transactor/${item._id}/transactions?limit=100`
         );
         const rawTransactions = res.data?.data?.transactions || [];
         
+        // Filter by date if filterType is provided
+        const filteredRaw = filterByDate(rawTransactions, filterType);
+        
         // Calculate running balance from opening balance
         let runningBalance = item.openingBalance || 0;
-        transactions = rawTransactions
+        transactions = filteredRaw
           .sort((a, b) => new Date(a.date) - new Date(b.date))
           .map((t) => {
             // For Cash/Bank accounts (transactors), the log already contains:
@@ -465,13 +550,16 @@ const ChartOfAccountsManagement = () => {
         const res = await axiosInstance.get(`/ledger/ledger/vendor/${item._id}`);
         const ledgerData = res.data?.data?.ledger || [];
         
+        // Filter by date if filterType is provided
+        const filteredLedger = filterByDate(ledgerData, filterType);
+        
         // Transform vendor ledger data
         // For Vendors (Accounts Payable - Liability):
         // - Purchase Order = Credit (we owe them more) - increases payable
         // - Purchase Return = Debit (they owe us back) - decreases payable
         // - Payment = Debit (we paid them) - decreases payable
         let runningBalance = item.openingBalance || 0;
-        transactions = ledgerData.map((log) => {
+        transactions = filteredLedger.map((log) => {
           let debitAmount = 0;
           let creditAmount = 0;
           
@@ -503,13 +591,16 @@ const ChartOfAccountsManagement = () => {
         const res = await axiosInstance.get(`/ledger/ledger/customer/${item._id}`);
         const ledgerData = res.data?.data?.ledger || [];
         
+        // Filter by date if filterType is provided
+        const filteredLedger = filterByDate(ledgerData, filterType);
+        
         // Transform customer ledger data
         // For Customers (Accounts Receivable - Asset):
         // - Sales Order = Debit (they owe us) - increases receivable
         // - Sales Return = Credit (we owe them back) - decreases receivable  
         // - Payment Made = Credit (they paid us) - decreases receivable
         let runningBalance = item.openingBalance || 0;
-        transactions = ledgerData.map((log) => {
+        transactions = filteredLedger.map((log) => {
           let debitAmount = 0;
           let creditAmount = 0;
           
@@ -546,17 +637,17 @@ const ChartOfAccountsManagement = () => {
     } finally {
       setTransactionLoading(false);
     }
-  }, [showToastMessage]);
+  }, [showToastMessage, customStartDate, customEndDate]);
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
-    Promise.all([fetchChartOfAccounts(), fetchVendors(), fetchCustomers()]).finally(
+    Promise.all([fetchChartOfAccounts(), fetchVendors(), fetchCustomers(), fetchExpenseAccounts()]).finally(
       () => {
         setIsRefreshing(false);
         showToastMessage("Data refreshed", "success");
       }
     );
-  }, [fetchChartOfAccounts, fetchVendors, fetchCustomers, showToastMessage]);
+  }, [fetchChartOfAccounts, fetchVendors, fetchCustomers, fetchExpenseAccounts, showToastMessage]);
 
   const handleSort = useCallback((key) => {
     setSortConfig((prev) => ({
@@ -566,8 +657,8 @@ const ChartOfAccountsManagement = () => {
   }, []);
 
   const combinedList = useMemo(() => {
-    return [...chartOfAccounts, ...vendors, ...customers];
-  }, [chartOfAccounts, vendors, customers]);
+    return [...chartOfAccounts, ...vendors, ...customers, ...expenseAccounts];
+  }, [chartOfAccounts, vendors, customers, expenseAccounts]);
 
   const filteredList = useMemo(() => {
     let list = combinedList;
@@ -622,6 +713,7 @@ const ChartOfAccountsManagement = () => {
     { value: "ChartOfAccounts", label: "Chart Of Accounts" },
     { value: "Vendor", label: "Vendor" },
     { value: "Customer", label: "Customer" },
+    { value: "Expense", label: "Expense" },
     ...[...new Set(chartOfAccounts.map((t) => t.type))]
       .filter((type) => type !== "ChartOfAccounts")
       .map((type) => ({
@@ -886,6 +978,8 @@ const ChartOfAccountsManagement = () => {
                             ? "bg-gray-100 text-gray-800"
                             : item.type === "Customer"
                             ? "bg-blue-100 text-blue-800"
+                            : item.type === "Expense"
+                            ? "bg-red-100 text-red-800"
                             : "bg-purple-100 text-purple-800"
                         }`}
                       >
@@ -915,6 +1009,10 @@ const ChartOfAccountsManagement = () => {
                           {(item.accountCategory || "other").charAt(0).toUpperCase() +
                             (item.accountCategory || "other").slice(1)}
                         </span>
+                      ) : item.isExpenseAccount ? (
+                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                          Expense
+                        </span>
                       ) : (
                         <span className="text-gray-400 text-xs">-</span>
                       )}
@@ -938,8 +1036,8 @@ const ChartOfAccountsManagement = () => {
                         >
                           <Eye size={16} />
                         </button>
-                        {/* Edit and Delete - Only for Chart of Accounts */}
-                        {item.isChartOfAccounts && (
+                        {/* Edit and Delete - Only for Chart of Accounts (not Expense Accounts from Expense section) */}
+                        {item.isChartOfAccounts && !item.isExpenseAccount && (
                           <>
                             <button
                               onClick={() => openEditModal(item)}
@@ -956,6 +1054,12 @@ const ChartOfAccountsManagement = () => {
                               <Trash2 size={16} />
                             </button>
                           </>
+                        )}
+                        {/* Expense accounts show info that edit is not allowed */}
+                        {item.isExpenseAccount && (
+                          <span className="text-xs text-gray-400 italic self-center ml-2" title="Edit from Expense Accounts section">
+                            (Manage in Expense)
+                          </span>
                         )}
                       </div>
                     </td>
@@ -1176,6 +1280,11 @@ const ChartOfAccountsManagement = () => {
                       <span className="font-semibold">{viewingAccount.name}</span>
                       {" - "}
                       <span className="capitalize">{viewingAccount.type}</span>
+                      {viewingAccount.isExpenseAccount && (
+                        <span className="ml-2 px-2 py-0.5 bg-white/20 rounded text-xs">
+                          Expense Account
+                        </span>
+                      )}
                     </>
                   ) : (
                     "View all transactions for this account"
@@ -1187,6 +1296,9 @@ const ChartOfAccountsManagement = () => {
                   setShowTransactionModal(false);
                   setViewingAccount(null);
                   setAccountTransactions([]);
+                  setTransactionDateFilter("all");
+                  setCustomStartDate("");
+                  setCustomEndDate("");
                 }}
                 className="p-2 text-white hover:bg-white/20 rounded-xl transition-all duration-200 hover:rotate-90"
               >
@@ -1194,6 +1306,71 @@ const ChartOfAccountsManagement = () => {
               </button>
             </div>
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              {/* Date Filter Section */}
+              <div className="mb-6 p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={18} className="text-gray-600" />
+                    <span className="font-semibold text-gray-700">Filter by:</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: "all", label: "All Time" },
+                      { value: "day", label: "Today" },
+                      { value: "month", label: "This Month" },
+                      { value: "year", label: "This Year" },
+                      { value: "custom", label: "Custom Range" },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => {
+                          setTransactionDateFilter(option.value);
+                          if (option.value !== "custom" && viewingAccount) {
+                            handleViewTransactions(viewingAccount, option.value);
+                          }
+                        }}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                          transactionDateFilter === option.value
+                            ? "bg-green-600 text-white shadow-md"
+                            : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  {transactionDateFilter === "custom" && (
+                    <div className="flex items-center gap-2 ml-auto">
+                      <input
+                        type="date"
+                        value={customStartDate}
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500"
+                        placeholder="Start Date"
+                      />
+                      <span className="text-gray-400">to</span>
+                      <input
+                        type="date"
+                        value={customEndDate}
+                        onChange={(e) => setCustomEndDate(e.target.value)}
+                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500"
+                        placeholder="End Date"
+                      />
+                      <button
+                        onClick={() => {
+                          if (viewingAccount) {
+                            handleViewTransactions(viewingAccount, "custom");
+                          }
+                        }}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-all"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Account Summary Card */}
               {viewingAccount && (
                 <div className="mb-6 grid grid-cols-4 gap-4">
@@ -1243,7 +1420,10 @@ const ChartOfAccountsManagement = () => {
                     No transactions found for this account
                   </p>
                   <p className="text-gray-400 text-sm mt-2">
-                    Transactions will appear here when vouchers are created
+                    {transactionDateFilter !== "all" 
+                      ? "Try adjusting the date filter or select 'All Time'"
+                      : "Transactions will appear here when vouchers are created"
+                    }
                   </p>
                 </div>
               ) : (
@@ -1263,6 +1443,12 @@ const ChartOfAccountsManagement = () => {
                         <th className="px-4 py-3 text-left font-semibold text-gray-700">
                           Reference/Party
                         </th>
+                        {/* Remarks column - only for Expense accounts */}
+                        {viewingAccount?.isExpenseAccount && (
+                          <th className="px-4 py-3 text-left font-semibold text-gray-700">
+                            Remarks
+                          </th>
+                        )}
                         <th className="px-4 py-3 text-right font-semibold text-gray-700">
                           Debit (Dr)
                         </th>
@@ -1286,6 +1472,9 @@ const ChartOfAccountsManagement = () => {
                           </td>
                           <td className="px-4 py-3 text-gray-600">-</td>
                           <td className="px-4 py-3 text-gray-600">-</td>
+                          {viewingAccount?.isExpenseAccount && (
+                            <td className="px-4 py-3 text-gray-400">-</td>
+                          )}
                           <td className="px-4 py-3 text-right text-gray-400">-</td>
                           <td className="px-4 py-3 text-right text-gray-400">-</td>
                           <td className="px-4 py-3 text-right font-bold text-blue-700">
@@ -1345,6 +1534,18 @@ const ChartOfAccountsManagement = () => {
                               )}
                             </div>
                           </td>
+                          {/* Remarks column - shows which expense type under the account */}
+                          {viewingAccount?.isExpenseAccount && (
+                            <td className="px-4 py-3 text-gray-600">
+                              {transaction.remarks || transaction.expenseTypeName ? (
+                                <span className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-lg border border-amber-200">
+                                  {transaction.remarks || `Expense Type: ${transaction.expenseTypeName}`}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </td>
+                          )}
                           <td className="px-4 py-3 text-right">
                             {transaction.debitAmount ? (
                               <span className="text-green-600 font-semibold">
@@ -1379,6 +1580,9 @@ const ChartOfAccountsManagement = () => {
                           </td>
                           <td className="px-4 py-3 text-gray-600">-</td>
                           <td className="px-4 py-3 text-gray-600">-</td>
+                          {viewingAccount?.isExpenseAccount && (
+                            <td className="px-4 py-3 text-gray-400">-</td>
+                          )}
                           <td className="px-4 py-3 text-right font-bold text-green-700">
                             {formatCurrency(
                               accountTransactions.reduce((sum, t) => sum + (Number(t.debitAmount) || 0), 0)

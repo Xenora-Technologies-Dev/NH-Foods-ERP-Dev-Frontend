@@ -16,8 +16,8 @@ import ApprovedPurchase from "../components/PurchaseOrder/purchase/ApprovedPurch
 import SalesOrderPage from "../components/PurchaseOrder/sales/SalesOrderPage.jsx";
 import ApprovedSales from "../components/PurchaseOrder/sales/ApprovedSales.jsx";
 import InventoryManagement from "../components/Inventory/InventoryManagement.jsx";
-import PurchaseReturnPage from "../components/PurchaseOrder/purchaseReturn/PurchaseOrderPage.jsx";
-import SalesReturnPage from "../components/PurchaseOrder/salesReturn/SalesOrderPage.jsx";
+import PurchaseReturnPage from "../components/PurchaseOrder/purchaseReturn/PurchaseReturnPage.jsx";
+import SalesReturnPage from "../components/PurchaseOrder/salesReturn/SalesReturnPage.jsx";
 import CategoryManagement from "../components/Inventory/CategoryManagement.jsx";
 import ReceiptVoucherManagement from "../components/FinancialModules/Receipt/ReceiptVoucher.jsx";
 import PaymentVoucherManagement from "../components/FinancialModules/Payment/PaymentVoucher.jsx";
@@ -33,6 +33,9 @@ import ContraVoucherManagement from "../components/FinancialModules/Contra/Contr
 import ExpenseVoucherManagement from "../components/FinancialModules/Expense/ExpenseVoucherManagement.jsx";
 import StockDetail from "../components/Stock/StockDetail.jsx";
 import VatReports from "../components/Reports/VATReportCreate.jsx";
+import TrialBalanceReport from "../components/Reports/TrialBalanceReport.jsx";
+import ProfitLossReport from "../components/Reports/ProfitLossReport.jsx";
+import BalanceSheetReport from "../components/Reports/BalanceSheetReport.jsx";
 import VendorDetailsPage from "../components/AccountsModule/Purchase/VendorDetailsPage.jsx";
 import CustomerDetailsPage from "../components/AccountsModule/Sales/CustomerDetailsPage.jsx";
 export default function AdminRouter() {
@@ -84,7 +87,10 @@ export default function AdminRouter() {
         <Route path="/expense-accounts/types/:typeId/history" element={<ExpenseHistoryPage />} />{" "}
         <Route path="/payment-voucher" element={<PaymentVoucherManagement />} />{" "}
         {/* reports */}
-        <Route path="/vat-reports" element={<VatReports />} />{" "}
+        <Route path="/vat-reports" element={<VatReports />} />
+        <Route path="/trial-balance" element={<TrialBalanceReport />} />
+        <Route path="/profit-loss" element={<ProfitLossReport />} />
+        <Route path="/balance-sheet" element={<BalanceSheetReport />} />
       </Route>
       {/* </Route> */}
       <Route path="*" element={<NotFound />} />

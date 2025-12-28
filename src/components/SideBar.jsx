@@ -241,10 +241,23 @@ const Sidebar = () => {
           {
             icon: <FileText strokeWidth={1.5} size={20} />,
             text: "VAT Reports",
-            to: "/vat-reports", // Your VAT Reports page
+            to: "/vat-reports",
           },
-          // Add more reports later
-          // { icon: <PieChart strokeWidth={1.5} size={20} />, text: "Sales Report", to: "/sales-report" },
+          {
+            icon: <FileText strokeWidth={1.5} size={20} />,
+            text: "Trial Balance",
+            to: "/trial-balance",
+          },
+          {
+            icon: <FileText strokeWidth={1.5} size={20} />,
+            text: "Profit & Loss",
+            to: "/profit-loss",
+          },
+          {
+            icon: <FileText strokeWidth={1.5} size={20} />,
+            text: "Balance Sheet",
+            to: "/balance-sheet",
+          },
         ].filter(() => userRole === "Admin" || userRole === "Accountant"),
       },
     ];
