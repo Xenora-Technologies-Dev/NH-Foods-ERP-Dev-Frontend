@@ -258,6 +258,11 @@ const Sidebar = () => {
             text: "Balance Sheet",
             to: "/balance-sheet",
           },
+          {
+            icon: <FileText strokeWidth={1.5} size={20} />,
+            text: "Statement of Account",
+            to: "/statement-of-account",
+          },
         ].filter(() => userRole === "Admin" || userRole === "Accountant"),
       },
     ];

@@ -36,6 +36,7 @@ import VatReports from "../components/Reports/VATReportCreate.jsx";
 import TrialBalanceReport from "../components/Reports/TrialBalanceReport.jsx";
 import ProfitLossReport from "../components/Reports/ProfitLossReport.jsx";
 import BalanceSheetReport from "../components/Reports/BalanceSheetReport.jsx";
+import StatementOfAccount from "../components/Reports/StatementOfAccount.jsx";
 import VendorDetailsPage from "../components/AccountsModule/Purchase/VendorDetailsPage.jsx";
 import CustomerDetailsPage from "../components/AccountsModule/Sales/CustomerDetailsPage.jsx";
 export default function AdminRouter() {
@@ -91,6 +92,7 @@ export default function AdminRouter() {
         <Route path="/trial-balance" element={<TrialBalanceReport />} />
         <Route path="/profit-loss" element={<ProfitLossReport />} />
         <Route path="/balance-sheet" element={<BalanceSheetReport />} />
+        <Route path="/statement-of-account" element={<StatementOfAccount />} />
       </Route>
       {/* </Route> */}
       <Route path="*" element={<NotFound />} />

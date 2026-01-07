@@ -10,17 +10,21 @@ import {
   Trash2,
   CheckSquare,
   Send,
-  ChevronLeft,
-  ChevronRight,
   Plus,
   X,
   TrendingUp,
   TrendingDown,
+  Download,
+  Calendar,
+  AlertCircle,
 } from "lucide-react";
 import axiosInstance from "../../axios/axios";
 import Select from "react-select";
+import { generateVATReportExcel } from "../../utils/vatExcelExport";
 
+// ─────────────────────────────────────────────────────────────
 // Toast Component
+// ─────────────────────────────────────────────────────────────
 const Toast = ({ show, message, type }) =>
   show && (
     <div
@@ -41,7 +45,9 @@ const Toast = ({ show, message, type }) =>
     </div>
   );
 
+// ─────────────────────────────────────────────────────────────
 // Currency formatter
+// ─────────────────────────────────────────────────────────────
 const formatCurrency = (amount, color = "text-gray-900") => {
   const num = Number(amount) || 0;
   const abs = Math.abs(num).toFixed(2);
@@ -55,7 +61,9 @@ const formatCurrency = (amount, color = "text-gray-900") => {
   );
 };
 
-// Status badge
+// ─────────────────────────────────────────────────────────────
+// Status badge component
+// ─────────────────────────────────────────────────────────────
 const StatusBadge = ({ status }) => {
   const styles = {
     DRAFT: "bg-yellow-100 text-yellow-800 border-yellow-300",
@@ -70,124 +78,162 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-// Quarter Card for Dashboard
-const QuarterCard = ({ quarter, onGenerate, onView }) => {
-  const isPositive = quarter.netVAT >= 0;
-  return (
-    <div className={`bg-white rounded-2xl shadow-lg border-2 p-6 transition-all duration-300 hover:shadow-xl ${
-      quarter.hasReport ? "border-emerald-200" : "border-gray-200"
-    }`}>
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <h3 className="text-lg font-bold text-gray-900">{quarter.periodLabel}</h3>
-          <StatusBadge status={quarter.status} />
-        </div>
-        <div className={`p-3 rounded-xl ${isPositive ? "bg-red-100" : "bg-emerald-100"}`}>
-          {isPositive ? (
-            <TrendingUp size={24} className="text-red-600" />
-          ) : (
-            <TrendingDown size={24} className="text-emerald-600" />
-          )}
-        </div>
-      </div>
+// ─────────────────────────────────────────────────────────────
+// Month names constant
+// ─────────────────────────────────────────────────────────────
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-      {quarter.hasReport ? (
-        <>
-          <div className="space-y-3 mb-4">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Output VAT</span>
-              {formatCurrency(quarter.outputVAT, "text-emerald-700")}
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Input VAT</span>
-              {formatCurrency(quarter.inputVAT, "text-amber-700")}
-            </div>
-            <div className="h-px bg-gray-200" />
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-semibold text-gray-700">
-                {isPositive ? "VAT Payable" : "VAT Refundable"}
-              </span>
-              {formatCurrency(quarter.netVAT, isPositive ? "text-red-700" : "text-emerald-700")}
-            </div>
-          </div>
-          <button
-            onClick={() => onView(quarter.reportId)}
-            className="w-full py-2 px-4 bg-purple-50 text-purple-700 rounded-xl font-medium hover:bg-purple-100 transition-colors flex items-center justify-center gap-2"
-          >
-            <Eye size={16} /> View Report
-          </button>
-        </>
-      ) : (
-        <div className="text-center py-4">
-          <p className="text-gray-500 text-sm mb-4">No report generated for this quarter</p>
-          <button
-            onClick={() => onGenerate(quarter.quarter)}
-            className="w-full py-2 px-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-medium hover:from-purple-700 hover:to-blue-700 transition-colors flex items-center justify-center gap-2"
-          >
-            <Plus size={16} /> Generate Report
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Generate Report Modal
-const GenerateReportModal = ({ isOpen, onClose, onGenerate, isLoading, preselectedQuarter }) => {
-  const [periodType, setPeriodType] = useState("quarterly");
+// ─────────────────────────────────────────────────────────────
+// Generate Report Modal - Supports Monthly & Custom 3-Month
+// ─────────────────────────────────────────────────────────────
+const GenerateReportModal = ({ isOpen, onClose, onGenerate, isLoading }) => {
+  const [periodType, setPeriodType] = useState("monthly"); // "monthly" or "custom"
   const [year, setYear] = useState(new Date().getFullYear());
-  const [quarter, setQuarter] = useState(preselectedQuarter || Math.ceil((new Date().getMonth() + 1) / 3));
   const [month, setMonth] = useState(new Date().getMonth() + 1);
-
-  useEffect(() => {
-    if (preselectedQuarter) {
-      setQuarter(preselectedQuarter);
-      setPeriodType("quarterly");
-    }
-  }, [preselectedQuarter]);
+  const [selectedMonths, setSelectedMonths] = useState([]); // For custom 3-month selection
+  const [validationError, setValidationError] = useState("");
 
   const currentYear = new Date().getFullYear();
   const yearOptions = Array.from({ length: 5 }, (_, i) => ({
-    value: currentYear - i,
-    label: String(currentYear - i),
+    value: currentYear - i + 1,
+    label: String(currentYear - i + 1),
   }));
 
-  const quarterOptions = [
-    { value: 1, label: "Q1 (Jan - Mar)" },
-    { value: 2, label: "Q2 (Apr - Jun)" },
-    { value: 3, label: "Q3 (Jul - Sep)" },
-    { value: 4, label: "Q4 (Oct - Dec)" },
-  ];
+  const monthOptions = MONTH_NAMES.map((name, idx) => ({
+    value: idx + 1,
+    label: name,
+  }));
 
-  const monthOptions = [
-    { value: 1, label: "January" },
-    { value: 2, label: "February" },
-    { value: 3, label: "March" },
-    { value: 4, label: "April" },
-    { value: 5, label: "May" },
-    { value: 6, label: "June" },
-    { value: 7, label: "July" },
-    { value: 8, label: "August" },
-    { value: 9, label: "September" },
-    { value: 10, label: "October" },
-    { value: 11, label: "November" },
-    { value: 12, label: "December" },
-  ];
+  // Generate available months for multi-select (last 24 months)
+  const availableMonths = [];
+  for (let y = currentYear + 1; y >= currentYear - 1; y--) {
+    for (let m = 12; m >= 1; m--) {
+      availableMonths.push({
+        value: `${y}-${m}`,
+        label: `${MONTH_SHORT[m - 1]} ${y}`,
+        year: y,
+        month: m,
+      });
+    }
+  }
 
-  const handleSubmit = () => {
-    onGenerate({
-      periodType,
-      year,
-      quarter: periodType === "quarterly" ? quarter : null,
-      month: periodType === "monthly" ? month : null,
+  /**
+   * Validate that selected months are consecutive
+   * Supports cross-year (e.g., Nov 2025, Dec 2025, Jan 2026)
+   */
+  const validateConsecutiveMonths = (months) => {
+    if (months.length < 2) return true;
+    
+    const sorted = [...months].sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      return a.month - b.month;
     });
+
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1];
+      const curr = sorted[i];
+      
+      let expectedYear = prev.year;
+      let expectedMonth = prev.month + 1;
+      
+      if (expectedMonth > 12) {
+        expectedMonth = 1;
+        expectedYear += 1;
+      }
+      
+      if (curr.year !== expectedYear || curr.month !== expectedMonth) {
+        return false;
+      }
+    }
+    return true;
   };
+
+  // Handle month selection for custom period
+  const handleMonthToggle = (monthData) => {
+    setValidationError("");
+    
+    const exists = selectedMonths.find(
+      m => m.year === monthData.year && m.month === monthData.month
+    );
+
+    let newSelection;
+    if (exists) {
+      // Remove month
+      newSelection = selectedMonths.filter(
+        m => !(m.year === monthData.year && m.month === monthData.month)
+      );
+    } else {
+      // Add month (max 3)
+      if (selectedMonths.length >= 3) {
+        setValidationError("Maximum 3 months can be selected");
+        return;
+      }
+      newSelection = [...selectedMonths, { year: monthData.year, month: monthData.month }];
+    }
+
+    // Validate consecutive
+    if (newSelection.length > 1 && !validateConsecutiveMonths(newSelection)) {
+      setValidationError("Months must be consecutive (e.g., Nov, Dec, Jan)");
+      return;
+    }
+
+    setSelectedMonths(newSelection);
+  };
+
+  // Check if month is selected
+  const isMonthSelected = (monthData) => {
+    return selectedMonths.some(
+      m => m.year === monthData.year && m.month === monthData.month
+    );
+  };
+
+  // Handle form submission
+  const handleSubmit = () => {
+    setValidationError("");
+
+    if (periodType === "monthly") {
+      onGenerate({
+        periodType: "monthly",
+        year,
+        month,
+      });
+    } else {
+      // Custom 3-month period
+      if (selectedMonths.length === 0) {
+        setValidationError("Please select at least one month");
+        return;
+      }
+      if (selectedMonths.length > 3) {
+        setValidationError("Maximum 3 months allowed");
+        return;
+      }
+      if (!validateConsecutiveMonths(selectedMonths)) {
+        setValidationError("Months must be consecutive");
+        return;
+      }
+
+      onGenerate({
+        periodType: "custom",
+        selectedMonths: selectedMonths.sort((a, b) => {
+          if (a.year !== b.year) return a.year - b.year;
+          return a.month - b.month;
+        }),
+      });
+    }
+  };
+
+  // Reset selection when switching period type
+  useEffect(() => {
+    setSelectedMonths([]);
+    setValidationError("");
+  }, [periodType]);
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden">
         <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-6 text-white">
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-bold flex items-center gap-2">
@@ -201,19 +247,10 @@ const GenerateReportModal = ({ isOpen, onClose, onGenerate, isLoading, preselect
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Period Type Selection */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Period Type</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Report Type</label>
             <div className="flex gap-3">
-              <button
-                onClick={() => setPeriodType("quarterly")}
-                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
-                  periodType === "quarterly"
-                    ? "bg-purple-100 text-purple-700 ring-2 ring-purple-500"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                Quarterly
-              </button>
               <button
                 onClick={() => setPeriodType("monthly")}
                 className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
@@ -222,43 +259,109 @@ const GenerateReportModal = ({ isOpen, onClose, onGenerate, isLoading, preselect
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
               >
+                <Calendar size={18} className="inline mr-2" />
                 Monthly
+              </button>
+              <button
+                onClick={() => setPeriodType("custom")}
+                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
+                  periodType === "custom"
+                    ? "bg-purple-100 text-purple-700 ring-2 ring-purple-500"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                <Calendar size={18} className="inline mr-2" />
+                3-Month Custom
               </button>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Year</label>
-            <Select
-              options={yearOptions}
-              value={yearOptions.find((o) => o.value === year)}
-              onChange={(opt) => setYear(opt.value)}
-              classNamePrefix="react-select"
-            />
-          </div>
+          {/* Monthly Selection */}
+          {periodType === "monthly" && (
+            <>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Year</label>
+                <Select
+                  options={yearOptions}
+                  value={yearOptions.find((o) => o.value === year)}
+                  onChange={(opt) => setYear(opt.value)}
+                  classNamePrefix="react-select"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Month</label>
+                <Select
+                  options={monthOptions}
+                  value={monthOptions.find((o) => o.value === month)}
+                  onChange={(opt) => setMonth(opt.value)}
+                  classNamePrefix="react-select"
+                />
+              </div>
+            </>
+          )}
 
-          {periodType === "quarterly" ? (
+          {/* Custom 3-Month Selection */}
+          {periodType === "custom" && (
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Quarter</label>
-              <Select
-                options={quarterOptions}
-                value={quarterOptions.find((o) => o.value === quarter)}
-                onChange={(opt) => setQuarter(opt.value)}
-                classNamePrefix="react-select"
-              />
-            </div>
-          ) : (
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Month</label>
-              <Select
-                options={monthOptions}
-                value={monthOptions.find((o) => o.value === month)}
-                onChange={(opt) => setMonth(opt.value)}
-                classNamePrefix="react-select"
-              />
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Select up to 3 consecutive months
+              </label>
+              <p className="text-xs text-gray-500 mb-3">
+                Cross-year selection supported (e.g., Nov 2025 – Jan 2026)
+              </p>
+              
+              {/* Selected months display */}
+              {selectedMonths.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {selectedMonths
+                    .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
+                    .map((m) => (
+                      <span
+                        key={`${m.year}-${m.month}`}
+                        className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium flex items-center gap-1"
+                      >
+                        {MONTH_SHORT[m.month - 1]} {m.year}
+                        <button
+                          onClick={() => handleMonthToggle(m)}
+                          className="hover:bg-purple-200 rounded-full p-0.5"
+                        >
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ))}
+                </div>
+              )}
+
+              {/* Month grid */}
+              <div className="max-h-48 overflow-y-auto border rounded-xl p-2">
+                <div className="grid grid-cols-4 gap-2">
+                  {availableMonths.slice(0, 36).map((monthData) => (
+                    <button
+                      key={monthData.value}
+                      onClick={() => handleMonthToggle(monthData)}
+                      className={`p-2 text-xs rounded-lg transition-all ${
+                        isMonthSelected(monthData)
+                          ? "bg-purple-600 text-white"
+                          : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      {monthData.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
+          {/* Validation Error */}
+          {validationError && (
+            <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-3 rounded-xl">
+              <AlertCircle size={16} />
+              {validationError}
+            </div>
+          )}
+
+          {/* Actions */}
           <div className="flex gap-3 pt-4">
             <button
               onClick={onClose}
@@ -268,7 +371,7 @@ const GenerateReportModal = ({ isOpen, onClose, onGenerate, isLoading, preselect
             </button>
             <button
               onClick={handleSubmit}
-              disabled={isLoading}
+              disabled={isLoading || (periodType === "custom" && selectedMonths.length === 0)}
               className="flex-1 py-3 px-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-medium hover:from-purple-700 hover:to-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
@@ -281,8 +384,10 @@ const GenerateReportModal = ({ isOpen, onClose, onGenerate, isLoading, preselect
   );
 };
 
+// ─────────────────────────────────────────────────────────────
 // Report Detail Modal
-const ReportDetailModal = ({ report, onClose, onFinalize, onSubmit, isLoading }) => {
+// ─────────────────────────────────────────────────────────────
+const ReportDetailModal = ({ report, onClose, onFinalize, onSubmit, onExport, isLoading, isExporting }) => {
   const [activeTab, setActiveTab] = useState("summary");
 
   if (!report) return null;
@@ -302,6 +407,7 @@ const ReportDetailModal = ({ report, onClose, onFinalize, onSubmit, isLoading })
   return (
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-6 text-white flex-shrink-0">
           <div className="flex justify-between items-start">
             <div>
@@ -309,9 +415,14 @@ const ReportDetailModal = ({ report, onClose, onFinalize, onSubmit, isLoading })
                 <FileText size={28} /> VAT Report - {report.reportNo}
               </h3>
               <p className="text-purple-100 mt-1">
-                {new Date(report.periodStart).toLocaleDateString()} - {new Date(report.periodEnd).toLocaleDateString()}
+                {report.periodLabel || `${new Date(report.periodStart).toLocaleDateString()} - ${new Date(report.periodEnd).toLocaleDateString()}`}
               </p>
-              <div className="mt-2"><StatusBadge status={report.status} /></div>
+              <div className="flex items-center gap-3 mt-2">
+                <StatusBadge status={report.status} />
+                <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                  {report.periodType === "custom" ? "Custom Period" : report.periodType === "monthly" ? "Monthly" : "Quarterly"}
+                </span>
+              </div>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition-colors">
               <X size={24} />
@@ -319,6 +430,7 @@ const ReportDetailModal = ({ report, onClose, onFinalize, onSubmit, isLoading })
           </div>
         </div>
 
+        {/* Tabs */}
         <div className="flex border-b border-gray-200 flex-shrink-0">
           {tabs.map((tab) => (
             <button
@@ -335,9 +447,11 @@ const ReportDetailModal = ({ report, onClose, onFinalize, onSubmit, isLoading })
           ))}
         </div>
 
+        {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {activeTab === "summary" && (
             <div className="space-y-6">
+              {/* VAT Summary Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-200">
                   <div className="flex items-center gap-2 mb-2">
@@ -345,7 +459,7 @@ const ReportDetailModal = ({ report, onClose, onFinalize, onSubmit, isLoading })
                     <span className="text-sm font-medium text-emerald-700">Output VAT (Sales)</span>
                   </div>
                   <p className="text-3xl font-bold text-emerald-900">
-                    AED {(report.totalOutputVAT || 0).toLocaleString()}
+                    AED {(report.totalOutputVAT || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div className="bg-amber-50 p-6 rounded-2xl border border-amber-200">
@@ -354,7 +468,7 @@ const ReportDetailModal = ({ report, onClose, onFinalize, onSubmit, isLoading })
                     <span className="text-sm font-medium text-amber-700">Input VAT (Purchases)</span>
                   </div>
                   <p className="text-3xl font-bold text-amber-900">
-                    AED {(report.totalInputVAT || 0).toLocaleString()}
+                    AED {(report.totalInputVAT || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div className={`p-6 rounded-2xl border ${
@@ -367,46 +481,47 @@ const ReportDetailModal = ({ report, onClose, onFinalize, onSubmit, isLoading })
                     </span>
                   </div>
                   <p className={`text-3xl font-bold ${report.netVATPayable >= 0 ? "text-red-900" : "text-blue-900"}`}>
-                    AED {Math.abs(report.netVATPayable || 0).toLocaleString()}
+                    AED {Math.abs(report.netVATPayable || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </p>
                 </div>
               </div>
 
+              {/* Detailed Summary */}
               <div className="bg-gray-50 rounded-2xl p-6">
-                <h4 className="text-lg font-bold text-gray-900 mb-4">UAE VAT Return Summary</h4>
+                <h4 className="text-lg font-bold text-gray-900 mb-4">UAE VAT Return Summary - Standard Rated Supplies in Dubai</h4>
                 <div className="space-y-3">
                   <div className="flex justify-between py-2 border-b border-gray-200">
                     <span className="text-gray-600">Standard Rated Sales (5%)</span>
-                    <span className="font-semibold">AED {(report.standardRatedSales || 0).toLocaleString()}</span>
+                    <span className="font-semibold">AED {(report.standardRatedSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between py-2 border-b border-gray-200">
                     <span className="text-gray-600">VAT on Sales</span>
-                    <span className="font-semibold text-emerald-600">AED {(report.standardRatedSalesVAT || 0).toLocaleString()}</span>
+                    <span className="font-semibold text-emerald-600">AED {(report.standardRatedSalesVAT || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between py-2 border-b border-gray-200">
-                    <span className="text-gray-600">Less: Sales Returns</span>
-                    <span className="font-semibold text-red-600">-AED {(report.salesReturnsVAT || 0).toLocaleString()}</span>
+                    <span className="text-gray-600">Less: Sales Returns VAT</span>
+                    <span className="font-semibold text-red-600">-AED {(report.salesReturnsVAT || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between py-2 bg-emerald-50 px-3 rounded">
                     <span className="font-medium text-emerald-700">Net Output VAT</span>
-                    <span className="font-bold text-emerald-700">AED {(report.totalOutputVAT || 0).toLocaleString()}</span>
+                    <span className="font-bold text-emerald-700">AED {(report.totalOutputVAT || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="h-4" />
                   <div className="flex justify-between py-2 border-b border-gray-200">
                     <span className="text-gray-600">Standard Rated Purchases (5%)</span>
-                    <span className="font-semibold">AED {(report.standardRatedPurchases || 0).toLocaleString()}</span>
+                    <span className="font-semibold">AED {(report.standardRatedPurchases || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between py-2 border-b border-gray-200">
                     <span className="text-gray-600">VAT on Purchases</span>
-                    <span className="font-semibold text-amber-600">AED {(report.standardRatedPurchasesVAT || 0).toLocaleString()}</span>
+                    <span className="font-semibold text-amber-600">AED {(report.standardRatedPurchasesVAT || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between py-2 border-b border-gray-200">
-                    <span className="text-gray-600">Less: Purchase Returns</span>
-                    <span className="font-semibold text-red-600">-AED {(report.purchaseReturnsVAT || 0).toLocaleString()}</span>
+                    <span className="text-gray-600">Less: Purchase Returns VAT</span>
+                    <span className="font-semibold text-red-600">-AED {(report.purchaseReturnsVAT || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between py-2 bg-amber-50 px-3 rounded">
                     <span className="font-medium text-amber-700">Net Input VAT</span>
-                    <span className="font-bold text-amber-700">AED {(report.totalInputVAT || 0).toLocaleString()}</span>
+                    <span className="font-bold text-amber-700">AED {(report.totalInputVAT || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="h-4" />
                   <div className={`flex justify-between py-3 px-4 rounded-xl ${
@@ -416,7 +531,7 @@ const ReportDetailModal = ({ report, onClose, onFinalize, onSubmit, isLoading })
                       {report.netVATPayable >= 0 ? "NET VAT PAYABLE" : "NET VAT REFUNDABLE"}
                     </span>
                     <span className={`font-bold text-xl ${report.netVATPayable >= 0 ? "text-red-700" : "text-blue-700"}`}>
-                      AED {Math.abs(report.netVATPayable || 0).toLocaleString()}
+                      AED {Math.abs(report.netVATPayable || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>
@@ -427,68 +542,76 @@ const ReportDetailModal = ({ report, onClose, onFinalize, onSubmit, isLoading })
           {activeTab === "sales" && (
             <div>
               <h4 className="text-lg font-bold text-gray-900 mb-4">Sales Transactions ({salesItems.length} items)</h4>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left">Invoice No</th>
-                      <th className="px-4 py-3 text-left">Date</th>
-                      <th className="px-4 py-3 text-left">Customer</th>
-                      <th className="px-4 py-3 text-left">Item</th>
-                      <th className="px-4 py-3 text-right">Amount</th>
-                      <th className="px-4 py-3 text-right">VAT</th>
-                      <th className="px-4 py-3 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {salesItems.map((item, i) => (
-                      <tr key={i} className="hover:bg-purple-50">
-                        <td className="px-4 py-3 font-medium">{item.transactionNo}</td>
-                        <td className="px-4 py-3">{new Date(item.date).toLocaleDateString()}</td>
-                        <td className="px-4 py-3">{item.partyName}</td>
-                        <td className="px-4 py-3">{item.description}</td>
-                        <td className="px-4 py-3 text-right">AED {item.lineTotal?.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right text-emerald-600">AED {item.vatAmount?.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right font-semibold">AED {item.grandTotal?.toLocaleString()}</td>
+              {salesItems.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">No sales transactions in this period</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left">Invoice No</th>
+                        <th className="px-4 py-3 text-left">Date</th>
+                        <th className="px-4 py-3 text-left">Customer</th>
+                        <th className="px-4 py-3 text-left">TRN</th>
+                        <th className="px-4 py-3 text-right">Amount</th>
+                        <th className="px-4 py-3 text-right">VAT</th>
+                        <th className="px-4 py-3 text-right">Total</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y">
+                      {salesItems.map((item, i) => (
+                        <tr key={i} className="hover:bg-purple-50">
+                          <td className="px-4 py-3 font-medium">{item.transactionNo}</td>
+                          <td className="px-4 py-3">{new Date(item.date).toLocaleDateString()}</td>
+                          <td className="px-4 py-3">{item.partyName}</td>
+                          <td className="px-4 py-3 text-xs text-gray-500">{item.partyTRN || "-"}</td>
+                          <td className="px-4 py-3 text-right">AED {item.lineTotal?.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-right text-emerald-600">AED {item.vatAmount?.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-right font-semibold">AED {item.grandTotal?.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
           {activeTab === "purchases" && (
             <div>
               <h4 className="text-lg font-bold text-gray-900 mb-4">Purchase Transactions ({purchaseItems.length} items)</h4>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left">Invoice No</th>
-                      <th className="px-4 py-3 text-left">Date</th>
-                      <th className="px-4 py-3 text-left">Vendor</th>
-                      <th className="px-4 py-3 text-left">Item</th>
-                      <th className="px-4 py-3 text-right">Amount</th>
-                      <th className="px-4 py-3 text-right">VAT</th>
-                      <th className="px-4 py-3 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {purchaseItems.map((item, i) => (
-                      <tr key={i} className="hover:bg-purple-50">
-                        <td className="px-4 py-3 font-medium">{item.transactionNo}</td>
-                        <td className="px-4 py-3">{new Date(item.date).toLocaleDateString()}</td>
-                        <td className="px-4 py-3">{item.partyName}</td>
-                        <td className="px-4 py-3">{item.description}</td>
-                        <td className="px-4 py-3 text-right">AED {item.lineTotal?.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right text-amber-600">AED {item.vatAmount?.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right font-semibold">AED {item.grandTotal?.toLocaleString()}</td>
+              {purchaseItems.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">No purchase transactions in this period</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left">Invoice No</th>
+                        <th className="px-4 py-3 text-left">Date</th>
+                        <th className="px-4 py-3 text-left">Vendor</th>
+                        <th className="px-4 py-3 text-left">TRN</th>
+                        <th className="px-4 py-3 text-right">Amount</th>
+                        <th className="px-4 py-3 text-right">VAT</th>
+                        <th className="px-4 py-3 text-right">Total</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y">
+                      {purchaseItems.map((item, i) => (
+                        <tr key={i} className="hover:bg-purple-50">
+                          <td className="px-4 py-3 font-medium">{item.transactionNo}</td>
+                          <td className="px-4 py-3">{new Date(item.date).toLocaleDateString()}</td>
+                          <td className="px-4 py-3">{item.partyName}</td>
+                          <td className="px-4 py-3 text-xs text-gray-500">{item.partyTRN || "-"}</td>
+                          <td className="px-4 py-3 text-right">AED {item.lineTotal?.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-right text-amber-600">AED {item.vatAmount?.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-right font-semibold">AED {item.grandTotal?.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
@@ -496,92 +619,106 @@ const ReportDetailModal = ({ report, onClose, onFinalize, onSubmit, isLoading })
             <div className="space-y-8">
               <div>
                 <h4 className="text-lg font-bold text-gray-900 mb-4">Sales Returns ({salesReturnItems.length} items)</h4>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left">Return No</th>
-                        <th className="px-4 py-3 text-left">Date</th>
-                        <th className="px-4 py-3 text-left">Customer</th>
-                        <th className="px-4 py-3 text-left">Item</th>
-                        <th className="px-4 py-3 text-right">Amount</th>
-                        <th className="px-4 py-3 text-right">VAT</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {salesReturnItems.map((item, i) => (
-                        <tr key={i} className="hover:bg-red-50">
-                          <td className="px-4 py-3 font-medium">{item.transactionNo}</td>
-                          <td className="px-4 py-3">{new Date(item.date).toLocaleDateString()}</td>
-                          <td className="px-4 py-3">{item.partyName}</td>
-                          <td className="px-4 py-3">{item.description}</td>
-                          <td className="px-4 py-3 text-right text-red-600">-AED {item.lineTotal?.toLocaleString()}</td>
-                          <td className="px-4 py-3 text-right text-red-600">-AED {item.vatAmount?.toLocaleString()}</td>
+                {salesReturnItems.length === 0 ? (
+                  <div className="text-center py-4 text-gray-500 text-sm">No sales returns in this period</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left">Return No</th>
+                          <th className="px-4 py-3 text-left">Date</th>
+                          <th className="px-4 py-3 text-left">Customer</th>
+                          <th className="px-4 py-3 text-right">Amount</th>
+                          <th className="px-4 py-3 text-right">VAT</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y">
+                        {salesReturnItems.map((item, i) => (
+                          <tr key={i} className="hover:bg-red-50">
+                            <td className="px-4 py-3 font-medium">{item.transactionNo}</td>
+                            <td className="px-4 py-3">{new Date(item.date).toLocaleDateString()}</td>
+                            <td className="px-4 py-3">{item.partyName}</td>
+                            <td className="px-4 py-3 text-right text-red-600">-AED {item.lineTotal?.toLocaleString()}</td>
+                            <td className="px-4 py-3 text-right text-red-600">-AED {item.vatAmount?.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
               <div>
                 <h4 className="text-lg font-bold text-gray-900 mb-4">Purchase Returns ({purchaseReturnItems.length} items)</h4>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left">Return No</th>
-                        <th className="px-4 py-3 text-left">Date</th>
-                        <th className="px-4 py-3 text-left">Vendor</th>
-                        <th className="px-4 py-3 text-left">Item</th>
-                        <th className="px-4 py-3 text-right">Amount</th>
-                        <th className="px-4 py-3 text-right">VAT</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {purchaseReturnItems.map((item, i) => (
-                        <tr key={i} className="hover:bg-red-50">
-                          <td className="px-4 py-3 font-medium">{item.transactionNo}</td>
-                          <td className="px-4 py-3">{new Date(item.date).toLocaleDateString()}</td>
-                          <td className="px-4 py-3">{item.partyName}</td>
-                          <td className="px-4 py-3">{item.description}</td>
-                          <td className="px-4 py-3 text-right text-red-600">-AED {item.lineTotal?.toLocaleString()}</td>
-                          <td className="px-4 py-3 text-right text-red-600">-AED {item.vatAmount?.toLocaleString()}</td>
+                {purchaseReturnItems.length === 0 ? (
+                  <div className="text-center py-4 text-gray-500 text-sm">No purchase returns in this period</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left">Return No</th>
+                          <th className="px-4 py-3 text-left">Date</th>
+                          <th className="px-4 py-3 text-left">Vendor</th>
+                          <th className="px-4 py-3 text-right">Amount</th>
+                          <th className="px-4 py-3 text-right">VAT</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y">
+                        {purchaseReturnItems.map((item, i) => (
+                          <tr key={i} className="hover:bg-red-50">
+                            <td className="px-4 py-3 font-medium">{item.transactionNo}</td>
+                            <td className="px-4 py-3">{new Date(item.date).toLocaleDateString()}</td>
+                            <td className="px-4 py-3">{item.partyName}</td>
+                            <td className="px-4 py-3 text-right text-red-600">-AED {item.lineTotal?.toLocaleString()}</td>
+                            <td className="px-4 py-3 text-right text-red-600">-AED {item.vatAmount?.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
 
-        <div className="p-6 border-t border-gray-200 flex justify-between items-center flex-shrink-0">
+        {/* Footer Actions */}
+        <div className="p-6 border-t border-gray-200 flex flex-col sm:flex-row justify-between items-center gap-4 flex-shrink-0">
           <div className="text-sm text-gray-600">
             Generated: {new Date(report.generatedAt).toLocaleString()} by {report.generatedByName}
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
+            {/* Excel Export Button */}
+            <button
+              onClick={() => onExport(report._id)}
+              disabled={isExporting}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              Export Excel
+            </button>
             {report.status === "DRAFT" && (
               <button
                 onClick={() => onFinalize(report._id)}
                 disabled={isLoading}
-                className="px-6 py-2 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
               >
-                <CheckSquare size={18} /> Finalize
+                <CheckSquare size={16} /> Finalize
               </button>
             )}
             {report.status === "FINALIZED" && (
               <button
                 onClick={() => onSubmit(report._id)}
                 disabled={isLoading}
-                className="px-6 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center gap-2"
               >
-                <Send size={18} /> Submit to FTA
+                <Send size={16} /> Submit to FTA
               </button>
             )}
             <button
               onClick={onClose}
-              className="px-6 py-2 border border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 border border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
               Close
             </button>
@@ -592,16 +729,18 @@ const ReportDetailModal = ({ report, onClose, onFinalize, onSubmit, isLoading })
   );
 };
 
-// Main Component
+// ─────────────────────────────────────────────────────────────
+// Main VAT Reports Management Component
+// ─────────────────────────────────────────────────────────────
 const VATReportsManagement = () => {
   const [reports, setReports] = useState([]);
   const [selectedReport, setSelectedReport] = useState(null);
   const [vatSummary, setVatSummary] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showGenerateModal, setShowGenerateModal] = useState(false);
-  const [preselectedQuarter, setPreselectedQuarter] = useState(null);
   const [toast, setToast] = useState({ visible: false, message: "", type: "success" });
   const [viewMode, setViewMode] = useState("dashboard");
 
@@ -610,6 +749,7 @@ const VATReportsManagement = () => {
     setTimeout(() => setToast((p) => ({ ...p, visible: false })), 3000);
   }, []);
 
+  // Fetch VAT summary for dashboard
   const fetchVATSummary = useCallback(async () => {
     try {
       const res = await axiosInstance.get(`/reports/vat/summary/${selectedYear}`);
@@ -619,11 +759,12 @@ const VATReportsManagement = () => {
     }
   }, [selectedYear]);
 
+  // Fetch all reports
   const fetchReports = useCallback(async () => {
     setIsLoading(true);
     try {
       const res = await axiosInstance.get("/reports/vat", { params: { year: selectedYear, limit: 50 } });
-      setReports(res.data.data);
+      setReports(res.data.data || []);
     } catch (err) {
       showToast("Failed to load VAT reports", "error");
     } finally {
@@ -636,6 +777,7 @@ const VATReportsManagement = () => {
     fetchReports();
   }, [fetchVATSummary, fetchReports]);
 
+  // Generate new report
   const handleGenerate = async (data) => {
     setIsActionLoading(true);
     try {
@@ -651,6 +793,7 @@ const VATReportsManagement = () => {
     }
   };
 
+  // View report details
   const viewReport = async (id) => {
     try {
       const res = await axiosInstance.get(`/reports/vat/${id}`);
@@ -660,6 +803,24 @@ const VATReportsManagement = () => {
     }
   };
 
+  // Export report to Excel
+  const exportReport = async (id) => {
+    setIsExporting(true);
+    try {
+      const res = await axiosInstance.get(`/reports/vat/${id}/export`);
+      const exportData = res.data.data;
+      
+      await generateVATReportExcel(exportData);
+      showToast("Excel report downloaded successfully!", "success");
+    } catch (err) {
+      console.error("Export error:", err);
+      showToast("Failed to export report", "error");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Finalize report
   const finalizeReport = async (id) => {
     setIsActionLoading(true);
     try {
@@ -675,6 +836,7 @@ const VATReportsManagement = () => {
     }
   };
 
+  // Submit report
   const submitReport = async (id) => {
     setIsActionLoading(true);
     try {
@@ -690,6 +852,7 @@ const VATReportsManagement = () => {
     }
   };
 
+  // Delete draft report
   const deleteReport = async (id) => {
     if (!window.confirm("Delete this DRAFT report?")) return;
     setIsActionLoading(true);
@@ -705,14 +868,9 @@ const VATReportsManagement = () => {
     }
   };
 
-  const openGenerateForQuarter = (quarter) => {
-    setPreselectedQuarter(quarter);
-    setShowGenerateModal(true);
-  };
-
   const yearOptions = Array.from({ length: 5 }, (_, i) => ({
-    value: new Date().getFullYear() - i,
-    label: String(new Date().getFullYear() - i),
+    value: new Date().getFullYear() - i + 1,
+    label: String(new Date().getFullYear() - i + 1),
   }));
 
   if (isLoading) {
@@ -735,6 +893,7 @@ const VATReportsManagement = () => {
 
       <Toast show={toast.visible} message={toast.message} type={toast.type} />
 
+      {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
@@ -785,8 +944,10 @@ const VATReportsManagement = () => {
         </div>
       </div>
 
+      {/* Dashboard View */}
       {viewMode === "dashboard" && vatSummary && (
         <>
+          {/* YTD Summary */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-8">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Year-to-Date Summary - {selectedYear}</h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -816,15 +977,93 @@ const VATReportsManagement = () => {
             </div>
           </div>
 
+          {/* Quarterly Overview */}
           <h2 className="text-xl font-bold text-gray-900 mb-4">Quarterly VAT Returns</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {vatSummary.quarters.map((quarter) => (
-              <QuarterCard key={quarter.quarter} quarter={quarter} onGenerate={openGenerateForQuarter} onView={viewReport} />
+              <div
+                key={quarter.quarter}
+                className={`bg-white rounded-2xl shadow-lg border-2 p-6 transition-all duration-300 hover:shadow-xl ${
+                  quarter.hasReport ? "border-emerald-200" : "border-gray-200"
+                }`}
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">{quarter.periodLabel}</h3>
+                    <StatusBadge status={quarter.status} />
+                  </div>
+                </div>
+                {quarter.hasReport ? (
+                  <>
+                    <div className="space-y-2 mb-4 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Output VAT</span>
+                        <span className="font-semibold text-emerald-700">AED {quarter.outputVAT.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Input VAT</span>
+                        <span className="font-semibold text-amber-700">AED {quarter.inputVAT.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between pt-2 border-t">
+                        <span className="font-medium">Net VAT</span>
+                        <span className={`font-bold ${quarter.netVAT >= 0 ? "text-red-700" : "text-blue-700"}`}>
+                          AED {Math.abs(quarter.netVAT).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => viewReport(quarter.reportId)}
+                      className="w-full py-2 px-4 bg-purple-50 text-purple-700 rounded-xl font-medium hover:bg-purple-100 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Eye size={16} /> View Report
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-gray-500 text-sm mb-4">No report generated</p>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
+
+          {/* Custom Reports */}
+          {vatSummary.customReports && vatSummary.customReports.length > 0 && (
+            <>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Custom Period Reports</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                {vatSummary.customReports.map((report) => (
+                  <div key={report.reportId} className="bg-white rounded-xl shadow-md p-4 border border-purple-100">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-gray-900">{report.periodLabel}</p>
+                        <p className="text-xs text-gray-500">{report.reportNo}</p>
+                      </div>
+                      <StatusBadge status={report.status} />
+                    </div>
+                    <div className="text-sm space-y-1">
+                      <div className="flex justify-between">
+                        <span>Net VAT:</span>
+                        <span className={`font-semibold ${report.netVAT >= 0 ? "text-red-600" : "text-blue-600"}`}>
+                          AED {Math.abs(report.netVAT).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => viewReport(report.reportId)}
+                      className="w-full mt-3 py-1.5 text-sm bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 flex items-center justify-center gap-1"
+                    >
+                      <Eye size={14} /> View
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </>
       )}
 
+      {/* List View */}
       {viewMode === "list" && (
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
@@ -833,6 +1072,7 @@ const VATReportsManagement = () => {
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Report No</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Period</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Type</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
                   <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase">Output VAT</th>
                   <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase">Input VAT</th>
@@ -843,14 +1083,23 @@ const VATReportsManagement = () => {
               <tbody className="divide-y divide-gray-200">
                 {reports.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">No VAT reports found for {selectedYear}</td>
+                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                      No VAT reports found for {selectedYear}
+                    </td>
                   </tr>
                 ) : (
                   reports.map((r) => (
                     <tr key={r._id} className="hover:bg-purple-50 transition-colors">
                       <td className="px-6 py-4 font-medium text-purple-700">{r.reportNo}</td>
-                      <td className="px-6 py-4 text-sm">
-                        {new Date(r.periodStart).toLocaleDateString()} - {new Date(r.periodEnd).toLocaleDateString()}
+                      <td className="px-6 py-4 text-sm">{r.periodLabel || `${new Date(r.periodStart).toLocaleDateString()} - ${new Date(r.periodEnd).toLocaleDateString()}`}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 text-xs rounded-full ${
+                          r.periodType === "custom" ? "bg-purple-100 text-purple-700" :
+                          r.periodType === "monthly" ? "bg-blue-100 text-blue-700" :
+                          "bg-gray-100 text-gray-700"
+                        }`}>
+                          {r.periodType === "custom" ? "Custom" : r.periodType === "monthly" ? "Monthly" : "Quarterly"}
+                        </span>
                       </td>
                       <td className="px-6 py-4"><StatusBadge status={r.status} /></td>
                       <td className="px-6 py-4 text-right">{formatCurrency(r.totalOutputVAT, "text-emerald-700")}</td>
@@ -858,11 +1107,27 @@ const VATReportsManagement = () => {
                       <td className="px-6 py-4 text-right">{formatCurrency(r.netVATPayable, "text-purple-700")}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-2">
-                          <button onClick={() => viewReport(r._id)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View">
+                          <button
+                            onClick={() => viewReport(r._id)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="View"
+                          >
                             <Eye size={16} />
                           </button>
+                          <button
+                            onClick={() => exportReport(r._id)}
+                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Export Excel"
+                          >
+                            <Download size={16} />
+                          </button>
                           {r.status === "DRAFT" && (
-                            <button onClick={() => deleteReport(r._id)} disabled={isActionLoading} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                            <button
+                              onClick={() => deleteReport(r._id)}
+                              disabled={isActionLoading}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete"
+                            >
                               <Trash2 size={16} />
                             </button>
                           )}
@@ -877,21 +1142,24 @@ const VATReportsManagement = () => {
         </div>
       )}
 
+      {/* Generate Modal */}
       <GenerateReportModal
         isOpen={showGenerateModal}
-        onClose={() => { setShowGenerateModal(false); setPreselectedQuarter(null); }}
+        onClose={() => setShowGenerateModal(false)}
         onGenerate={handleGenerate}
         isLoading={isActionLoading}
-        preselectedQuarter={preselectedQuarter}
       />
 
+      {/* Report Detail Modal */}
       {selectedReport && (
         <ReportDetailModal
           report={selectedReport}
           onClose={() => setSelectedReport(null)}
           onFinalize={finalizeReport}
           onSubmit={submitReport}
+          onExport={exportReport}
           isLoading={isActionLoading}
+          isExporting={isExporting}
         />
       )}
     </div>
