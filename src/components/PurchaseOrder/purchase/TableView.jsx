@@ -71,6 +71,11 @@ const TableView = ({
               >
                 PO #
               </th>
+              {showApprovedAt && (
+                <th className="px-4 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  GRN #
+                </th>
+              )}
               <th
                 onClick={() => handleSort("vendor")}
                 className="px-4 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider cursor-pointer hover:bg-slate-200 transition-colors"
@@ -132,10 +137,21 @@ const TableView = ({
                       <HashIcon className="w-4 h-4 text-blue-600" />
                     </div>
                     <span className="font-medium text-slate-900">
-                      {po.orderNumber || po.transactionNo}
+                      {po.poNumber || po.orderNumber || po.transactionNo}
                     </span>
                   </div>
                 </td>
+                {showApprovedAt && (
+                  <td className="px-4 py-4 text-sm">
+                    {po.grnNumber || po.sourceGrnNumber ? (
+                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
+                        {po.grnNumber || po.sourceGrnNumber}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">-</span>
+                    )}
+                  </td>
+                )}
                 <td className="px-4 py-4">
                   <div className="flex items-center space-x-2">
                     <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">

@@ -34,8 +34,9 @@ const SaleInvoiceView = ({
     logo: null,
     bankName: "NATIONAL BANK OF RAS AL KHAIMAH",
     accountNumber: "0333547283001",
-    accountName: "NAJM ALHUDA FOODSTUFF TRADING LLC S.O.C.",
+    accountName: "NAJM ALHUDA FOODSTUFF TRADING LLC S.O.C",
     ibanNumber: "AE410400000333547283001",
+    currency: "AED",
     swiftCode: "",
     branch: "",
   });

@@ -652,7 +652,7 @@ const POForm = React.memo(
                     <p>{formData.vendorDetails.email || "N/A"}</p>
                     <p>VAT: {formData.vendorDetails.vatNumber || "N/A"}</p>
                     <p>Terms: {formData.vendorDetails.paymentTerms || "N/A"}</p>
-                    <p>Reference: {formData.vendorReference || "N/A"}</p>
+                    <p>Invoice No: {formData.vendorReference || "N/A"}</p>
                   </div>
                 ) : (
                   <p className="text-slate-500 italic">Select a vendor to see details</p>
@@ -733,6 +733,7 @@ const POForm = React.memo(
                         value={item.description || ""}
                         onChange={(e) => handleItemChange(index, "description", e.target.value)}
                         placeholder="Description"
+                        title={item.description || ""}
                         className="w-full px-4 py-3 bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                       />
                     </div>

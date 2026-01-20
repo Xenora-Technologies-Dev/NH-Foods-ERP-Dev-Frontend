@@ -39,6 +39,7 @@ import BalanceSheetReport from "../components/Reports/BalanceSheetReport.jsx";
 import StatementOfAccount from "../components/Reports/StatementOfAccount.jsx";
 import VendorDetailsPage from "../components/AccountsModule/Purchase/VendorDetailsPage.jsx";
 import CustomerDetailsPage from "../components/AccountsModule/Sales/CustomerDetailsPage.jsx";
+import GRNPage from "../components/PurchaseOrder/grn/GRNPage.jsx";
 export default function AdminRouter() {
   return (
     <Routes>
@@ -54,6 +55,7 @@ export default function AdminRouter() {
         <Route path="/staff-records" element={<Staff />} />{" "}
         <Route path="/settings" element={<Settings />} />{" "}
         <Route path="/purchase-order" element={<PurchaseOrderPage />} />{" "}
+        <Route path="/goods-received-note" element={<GRNPage />} />{" "}
         <Route path="/approved-purchase" element={<ApprovedPurchase />} />{" "}
         <Route path="/sales-order" element={<SalesOrderPage />} />{" "}
         <Route path="/approved-sales" element={<ApprovedSales />} />{" "}

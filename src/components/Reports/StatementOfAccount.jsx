@@ -15,10 +15,12 @@ import {
   TrendingDown,
   FileSpreadsheet,
   Search,
+  FileDown,
 } from "lucide-react";
 import axiosInstance from "../../axios/axios";
 import Select from "react-select";
 import { exportStatementOfAccountExcel } from "../../utils/soaExcelExport";
+import { exportStatementOfAccountPDF } from "../../utils/soaPdfExport";
 
 // Toast Component
 const Toast = ({ show, message, type }) =>
@@ -63,7 +65,7 @@ const formatDate = (dateString) => {
 };
 
 // Statement View Modal
-const StatementViewModal = ({ isOpen, onClose, statement, onExport, isExporting }) => {
+const StatementViewModal = ({ isOpen, onClose, statement, onExportExcel, onExportPDF, isExporting, isExportingPDF }) => {
   if (!isOpen || !statement) return null;
 
   const { customer, period, openingBalance, closingBalance, transactions, totals, excessPayments, excessTotal, summary } = statement;
@@ -133,8 +135,8 @@ const StatementViewModal = ({ isOpen, onClose, statement, onExport, isExporting 
                   <tr className="bg-gray-200 text-gray-700">
                     <th className="px-4 py-3 text-left font-semibold rounded-tl-lg">Date</th>
                     <th className="px-4 py-3 text-left font-semibold">Type</th>
-                    <th className="px-4 py-3 text-left font-semibold">Reference</th>
-                    <th className="px-4 py-3 text-left font-semibold">Description</th>
+                    <th className="px-4 py-3 text-left font-semibold">Invoice #</th>
+                    <th className="px-4 py-3 text-left font-semibold">LPO No</th>
                     <th className="px-4 py-3 text-right font-semibold">Debit (AED)</th>
                     <th className="px-4 py-3 text-right font-semibold">Credit (AED)</th>
                     <th className="px-4 py-3 text-right font-semibold rounded-tr-lg">Balance (AED)</th>
@@ -165,7 +167,7 @@ const StatementViewModal = ({ isOpen, onClose, statement, onExport, isExporting 
                           </span>
                         </td>
                         <td className="px-4 py-3 text-gray-700 font-mono">{t.reference}</td>
-                        <td className="px-4 py-3 text-gray-600">{t.description}</td>
+                        <td className="px-4 py-3 text-gray-600">{t.lpoNo || "-"}</td>
                         <td className="px-4 py-3 text-right font-medium text-blue-600">
                           {t.debit > 0 ? formatCurrency(t.debit) : "-"}
                         </td>
@@ -265,7 +267,15 @@ const StatementViewModal = ({ isOpen, onClose, statement, onExport, isExporting 
           </div>
           <div className="flex gap-3">
             <button
-              onClick={onExport}
+              onClick={onExportPDF}
+              disabled={isExportingPDF}
+              className="px-6 py-3 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl font-semibold hover:from-red-600 hover:to-rose-700 transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              {isExportingPDF ? <Loader2 size={20} className="animate-spin" /> : <FileDown size={20} />}
+              {isExportingPDF ? "Exporting..." : "Export PDF"}
+            </button>
+            <button
+              onClick={onExportExcel}
               disabled={isExporting}
               className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:from-green-600 hover:to-emerald-700 transition-all flex items-center gap-2 disabled:opacity-50"
             >
@@ -294,6 +304,7 @@ const StatementOfAccount = () => {
   const [statement, setStatement] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: "", type: "" });
 
@@ -349,7 +360,7 @@ const StatementOfAccount = () => {
   };
 
   // Export to Excel
-  const handleExport = async () => {
+  const handleExportExcel = async () => {
     if (!statement) return;
 
     setIsExporting(true);
@@ -357,10 +368,26 @@ const StatementOfAccount = () => {
       await exportStatementOfAccountExcel(statement);
       showToast("Excel exported successfully!", "success");
     } catch (error) {
-      console.error("Failed to export:", error);
+      console.error("Failed to export Excel:", error);
       showToast("Failed to export Excel", "error");
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  // Export to PDF
+  const handleExportPDF = async () => {
+    if (!statement) return;
+
+    setIsExportingPDF(true);
+    try {
+      await exportStatementOfAccountPDF(statement, axiosInstance);
+      showToast("PDF exported successfully!", "success");
+    } catch (error) {
+      console.error("Failed to export PDF:", error);
+      showToast("Failed to export PDF", "error");
+    } finally {
+      setIsExportingPDF(false);
     }
   };
 
@@ -575,7 +602,15 @@ const StatementOfAccount = () => {
                 <FileText size={20} /> View Statement
               </button>
               <button
-                onClick={handleExport}
+                onClick={handleExportPDF}
+                disabled={isExportingPDF}
+                className="px-6 py-3 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl font-semibold hover:from-red-600 hover:to-rose-700 transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {isExportingPDF ? <Loader2 size={20} className="animate-spin" /> : <FileDown size={20} />}
+                {isExportingPDF ? "Exporting..." : "Download PDF"}
+              </button>
+              <button
+                onClick={handleExportExcel}
                 disabled={isExporting}
                 className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:from-green-600 hover:to-emerald-700 transition-all flex items-center gap-2 disabled:opacity-50"
               >
@@ -592,8 +627,10 @@ const StatementOfAccount = () => {
         isOpen={showModal}
         onClose={() => setShowModal(false)}
         statement={statement}
-        onExport={handleExport}
+        onExportExcel={handleExportExcel}
+        onExportPDF={handleExportPDF}
         isExporting={isExporting}
+        isExportingPDF={isExportingPDF}
       />
     </div>
   );

@@ -157,6 +157,11 @@ const Sidebar = () => {
             to: "/purchase-order",
           },
           {
+            icon: <Truck strokeWidth={1.5} size={20} />,
+            text: "Goods Received Note",
+            to: "/goods-received-note",
+          },
+          {
             icon: <ShoppingCart strokeWidth={1.5} size={20} />,
             text: "Purchase Entry",
             to: "/approved-purchase",
@@ -573,7 +578,7 @@ const SidebarSection = React.memo(
 
         <div
           className={`overflow-hidden transition-all duration-500 ease-out ${
-            expanded && !isCollapsed ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+            expanded && !isCollapsed ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"
           }`}
         >
           <div className="ml-6 mt-2 space-y-1 border-l border-gray-200/50 pl-4">

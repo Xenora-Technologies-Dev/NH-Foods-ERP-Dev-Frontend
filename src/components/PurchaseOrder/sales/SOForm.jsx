@@ -664,7 +664,7 @@ const SOForm = React.memo(
                     </div>
                     <div className="col-span-2">
                       <label className="text-xs font-medium text-slate-600">Description</label>
-                      <input type="text" value={item.description || ''} onChange={(e) => handleItemChange(idx, "description", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"/>
+                      <input type="text" value={item.description || ''} onChange={(e) => handleItemChange(idx, "description", e.target.value)} title={item.description || ''} className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"/>
                     </div>
                     <div className="col-span-1">
                       <label className="text-xs font-medium text-slate-600">Purchase Price</label>

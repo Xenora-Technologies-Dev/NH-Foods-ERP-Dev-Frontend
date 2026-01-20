@@ -33,8 +33,9 @@ const PurchaseInvoiceView = ({
     logo: null,
     bankName: "NATIONAL BANK OF RAS AL KHAIMAH",
     accountNumber: "0333547283001",
-    accountName: "NAJM ALHUDA FOODSTUFF TRADING LLC S.O.C.C.",
+    accountName: "NAJM ALHUDA FOODSTUFF TRADING LLC S.O.C",
     ibanNumber: "AE410400000333547283001",
+    currency: "AED",
     swiftCode: "",
     branch: "",
   });
@@ -84,22 +85,32 @@ const PurchaseInvoiceView = ({
   const vendor = vendors.find((v) => v._id === po.vendorId) || {};
   const vendorTRN = vendor.trnNO || vendor.vatNumber || po.vendorTRN || "";
   const isApproved = po.status === "APPROVED";
+  
+  // Determine if this is a GRN-based entry
+  const isGRNEntry = po.entryType === "GRN" || po.sourceGrnId || po.grnNumber;
+  const grnNumber = po.grnNumber || po.sourceGrnNumber || null;
+  const poNumber = po.poNumber || po.orderNumber || po.transactionNo;
 
   // invoice meta: not editable in UI (display-only)
   const [invoiceMeta, setInvoiceMeta] = useState({
     // Prefer explicit vendorReference, then refNo, fallback '-'
     reference: (po.vendorReference ?? po.refNo ?? '-') || '-',
-    // Always show only PO number without INV suffix
-    poNo: po.transactionNo || po.displayTransactionNo || '',
+    // For GRN entries: show GRN number as Entry No, for legacy: show PO number
+    entryNo: isGRNEntry ? grnNumber : (po.transactionNo || po.displayTransactionNo || ''),
+    poNo: poNumber,
     paymentTerms: vendor.paymentTerms || "COD",
   });
 
   useEffect(() => {
+    const isGRN = po.entryType === "GRN" || po.sourceGrnId || po.grnNumber;
+    const grn = po.grnNumber || po.sourceGrnNumber || null;
+    const poNum = po.poNumber || po.orderNumber || po.transactionNo;
+    
     setInvoiceMeta((m) => ({
       ...m,
       reference: (po.vendorReference ?? po.refNo ?? m.reference ?? '-') || '-',
-      // Show PO number only; do not append invoice number into PO No field
-      poNo: po.transactionNo || po.displayTransactionNo || m.poNo || '',
+      entryNo: isGRN ? grn : (po.transactionNo || po.displayTransactionNo || m.entryNo || ''),
+      poNo: poNum,
       paymentTerms: vendor.paymentTerms || m.paymentTerms || "COD",
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -217,14 +228,12 @@ const handleConvertToInvoice = async () => {
               <Printer className="w-4 h-4" /> Print
             </button>
             {/* <button onClick={() => alert("Sent")} className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"><Send className="w-4 h-4" /> Send</button> */}
+            {/* Note: Convert to Purchase Entry now happens through GRN (Goods Received Note) */}
             {po.status !== "APPROVED" && (
-  <button
-    onClick={handleConvertToInvoice}
-    className="flex items-center gap-2 px-5 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
-  >
-    Convert to Purchase Entry
-  </button>
-)}
+              <div className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded text-sm">
+                To create Purchase Entry, use GRN (Goods Received Note)
+              </div>
+            )}
           </div>
         </div>
 
@@ -306,12 +315,18 @@ const handleConvertToInvoice = async () => {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ textAlign: "left", minWidth: 120 }}>
                   <div style={{ fontWeight: 700 }}>Date:</div>
+                  {isGRNEntry && (
+                    <div style={{ fontWeight: 700, marginTop: 6 }}>GRN No</div>
+                  )}
                   <div style={{ fontWeight: 700, marginTop: 6 }}>PO No</div>
-                  <div style={{ fontWeight: 700, marginTop: 6 }}>Reference</div>
+                  <div style={{ fontWeight: 700, marginTop: 6 }}>Inv No</div>
                   <div style={{ fontWeight: 700, marginTop: 6 }}>Payment Terms</div>
                 </div>
                 <div style={{ textAlign: "right", minWidth: 140 }}>
                   <div style={{ marginTop: 0 }}>{formatDateGB(po.date)}</div>
+                  {isGRNEntry && (
+                    <div style={{ marginTop: 6 }}>{invoiceMeta.entryNo}</div>
+                  )}
                   <div style={{ marginTop: 6 }}>{invoiceMeta.poNo}</div>
                   <div style={{ marginTop: 6 }}>{invoiceMeta.reference || '-'}</div>
                   <div style={{ marginTop: 6 }}>{invoiceMeta.paymentTerms}</div>

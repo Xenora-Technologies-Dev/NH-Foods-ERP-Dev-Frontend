@@ -86,8 +86,8 @@ export const exportStatementOfAccountExcel = (statement) => {
   mainData.push([
     'Date',
     'Type',
-    'Reference',
-    'Description',
+    'Invoice #',
+    'LPO No',
     `Debit (${CURRENCY})`,
     `Credit (${CURRENCY})`,
     `Balance (${CURRENCY})`,
@@ -100,7 +100,7 @@ export const exportStatementOfAccountExcel = (statement) => {
       formatDate(t.date),
       t.type || '',
       t.reference || '',
-      t.description || '',
+      t.lpoNo || '-',
       t.debit > 0 ? formatNumber(t.debit) : '',
       t.credit > 0 ? formatNumber(t.credit) : '',
       formatNumber(t.balance),
@@ -139,8 +139,8 @@ export const exportStatementOfAccountExcel = (statement) => {
   mainWs['!cols'] = [
     { wch: 15 },  // Date
     { wch: 18 },  // Type
-    { wch: 20 },  // Reference
-    { wch: 35 },  // Description
+    { wch: 22 },  // Invoice #
+    { wch: 22 },  // LPO No
     { wch: 15 },  // Debit
     { wch: 15 },  // Credit
     { wch: 15 },  // Balance

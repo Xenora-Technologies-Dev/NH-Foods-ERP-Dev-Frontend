@@ -708,14 +708,14 @@ const POForm = React.memo(
 
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Reference
+                    Invoice Number
                   </label>
                   <input
                     type="text"
                     name="vendorReference"
                     value={formData.vendorReference || ""}
                     onChange={handleInputChange}
-                    placeholder="Enter reference"
+                    placeholder="Enter invoice number"
                     className={`w-full px-4 py-3 bg-white rounded-xl border ${
                       formErrors.vendorReference
                         ? "border-red-500"
@@ -771,7 +771,7 @@ const POForm = React.memo(
                         <p>{vendor.email}</p>
                         <p>VAT: {vendor.vatNumber}</p>
                         <p>Terms: {vendor.paymentTerms}</p>
-                        <p>Reference: {formData.vendorReference || "N/A"}</p>
+                        <p>Invoice No: {formData.vendorReference || "N/A"}</p>
                       </div>
                     ) : (
                       <p className="text-slate-500 italic">Vendor not found</p>
@@ -886,6 +886,7 @@ const POForm = React.memo(
                           handleItemChange(index, "description", e.target.value)
                         }
                         placeholder="Description"
+                        title={item.description || ""}
                         className="w-full px-4 py-3 bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                       />
                     </div>

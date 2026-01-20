@@ -50,8 +50,11 @@ const GridView = ({
                 />
                 <div>
                   <h3 className="text-lg font-bold text-slate-800">
-                    {po.transactionNo}
+                    {po.grnNumber || po.transactionNo}
                   </h3>
+                  {po.poNumber && po.poNumber !== po.grnNumber && (
+                    <p className="text-xs text-slate-500">PO: {po.poNumber}</p>
+                  )}
                   <p className="text-sm text-slate-600">{po.vendorName}</p>
                 </div>
               </div>

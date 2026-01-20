@@ -99,9 +99,49 @@ const PurchaseOrderManagement = () => {
     priority: "Medium",
   });
 
+  // Initial load - fetch vendors and stock in parallel for faster loading
   useEffect(() => {
-    fetchVendors();
-    fetchStockItems();
+    const initializeData = async () => {
+      setIsLoading(true);
+      try {
+        // Fetch vendors and stock items in parallel (they don't depend on each other)
+        const [vendorsRes, stockRes] = await Promise.all([
+          axiosInstance.get("/vendors/vendors"),
+          axiosInstance.get("/stock/stock"),
+        ]);
+        
+        setVendors(vendorsRes.data?.data || []);
+        
+        const stocks = stockRes.data?.data?.stocks || stockRes.data?.data || [];
+        setStockItems(
+          stocks.map((i) => ({
+            _id: i._id,
+            itemId: i.itemId,
+            itemName: i.itemName,
+            sku: i.sku,
+            category: i.category,
+            unitOfMeasure: i.unitOfMeasure,
+            currentStock: i.currentStock,
+            purchasePrice: i.purchasePrice,
+            salesPrice: i.salesPrice,
+            reorderLevel: i.reorderLevel,
+            status: i.status,
+            brand: i.brand,
+            origin: i.origin,
+            expiryDate: i.expiryDate,
+          }))
+        );
+      } catch (e) {
+        addNotification(
+          `Data load error: ${e.response?.data?.message || e.message}`,
+          "error"
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    initializeData();
     fetchTransactions();
   }, []);
 
@@ -119,7 +159,6 @@ const PurchaseOrderManagement = () => {
   }, [debouncedSearchTerm, statusFilter, vendorFilter, dateFilter]);
 
   const fetchVendors = async () => {
-    setIsLoading(true);
     try {
       const { data } = await axiosInstance.get("/vendors/vendors");
       setVendors(data.data || []);
@@ -128,13 +167,10 @@ const PurchaseOrderManagement = () => {
         `Vendors load error: ${e.response?.data?.message || e.message}`,
         "error"
       );
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const fetchStockItems = async () => {
-    setIsLoading(true);
     try {
       const { data } = await axiosInstance.get("/stock/stock");
       const stocks = data.data?.stocks || data.data || [];
@@ -161,8 +197,6 @@ const PurchaseOrderManagement = () => {
         `Stock load error: ${e.response?.data?.message || e.message}`,
         "error"
       );
-    } finally {
-      setIsLoading(false);
     }
   };
 
