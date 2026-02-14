@@ -10,9 +10,13 @@ import {
   ArrowLeft,
   Hash,
   AlertCircle,
+  Eye,
+  RotateCcw,
 } from "lucide-react";
 import Select from "react-select";
 import { getSequencePreview, saveOrder, updateOrder } from '../../../axios/sequence';
+import axiosInstance from "../../../axios/axios";
+import PriceHistoryModal from "../shared/PriceHistoryModal";
 
 const SOForm = React.memo(
   ({
@@ -59,6 +63,10 @@ const SOForm = React.memo(
       const [previewLoading, setPreviewLoading] = useState(false);
       const [saveLoading, setSaveLoading] = useState(false);
       const [conflict, setConflict] = useState(false);
+      // Price history modal state
+      const [priceHistoryOpen, setPriceHistoryOpen] = useState(false);
+      const [priceHistoryItemId, setPriceHistoryItemId] = useState("");
+      const [priceHistoryItemName, setPriceHistoryItemName] = useState("");
       // Compute yearMonth from formData.date (YYYY-MM-DD)
       const yearMonth = (formData.date || "").replace(/-/g, "").slice(0,6);
 
@@ -103,11 +111,13 @@ const SOForm = React.memo(
             const updates = {};
             if (!prev.refNo) {
               const lpo = selectedSO.refNo || selectedSO.lpoNo || selectedSO.lpo || selectedSO.reference;
-              if (lpo) updates.refNo = lpo;
+              // Don't re-seed '-' placeholder from DB
+              if (lpo && lpo !== '-') updates.refNo = lpo;
             }
             if (!prev.docNo) {
               const doc = selectedSO.docNo || selectedSO.documentNo || selectedSO.docNumber;
-              if (doc) updates.docNo = doc;
+              // Don't re-seed '-' placeholder from DB
+              if (doc && doc !== '-') updates.docNo = doc;
             }
             return Object.keys(updates).length ? { ...prev, ...updates } : prev;
           });
@@ -188,28 +198,48 @@ const SOForm = React.memo(
         const items = [...formData.items];
         const currentItem = { ...items[index], [field]: value };
 
-        // If item ID changes, populate details from stock
+        // If item ID changes, populate details from stock and fetch last purchase price
         if (field === "itemId") {
           const stock = stockItems.find((s) => s._id === value);
           if (stock) {
             currentItem.description = stock.itemName;
-            currentItem.rate = (stock.salesPrice || 0).toString(); // 'rate' in form is per-unit price
+            currentItem.itemCode = stock.itemId || "";
+            currentItem.rate = (stock.salesPrice || 0).toString();
             currentItem.purchasePrice = (stock.purchasePrice || 0).toString();
             currentItem.vatPercent = (stock.taxPercent || 5).toString();
-            // capture current stock for display
             currentItem.currentStock = typeof stock.currentStock === 'number' ? stock.currentStock : 0;
-            // currentItem.package = "1";
+            currentItem.uom = stock.unitOfMeasure?.shortCode || stock.unitOfMeasure?.unitName || "";
             if (stock.currentStock <= stock.reorderLevel) {
               addNotification(`Low stock warning: ${stock.itemName}`, "warning");
             }
+            // Fetch last purchase price from transaction history
+            axiosInstance.get(`/stock/stock/${value}/price-history`)
+              .then((res) => {
+                const lastPrice = res.data?.data?.lastPurchasePrice;
+                if (lastPrice && lastPrice > 0) {
+                  setFormData((prev) => {
+                    const updatedItems = [...prev.items];
+                    if (updatedItems[index]) {
+                      updatedItems[index] = { ...updatedItems[index], purchasePrice: lastPrice.toString() };
+                    }
+                    return { ...prev, items: updatedItems };
+                  });
+                }
+              })
+              .catch(() => {});
           } else {
-            // Reset if item is cleared
+            // Reset ALL fields when item is cleared
             currentItem.description = "";
+            currentItem.itemCode = "";
             currentItem.rate = "0.00";
             currentItem.purchasePrice = "0.00";
             currentItem.vatPercent = "5";
             currentItem.currentStock = 0;
-            // currentItem.package = "1";
+            currentItem.uom = "";
+            currentItem.qty = "";
+            currentItem.subtotal = "0.00";
+            currentItem.vatAmount = "0.00";
+            currentItem.lineTotal = "0.00";
           }
         }
 
@@ -241,7 +271,7 @@ const SOForm = React.memo(
           ...prev.items,
           {
             itemId: "", description: "", purchasePrice: "0.00",
-            rate: "", qty: "", vatPercent: "5",
+            rate: "", qty: "", vatPercent: "5", uom: "",
             subtotal: "0.00", vatAmount: "0.00", lineTotal: "0.00",
           },
         ],
@@ -324,7 +354,8 @@ const SOForm = React.memo(
           const vat = subtotal * (vatPct / 100);
           const grandTotal = subtotal + vat;
           const stock = stockItems.find(s => String(s._id) === String(i.itemId));
-          const itemCode = i.itemCode || stock?.itemId || stock?.itemCode || i.itemCode || "";
+          // FIX: Always prefer the authoritative stock code over any stale item.itemCode
+          const itemCode = stock?.itemId || i.itemCode || "";
           return {
             itemId: i.itemId,
             itemCode,
@@ -339,12 +370,9 @@ const SOForm = React.memo(
           };
         });
       // Build transaction payload matching backend expectations
-      // Normalize optional references: save '-' if empty
-      const refNoSanitized = (formData.refNo || '').trim() || '-';
-      const docNoSanitized = (formData.docNo || '').trim() || '-';
-      if (refNoSanitized !== formData.refNo || docNoSanitized !== formData.docNo) {
-        setFormData(prev => ({ ...prev, refNo: refNoSanitized, docNo: docNoSanitized }));
-      }
+      // Normalize optional references: keep empty string if not provided (no '-' placeholder)
+      const refNoSanitized = (formData.refNo || '').trim();
+      const docNoSanitized = (formData.docNo || '').trim();
 
       // Infer manual if toggle is on OR existing number doesn't match auto pattern in edit
       const autoPattern = /^SO\d{6}-\d{5}$/i;
@@ -446,31 +474,42 @@ const SOForm = React.memo(
     }, [isEditing, setFormData]);
 
     // --- UI with badges/tooltips for preview/manual ---
+    // Clear all form handler
+    const handleClearAll = useCallback(() => {
+      resetForm();
+      addNotification("Form cleared", "info");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, [resetForm, addNotification]);
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        {/* Price History Modal */}
+        <PriceHistoryModal
+          isOpen={priceHistoryOpen}
+          onClose={() => setPriceHistoryOpen(false)}
+          itemId={priceHistoryItemId}
+          itemName={priceHistoryItemName}
+          contextType="sales"
+        />
         <div className="bg-white/80 backdrop-blur-xl shadow-xl border-b border-gray-200/50">
-          <div className="px-8 py-6 flex justify-between items-center">
-            <div className="flex items-center space-x-4">
-              <button onClick={() => { setActiveView("list"); resetForm(); }} className="flex items-center space-x-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700">
-                <ArrowLeft className="w-4 h-4" /> <span>Back</span>
+          <div className="px-4 sm:px-8 py-4 sm:py-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="flex items-center space-x-3 sm:space-x-4">
+              <button onClick={() => { setActiveView("list"); resetForm(); }} className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 active:scale-95 transition-all min-h-[44px]">
+                <ArrowLeft className="w-4 h-4" /> <span className="hidden sm:inline">Back</span>
               </button>
               <div>
-                <h1 className="text-3xl font-bold text-slate-800">
+                <h1 className="text-xl sm:text-3xl font-bold text-slate-800">
                   {isEditing ? "Edit Sales Order" : "Create Sales Order"}
                 </h1>
-                <p className="text-slate-600">Fill in all required fields</p>
-                  
+                <p className="text-sm text-slate-600 hidden sm:block">Fill in all required fields</p>
+              </div>
             </div>
-            <button onClick={saveSO} className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 shadow-lg disabled:opacity-60" disabled={saveLoading} aria-busy={saveLoading} aria-label="Save Sales Order">
-              {saveLoading ? <span className="loader mr-2" aria-label="Saving..." /> : <Save className="w-5 h-5" />}
-              <span>{isEditing ? "Update SO" : "Save SO"}</span>
-            </button>
           </div>
         </div>
 
-        <div className="p-8">
-          <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200/50 shadow-2xl p-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div className="p-3 sm:p-8">
+          <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200/50 shadow-2xl p-4 sm:p-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-6 sm:mb-8">
               <div className="space-y-6">
                 {/* SO Number with optional Manual toggle (create mode) */}
                 <div>
@@ -590,7 +629,7 @@ const SOForm = React.memo(
                     <input
                       type="text"
                       name="refNo"
-                      value={formData.refNo || selectedSO?.refNo || selectedSO?.lpono || selectedSO?.lpoNo || selectedSO?.lpo || selectedSO?.reference || ''}
+                      value={formData.refNo ?? ''}
                       onChange={handleInputChange}
                       placeholder="Enter LPO/Reference No"
                       className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -601,7 +640,7 @@ const SOForm = React.memo(
                     <input
                       type="text"
                       name="docNo"
-                      value={formData.docNo || selectedSO?.docNo || selectedSO?.docno || selectedSO?.documentNo || selectedSO?.docNumber || ''}
+                      value={formData.docNo ?? ''}
                       onChange={handleInputChange}
                       placeholder="Enter Document No"
                       className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -656,13 +695,27 @@ const SOForm = React.memo(
 
               <div className="space-y-4">
                 {formData.items.map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-6 gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
-                    <div className="col-span-2">
+                  <div key={idx} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                    <div className="col-span-2 sm:col-span-2">
                       <label className="text-xs font-medium text-slate-600">Item</label>
-                      <Select options={itemOptions} value={itemOptions.find(o => o.value === item.itemId) || null} onChange={(opt) => handleItemChange(idx, "itemId", opt ? opt.value : "")} placeholder="Select Item..." isSearchable styles={{control: b => ({...b, fontSize: "0.875rem", minHeight: "38px", borderRadius: "0.5rem", border: formErrors[`itemId_${idx}`] ? "2px solid #ef4444" : "1px solid #e2e8f0"})}}/>
+                      <div className="flex items-center gap-1">
+                        <div className="flex-1">
+                          <Select options={itemOptions} value={itemOptions.find(o => o.value === item.itemId) || null} onChange={(opt) => handleItemChange(idx, "itemId", opt ? opt.value : "")} placeholder="Select Item..." isSearchable isClearable styles={{control: b => ({...b, fontSize: "0.875rem", minHeight: "38px", borderRadius: "0.5rem", border: formErrors[`itemId_${idx}`] ? "2px solid #ef4444" : "1px solid #e2e8f0"})}}/>
+                        </div>
+                        {item.itemId && (
+                          <button
+                            type="button"
+                            onClick={() => { setPriceHistoryItemId(item.itemId); setPriceHistoryItemName(item.description || ''); setPriceHistoryOpen(true); }}
+                            className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-all duration-150 shadow-sm hover:shadow" title="View recent sales & purchase prices"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">History</span>
+                          </button>
+                        )}
+                      </div>
                       {formErrors[`itemId_${idx}`] && <p className="text-red-500 text-xs mt-1">{formErrors[`itemId_${idx}`]}</p>}
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-2 sm:col-span-2">
                       <label className="text-xs font-medium text-slate-600">Description</label>
                       <input type="text" value={item.description || ''} onChange={(e) => handleItemChange(idx, "description", e.target.value)} title={item.description || ''} className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"/>
                     </div>
@@ -671,21 +724,24 @@ const SOForm = React.memo(
                       <input type="text" value={item.purchasePrice || '0.00'} readOnly className="w-full px-3 py-2 text-sm bg-slate-100 border border-slate-300 rounded-lg cursor-not-allowed"/>
                     </div>
                     <div className="col-span-1">
-                      <label className="text-xs font-medium text-slate-600">Sales Price</label>
-                      <input type="number" value={item.rate || ''} onChange={(e) => handleItemChange(idx, "rate", e.target.value)} min="0" step="0.01" className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 ${formErrors[`rate_${idx}`] ? "border-red-500" : "border-slate-300"}`}/>
-                      {formErrors[`rate_${idx}`] && <p className="text-red-500 text-xs mt-1">{formErrors[`rate_${idx}`]}</p>}
-                    </div>
-                    <div className="col-span-1">
                       <label className="text-xs font-medium text-slate-600">Quantity</label>
                       <input type="number" value={item.qty || ''} onChange={(e) => handleItemChange(idx, "qty", e.target.value)} min="0" step="0.01" className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 ${formErrors[`qty_${idx}`] ? "border-red-500" : "border-slate-300"}`}/>
                       {formErrors[`qty_${idx}`] && <p className="text-red-500 text-xs mt-1">{formErrors[`qty_${idx}`]}</p>}
+                    </div>
+                    <div className="col-span-1">
+                      <label className="text-xs font-medium text-slate-600">UOM</label>
+                      <input type="text" value={item.uom || ""} readOnly className="w-full px-3 py-2 text-sm bg-slate-100 border border-slate-300 rounded-lg cursor-not-allowed"/>
+                    </div>
+                    <div className="col-span-1">
+                      <label className="text-xs font-medium text-slate-600">Sales Price</label>
+                      <input type="number" value={item.rate || ''} onChange={(e) => handleItemChange(idx, "rate", e.target.value)} min="0" step="0.01" className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 ${formErrors[`rate_${idx}`] ? "border-red-500" : "border-slate-300"}`}/>
+                      {formErrors[`rate_${idx}`] && <p className="text-red-500 text-xs mt-1">{formErrors[`rate_${idx}`]}</p>}
                     </div>
                     <div className="col-span-1">
                       <label className="text-xs font-medium text-slate-600">Current stock</label>
                       <input type="text" value={(item.currentStock ?? 0).toString()} readOnly className="w-full px-3 py-2 text-sm bg-slate-100 border border-slate-300 rounded-lg cursor-not-allowed"/>
                     </div>
                     
-                    {/* FIX: Bind these inputs to the state fields calculated in handleItemChange */}
                     <div className="col-span-1">
                       <label className="text-xs font-medium text-slate-600">Total</label>
                       <input type="text" value={item.subtotal || '0.00'} readOnly className="w-full px-3 py-2 text-sm bg-slate-100 border border-slate-300 rounded-lg cursor-not-allowed"/>
@@ -710,9 +766,31 @@ const SOForm = React.memo(
                 ))}
               </div>
             </div>
+
+            {/* Save and Clear All buttons at bottom */}
+            <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-slate-200 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3">
+              {!isEditing && (
+                <button
+                  onClick={handleClearAll}
+                  className="flex items-center justify-center space-x-2 px-5 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors border border-slate-300 active:scale-95 min-h-[48px]"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Clear All</span>
+                </button>
+              )}
+              <button
+                onClick={saveSO}
+                disabled={saveLoading}
+                className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 shadow-lg disabled:opacity-60 active:scale-95 min-h-[48px]"
+                aria-busy={saveLoading}
+                aria-label="Save Sales Order"
+              >
+                {saveLoading ? <span className="loader mr-2" aria-label="Saving..." /> : <Save className="w-5 h-5" />}
+                <span>{isEditing ? "Update SO" : "Save SO"}</span>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
       </div>
     );
   },

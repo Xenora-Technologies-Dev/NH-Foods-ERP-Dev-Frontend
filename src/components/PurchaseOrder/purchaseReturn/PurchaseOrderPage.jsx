@@ -39,11 +39,13 @@ import {
   Users,
   Archive,
 } from "lucide-react";
-import axiosInstance from "../../../axios/axios"; // Import the configured Axios instance
+import axiosInstance from "../../../axios/axios";
 import POForm from "./POForm";
 import TableView from "./TableView";
 import GridView from "./GridView";
 import InvoiceView from "./InvoiceView";
+import { useVendorList, useStockList } from "../../../hooks/useDataFetching";
+import { PageListSkeleton, RefetchIndicator } from "../../ui/Skeletons";
 
 const PurchaseReturnOrderManagement = () => {
   const [activeView, setActiveView] = useState("dashboard"); // dashboard, list, create, edit, invoice
@@ -60,8 +62,12 @@ const PurchaseReturnOrderManagement = () => {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [notifications, setNotifications] = useState([]);
   const [selectedPOs, setSelectedPOs] = useState([]);
-  const [vendors, setVendors] = useState([]);
-  const [stockItems, setStockItems] = useState([]);
+  // ── Cached data via React Query (shared across all pages) ──
+  const { data: vendorData, isLoading: vendorsLoading, isFetching: vendorsFetching } = useVendorList();
+  const { data: stockData, isLoading: stockLoading, isFetching: stockFetching } = useStockList();
+  const vendors = useMemo(() => vendorData?.items || [], [vendorData]);
+  const stockItems = useMemo(() => stockData?.items || [], [stockData]);
+
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [formErrors, setFormErrors] = useState({});
@@ -88,10 +94,8 @@ const PurchaseReturnOrderManagement = () => {
     priority: "Medium",
   });
 
-  // Fetch vendors, stock items, and transactions on component mount
+  // Fetch transactions on mount (vendors & stock from React Query cache)
   useEffect(() => {
-    fetchVendors();
-    fetchStockItems();
     fetchTransactions();
   }, []);
 
@@ -108,58 +112,7 @@ const PurchaseReturnOrderManagement = () => {
     fetchTransactions();
   }, [debouncedSearchTerm, statusFilter, vendorFilter, dateFilter]);
 
-  // Fetch vendors from backend
-  const fetchVendors = async () => {
-    setIsLoading(true);
-    try {
-      const response = await axiosInstance.get("/vendors/vendors");
-      console.log("Vendors Response:", response.data); // Debug
-      setVendors(response.data.data || []);
-    } catch (error) {
-      console.error("Fetch Vendors Error:", error);
-      addNotification(
-        "Failed to fetch vendors: " +
-          (error.response?.data?.message || error.message),
-        "error"
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Fetch stock items from backend
-  const fetchStockItems = async () => {
-    setIsLoading(true);
-    try {
-      const response = await axiosInstance.get("/stock/stock");
-      console.log("Stock Items Response:", response.data); // Debug
-      const stocks = response.data.data?.stocks || response.data.data || [];
-      setStockItems(
-        stocks.map((item) => ({
-          _id: item._id,
-          itemId: item.itemId,
-          itemName: item.itemName,
-          sku: item.sku,
-          category: item.category,
-          unitOfMeasure: item.unitOfMeasure,
-          currentStock: item.currentStock,
-          purchasePrice: item.purchasePrice,
-          salesPrice: item.salesPrice,
-          reorderLevel: item.reorderLevel,
-          status: item.status,
-        }))
-      );
-    } catch (error) {
-      console.error("Fetch Stock Items Error:", error);
-      addNotification(
-        "Failed to fetch stock items: " +
-          (error.response?.data?.message || error.message),
-        "error"
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Vendors and stock items are now provided by React Query hooks above
 
   // Fetch transactions from backend
   const fetchTransactions = async () => {
@@ -244,6 +197,7 @@ const PurchaseReturnOrderManagement = () => {
       "Purchase Return Order saved successfully! Showing invoice...",
       "success"
     );
+    window.scrollTo({ top: 0, behavior: "smooth" });
     setTimeout(resetForm, 0); // Delay to ensure state updates
   };
 
@@ -1074,10 +1028,9 @@ const PurchaseReturnOrderManagement = () => {
       </div>
 
       <div className="p-8">
-        {isLoading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-          </div>
+        {(vendorsFetching || stockFetching) && <RefetchIndicator />}
+        {(vendorsLoading || stockLoading || isLoading) ? (
+          <PageListSkeleton rows={6} />
         ) : (
           <>
             {activeView === "dashboard" && <Dashboard />}

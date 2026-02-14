@@ -9,10 +9,13 @@ import {
   Save,
   ArrowLeft,
   Hash,
+  Eye,
+  RotateCcw,
 } from "lucide-react";
 import Select from "react-select";
 import axiosInstance from "../../../axios/axios";
 import { getSequencePreview, saveOrder, updateOrder } from '../../../axios/sequence';
+import PriceHistoryModal from "../shared/PriceHistoryModal";
 
 // FIX: Refined memoization to prevent unnecessary re-renders.
 // By moving the comparator function outside, it's not recreated on every render.
@@ -55,6 +58,10 @@ const POForm = React.memo(
     const [previewLoading, setPreviewLoading] = useState(false);
     const [saveLoading, setSaveLoading] = useState(false);
     const [conflict, setConflict] = useState(false);
+    // Price history modal state
+    const [priceHistoryOpen, setPriceHistoryOpen] = useState(false);
+    const [priceHistoryItemId, setPriceHistoryItemId] = useState("");
+    const [priceHistoryItemName, setPriceHistoryItemName] = useState("");
     // Compute yearMonth from formData.date (YYYY-MM-DD)
     const yearMonth = (formData.date || "").replace(/-/g, "").slice(0,6);
 
@@ -89,6 +96,22 @@ const POForm = React.memo(
     const totals = useMemo(() => {
       return calculateTotals(formData.items);
     }, [formData.items, calculateTotals]);
+
+    // Discount & Roundoff logic
+    const effectiveDiscount = useMemo(() => {
+      const d = parseFloat(formData.discount) || 0;
+      const tot = parseFloat(totals.total) || 0;
+      return Math.min(Math.max(d, 0), tot);
+    }, [formData.discount, totals.total]);
+
+    const effectiveRoundoff = useMemo(() => {
+      return parseFloat(formData.roundoff) || 0;
+    }, [formData.roundoff]);
+
+    const totalsAfterAdjustments = useMemo(() => {
+      const tot = parseFloat(totals.total) || 0;
+      return Math.max(0, tot - effectiveDiscount + effectiveRoundoff).toFixed(2);
+    }, [totals.total, effectiveDiscount, effectiveRoundoff]);
 
     const generatePONumber = useCallback(() => {
         const date = new Date();
@@ -180,25 +203,52 @@ const POForm = React.memo(
         // Update the field that was changed
         currentItem[field] = value;
 
-        // If the item ID changes, populate details from stock
+        // If the item ID changes, populate details from stock and fetch last purchase price
         if (field === "itemId") {
           const stockItem = stockItems.find((i) => i._id === value);
           if (stockItem) {
             currentItem.description = stockItem.itemName;
+            currentItem.itemCode = stockItem.itemId || "";
             currentItem.brand = stockItem.brand || "";
             currentItem.origin = stockItem.origin || "";
+            currentItem.uom = stockItem.unitOfMeasure?.shortCode || stockItem.unitOfMeasure?.unitName || "";
             currentItem.vatPercent = (stockItem.vatPercent !== undefined ? stockItem.vatPercent : 5).toString();
-            // Only set purchase price if not already set, to avoid overwriting a manual entry
-            if (!currentItem.currentPurchasePrice || parseFloat(currentItem.currentPurchasePrice) === 0) {
-              currentItem.currentPurchasePrice = (stockItem.purchasePrice || 0).toString();
-            }
-            // Always update the system price for reference
+            // Set initial purchase price from stock
+            currentItem.currentPurchasePrice = (stockItem.purchasePrice || 0).toString();
             currentItem.purchasePrice = stockItem.purchasePrice || 0;
+            // Fetch last purchase price from transaction history
+            axiosInstance.get(`/stock/stock/${value}/price-history`)
+              .then((res) => {
+                const lastPrice = res.data?.data?.lastPurchasePrice;
+                if (lastPrice && lastPrice > 0) {
+                  setFormData((prev) => {
+                    const updatedItems = [...prev.items];
+                    if (updatedItems[index]) {
+                      updatedItems[index] = {
+                        ...updatedItems[index],
+                        purchasePrice: lastPrice,
+                        currentPurchasePrice: lastPrice.toString(),
+                      };
+                    }
+                    return { ...prev, items: updatedItems };
+                  });
+                }
+              })
+              .catch(() => {});
           } else {
-            // Reset fields if item is cleared
+            // Reset ALL fields when item is cleared
             currentItem.description = "";
+            currentItem.itemCode = "";
             currentItem.brand = "";
             currentItem.origin = "";
+            currentItem.uom = "";
+            currentItem.qty = "";
+            currentItem.currentPurchasePrice = "";
+            currentItem.purchasePrice = 0;
+            currentItem.vatPercent = "5";
+            currentItem.total = "0.00";
+            currentItem.vatAmount = "0.00";
+            currentItem.grandTotal = "0.00";
           }
         }
         
@@ -243,7 +293,7 @@ const POForm = React.memo(
           {
             itemId: "", description: "", qty: "",
             purchasePrice: 0, currentPurchasePrice: "", vatPercent: "5",
-            brand: "", origin: "", total: "0.00", vatAmount: "0.00", grandTotal: "0.00",
+            brand: "", origin: "", uom: "", total: "0.00", vatAmount: "0.00", grandTotal: "0.00",
           },
         ],
       }));
@@ -318,7 +368,8 @@ const POForm = React.memo(
           const vatAmount = lineSubtotal * (vatPercent / 100);
           const grandTotal = lineSubtotal + vatAmount;
           const stock = stockItems.find(s => String(s._id) === String(item.itemId));
-          const itemCode = item.itemCode || stock?.itemId || stock?.itemCode || item.itemCode || "";
+          // FIX: Always prefer the authoritative stock code over any stale item.itemCode
+          const itemCode = stock?.itemId || item.itemCode || "";
           return {
             itemId: item.itemId,
             itemCode,
@@ -336,6 +387,9 @@ const POForm = React.memo(
           };
         });
       // Build transaction payload matching backend expectations
+      const discountVal = parseFloat(formData.discount) || 0;
+      const roundoffVal = parseFloat(formData.roundoff) || 0;
+      const adjustedTotal = Math.max(0, parseFloat(finalTotals.total) - discountVal + roundoffVal);
       const transactionPayload = {
         transactionNo: poNumber,
         type: "purchase_order",
@@ -344,7 +398,9 @@ const POForm = React.memo(
         date: formData.date,
         deliveryDate: formData.deliveryDate,
         status: formData.status,
-        totalAmount: parseFloat(finalTotals.total),
+        totalAmount: parseFloat(adjustedTotal.toFixed(2)),
+        discount: discountVal,
+        roundoff: roundoffVal,
         vendorReference: formData.vendorReference,
         notes: formData.notes,
         partyName: (vendors.find((v) => v._id === formData.partyId)?.vendorName) || formData.partyName || "",
@@ -506,51 +562,57 @@ const POForm = React.memo(
       }
     }, [isEditing, selectedPO, stockItems]);
 
+    // Clear all form handler
+    const handleClearAll = useCallback(() => {
+      resetForm();
+      addNotification("Form cleared", "info");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, [resetForm, addNotification]);
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        {/* Price History Modal */}
+        <PriceHistoryModal
+          isOpen={priceHistoryOpen}
+          onClose={() => setPriceHistoryOpen(false)}
+          itemId={priceHistoryItemId}
+          itemName={priceHistoryItemName}
+          contextType="purchase"
+        />
         <div className="relative bg-white/80 backdrop-blur-xl shadow-xl border-b border-gray-200/50">
-          <div className="px-8 py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
+          <div className="px-4 sm:px-8 py-4 sm:py-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center space-x-3 sm:space-x-4">
                 <button
                   onClick={() => {
                     setActiveView("list");
                     resetForm();
                   }}
-                  className="flex items-center space-x-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors"
+                  className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors active:scale-95 min-h-[44px]"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  <span>Back</span>
+                  <span className="hidden sm:inline">Back</span>
                 </button>
                 <div>
-                  <h1 className="text-3xl font-bold text-slate-800">
+                  <h1 className="text-xl sm:text-3xl font-bold text-slate-800">
                     {isEditing
                       ? "Edit Purchase Order"
                       : "Create Purchase Order"}
                   </h1>
-                  <p className="text-slate-600 mt-1">
+                  <p className="text-sm text-slate-600 mt-1 hidden sm:block">
                     {isEditing
                       ? "Update purchase order details"
                       : "Create a new purchase order"}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={savePO}
-                  className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 shadow-lg"
-                >
-                  <Save className="w-5 h-5" />
-                  <span>{isEditing ? "Update PO" : "Save PO"}</span>
-                </button>
-              </div>
             </div>
           </div>
         </div>
 
-        <div className="p-8">
-          <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200/50 shadow-2xl p-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="p-3 sm:p-8">
+          <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200/50 shadow-2xl p-4 sm:p-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
               <div className="space-y-6">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">
@@ -744,6 +806,33 @@ const POForm = React.memo(
                     className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent h-24 resize-none"
                   />
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Discount (AED)</label>
+                    <input
+                      type="number"
+                      name="discount"
+                      min="0"
+                      step="0.01"
+                      value={formData.discount || ""}
+                      onChange={handleInputChange}
+                      placeholder="0.00"
+                      className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Round Off (AED)</label>
+                    <input
+                      type="number"
+                      name="roundoff"
+                      step="0.01"
+                      value={formData.roundoff || ""}
+                      onChange={handleInputChange}
+                      placeholder="0.00"
+                      className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-6 border border-slate-200">
@@ -796,17 +885,31 @@ const POForm = React.memo(
                     </div>
                     <div className="flex justify-between text-sm">
                       <span>Subtotal:</span>
-                      <span>AED {parseFloat(totals.subtotal || 0).toFixed(2)}</span>  {/* FIX: Ensure display */}
+                      <span>AED {parseFloat(totals.subtotal || 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span>VAT:</span>
-                      <span>AED {parseFloat(totals.tax || 0).toFixed(2)}</span>  {/* FIX: Use 'tax' from calculateTotals */}
+                      <span>AED {parseFloat(totals.tax || 0).toFixed(2)}</span>
                     </div>
+                    {effectiveDiscount > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span>Discount:</span>
+                        <span className="text-rose-600">- AED {Number(effectiveDiscount).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {effectiveRoundoff !== 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span>Round Off:</span>
+                        <span className={effectiveRoundoff >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                          {effectiveRoundoff >= 0 ? "+" : ""} AED {Number(effectiveRoundoff).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                     <div className="border-t pt-2">
                       <div className="flex justify-between font-semibold">
                         <span>Total:</span>
                         <span className="text-emerald-600">
-                          AED {parseFloat(totals.total || 0).toFixed(2)}
+                          AED {totalsAfterAdjustments}
                         </span>
                       </div>
                     </div>
@@ -838,36 +941,51 @@ const POForm = React.memo(
                 {formData.items.map((item, index) => (
                   <div
                     key={`item-${index}`}
-                    className="grid grid-cols-7 gap-4 items-center p-4 bg-slate-50 rounded-xl border border-slate-200 relative"
+                    className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4 items-center p-4 bg-slate-50 rounded-xl border border-slate-200 relative"
                   >
                     <div className="col-span-2">
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
                         Item
                       </label>
-                      <Select
-                        options={itemOptions}
-                        value={
-                          itemOptions.find(
-                            (opt) => opt.value === item.itemId
-                          ) || null
-                        }
-                        onChange={(selected) =>
-                          handleItemChange(
-                            index,
-                            "itemId",
-                            selected ? selected.value : ""
-                          )
-                        }
-                        placeholder="Select Item..."
-                        isClearable
-                        isSearchable
-                        classNamePrefix="select"
-                        className={`text-sm ${
-                          formErrors[`itemId_${index}`]
-                            ? "border-red-500 rounded-lg"
-                            : ""
-                        }`}
-                      />
+                      <div className="flex items-center gap-1">
+                        <div className="flex-1">
+                          <Select
+                            options={itemOptions}
+                            value={
+                              itemOptions.find(
+                                (opt) => opt.value === item.itemId
+                              ) || null
+                            }
+                            onChange={(selected) =>
+                              handleItemChange(
+                                index,
+                                "itemId",
+                                selected ? selected.value : ""
+                              )
+                            }
+                            placeholder="Select Item..."
+                            isClearable
+                            isSearchable
+                            classNamePrefix="select"
+                            className={`text-sm ${
+                              formErrors[`itemId_${index}`]
+                                ? "border-red-500 rounded-lg"
+                                : ""
+                            }`}
+                          />
+                        </div>
+                        {item.itemId && (
+                          <button
+                            type="button"
+                            onClick={() => { setPriceHistoryItemId(item.itemId); setPriceHistoryItemName(item.description || ''); setPriceHistoryOpen(true); }}
+                            className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-all duration-150 shadow-sm hover:shadow"
+                            title="View recent purchase & sales prices"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">History</span>
+                          </button>
+                        )}
+                      </div>
                       {formErrors[`itemId_${index}`] && (
                         <p className="text-red-500 text-xs mt-1">
                           {formErrors[`itemId_${index}`]}
@@ -936,6 +1054,18 @@ const POForm = React.memo(
                           {formErrors[`qty_${index}`]}
                         </p>
                       )}
+                    </div>
+
+                    <div className="col-span-1">
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        UOM
+                      </label>
+                      <input
+                        type="text"
+                        value={item.uom || ""}
+                        readOnly
+                        className="w-full px-4 py-3 bg-slate-100 rounded-lg border border-slate-200 text-sm cursor-not-allowed"
+                      />
                     </div>
 
                     <div className="col-span-1">
@@ -1048,6 +1178,27 @@ const POForm = React.memo(
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Save and Clear All buttons at bottom */}
+            <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-slate-200 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3">
+              {!isEditing && (
+                <button
+                  onClick={handleClearAll}
+                  className="flex items-center justify-center space-x-2 px-5 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors border border-slate-300 active:scale-95 min-h-[48px]"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Clear All</span>
+                </button>
+              )}
+              <button
+                onClick={savePO}
+                disabled={saveLoading}
+                className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed active:scale-95 min-h-[48px]"
+              >
+                {saveLoading ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save className="w-5 h-5" />}
+                <span>{saveLoading ? "Saving..." : isEditing ? "Update PO" : "Save PO"}</span>
+              </button>
             </div>
           </div>
         </div>

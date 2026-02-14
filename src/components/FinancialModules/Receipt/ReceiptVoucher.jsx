@@ -26,12 +26,15 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Wallet,
+  Download,
 } from "lucide-react";
 import axios from "../../../axios/axios";
+import { exportVouchersToExcel } from "../../../utils/excelExport";
 import InvoiceSelection from "./InvoiceSelection";
 import PaymentInvoiceView from "../Payment/PaymentInvoiceView";
 import CustomerSelect from "./CustomerSelect";
 import VoucherDocument from "./VoucherDocument";
+import { useCustomerList } from "../../../hooks/useDataFetching";
 import {
   asArray,
   takeArray,
@@ -130,7 +133,9 @@ const StatCard = ({
 
 const ReceiptVoucherManagement = () => {
   const [receipts, setReceipts] = useState([]);
-  const [customers, setCustomers] = useState([]);
+  // ── Cached customer data via React Query ──
+  const { data: customerData } = useCustomerList();
+  const customers = useMemo(() => customerData?.items || [], [customerData]);
   const [availableInvoices, setAvailableInvoices] = useState([]);
   const [allChartOfAccounts, setAllChartOfAccounts] = useState([]); // All chart of accounts fetched at mount
   const [chartOfAccountsAccounts, setChartOfAccountsAccounts] = useState([]); // Filtered by category
@@ -177,7 +182,6 @@ const ReceiptVoucherManagement = () => {
       setFormData((prev) => ({ ...prev, ...savedFormData }));
     }
     fetchReceipts();
-    fetchCustomers();
     fetchUnpaidInvoices();
     fetchAllChartOfAccounts(); // Fetch all chart of accounts at mount
   }, []);
@@ -228,15 +232,7 @@ const ReceiptVoucherManagement = () => {
     [showToastMessage]
   );
 
-  const fetchCustomers = useCallback(async () => {
-    try {
-      const response = await axios.get("/customers/customers");
-      setCustomers(takeArray(response));
-    } catch (err) {
-      showToastMessage("Failed to fetch customers.", "error");
-      setCustomers([]);
-    }
-  }, [showToastMessage]);
+  // Customers are now provided by React Query hook above
 
   // Fetch all chart of accounts at mount
   const fetchAllChartOfAccounts = useCallback(async () => {
@@ -329,12 +325,13 @@ const fetchUnpaidInvoices = useCallback(
 
       let invoices = takeArray(response);
 
-      // Filter only APPROVED invoices that have outstanding balance
+      // Filter only APPROVED invoices (including those with PAID/PARTIAL legacy status) that have outstanding balance
       const outstandingInvoices = invoices
         .filter((inv) => {
           const outstanding = Number(inv.outstandingAmount || 0);
-          const isApproved = (inv.status || "").toLowerCase() === "approved";
-          return outstanding > 0 && isApproved;
+          const status = (inv.status || "").toUpperCase();
+          const isEligible = ["APPROVED", "PAID", "PARTIAL"].includes(status);
+          return outstanding > 0 && isEligible;
         })
         .map((inv) => ({
           _id: inv._id,
@@ -733,14 +730,13 @@ const handleInvoiceAmountChange = useCallback(
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2
-            size={48}
-            className="text-purple-600 animate-spin mx-auto mb-4"
-          />
-          <p className="text-gray-600 text-lg">Loading receipt vouchers...</p>
+      <div className="p-6 min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3"><div className="animate-pulse bg-gray-200 rounded-full w-10 h-10" /><div><div className="animate-pulse bg-gray-200 rounded w-48 h-6 mb-2" /><div className="animate-pulse bg-gray-200 rounded w-64 h-3" /></div></div>
+          <div className="animate-pulse bg-gray-200 rounded-lg w-36 h-10" />
         </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">{Array.from({length:4}).map((_,i)=>(<div key={i} className="bg-white rounded-xl shadow-sm border p-5"><div className="flex items-center justify-between mb-3"><div className="animate-pulse bg-gray-200 rounded w-24 h-3" /><div className="animate-pulse bg-gray-200 rounded-full w-8 h-8" /></div><div className="animate-pulse bg-gray-200 rounded w-16 h-7 mb-2" /><div className="animate-pulse bg-gray-200 rounded w-32 h-3" /></div>))}</div>
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden"><div className="bg-gray-50 border-b px-6 py-4"><div className="flex gap-4">{Array.from({length:5}).map((_,i)=>(<div key={i} className="animate-pulse bg-gray-200 rounded w-24 h-3" />))}</div></div>{Array.from({length:6}).map((_,i)=>(<div key={i} className={`px-6 py-4 flex gap-4 ${i%2===1?'bg-gray-50/50':''} border-b border-gray-100`}>{Array.from({length:5}).map((_,j)=>(<div key={j} className="animate-pulse bg-gray-200 rounded w-24 h-4" />))}</div>))}</div>
       </div>
     );
   }
@@ -873,12 +869,22 @@ const handleInvoiceAmountChange = useCallback(
                 Manage payment receipts and vouchers
               </p>
             </div>
-            <button
-              onClick={openAddModal}
-              className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
-            >
-              <Plus size={18} /> Add Receipt
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => exportVouchersToExcel(sortedAndFilteredReceipts, 'receipt', { party: searchTerm })}
+                disabled={sortedAndFilteredReceipts.length === 0}
+                className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Export to Excel"
+              >
+                <Download size={18} /> Export
+              </button>
+              <button
+                onClick={openAddModal}
+                className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
+              >
+                <Plus size={18} /> Add Receipt
+              </button>
+            </div>
           </div>
           <div className="mt-6 space-y-4">
             <div className="relative">

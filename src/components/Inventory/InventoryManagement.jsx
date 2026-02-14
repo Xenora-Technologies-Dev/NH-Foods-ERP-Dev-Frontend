@@ -31,7 +31,7 @@ import axiosInstance from "../../axios/axios";
 const SessionManager = {
   storage: {},
 
-  get: (key) => {
+  get(key) {
     try {
       return this.storage[`inventory_session_${key}`] || null;
     } catch {
@@ -39,7 +39,7 @@ const SessionManager = {
     }
   },
 
-  set: (key, value) => {
+  set(key, value) {
     try {
       this.storage[`inventory_session_${key}`] = value;
     } catch (error) {
@@ -47,7 +47,7 @@ const SessionManager = {
     }
   },
 
-  remove: (key) => {
+  remove(key) {
     try {
       delete this.storage[`inventory_session_${key}`];
     } catch (error) {
@@ -55,7 +55,7 @@ const SessionManager = {
     }
   },
 
-  clear: () => {
+  clear() {
     Object.keys(this.storage).forEach((key) => {
       if (key.startsWith("inventory_session_")) {
         delete this.storage[key];
@@ -187,6 +187,14 @@ const InventoryManagement = () => {
     SessionManager.set("showFilters", showFilters);
   }, [searchTerm, filterEventType, filterMovementType, dateRange, showFilters]);
 
+  const showToastMessage = useCallback((message, type = "success") => {
+    setShowToast({ visible: true, message, type });
+    setTimeout(
+      () => setShowToast((prev) => ({ ...prev, visible: false })),
+      3000
+    );
+  }, []);
+
   const fetchStockItems = useCallback(async () => {
     try {
       const response = await axiosInstance.get("/stock/stock");
@@ -252,14 +260,6 @@ const InventoryManagement = () => {
     fetchMovements();
     fetchStats();
   }, [fetchStockItems, fetchMovements, fetchStats]);
-
-  const showToastMessage = useCallback((message, type = "success") => {
-    setShowToast({ visible: true, message, type });
-    setTimeout(
-      () => setShowToast((prev) => ({ ...prev, visible: false })),
-      3000
-    );
-  }, []);
 
   const handleChange = useCallback(
     (e) => {

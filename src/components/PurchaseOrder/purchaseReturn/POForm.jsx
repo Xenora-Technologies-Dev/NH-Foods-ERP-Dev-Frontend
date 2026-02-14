@@ -24,6 +24,7 @@ const POForm = React.memo(
     const [formErrors, setFormErrors] = useState({});
     const [availablePOs, setAvailablePOs] = useState([]);
     const [selectedPOId, setSelectedPOId] = useState(null);
+    const [saveLoading, setSaveLoading] = useState(false);
 
     // Memoize debouncedAddNotification
     const debouncedAddNotification = useMemo(() => {
@@ -211,6 +212,7 @@ const POForm = React.memo(
           const item = stockItems.find((i) => i._id === value);
           if (item) {
             newItems[index].description = item.itemName || "";
+            newItems[index].itemCode = item.itemId || ""; // FIX: Always sync itemCode from stock on selection
             newItems[index].currentPurchasePrice = item.purchasePrice || 0;
             newItems[index].purchasePrice = item.purchasePrice || 0;
             newItems[index].vatPercent = item.vatPercent !== undefined ? item.vatPercent.toString() : newItems[index].vatPercent || "5";
@@ -227,6 +229,7 @@ const POForm = React.memo(
             }
           } else {
             newItems[index].description = "";
+            newItems[index].itemCode = ""; // FIX: Clear itemCode when item is deselected
             newItems[index].currentPurchasePrice = 0;
             newItems[index].purchasePrice = 0;
             newItems[index].vatPercent = "5";
@@ -296,11 +299,13 @@ const POForm = React.memo(
 
     // Save or update the purchase return order
     const savePO = useCallback(async () => {
+      if (saveLoading) return;
       if (!validateForm()) {
         debouncedAddNotification("Please fix form errors before saving", "error");
         return;
       }
 
+      setSaveLoading(true);
       try {
         const totals = calculateTotals(formData.items);
         const transactionData = {
@@ -390,6 +395,8 @@ const POForm = React.memo(
           "Failed to save purchase return order: " + (error.response?.data?.message || error.message),
           "error"
         );
+      } finally {
+        setSaveLoading(false);
       }
     }, [
       validateForm,
@@ -494,10 +501,11 @@ const POForm = React.memo(
               <div className="flex items-center space-x-3">
                 <button
                   onClick={savePO}
-                  className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 shadow-lg"
+                  disabled={saveLoading}
+                  className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <Save className="w-5 h-5" />
-                  <span>{isEditing ? "Update PR" : "Save PR"}</span>
+                  {saveLoading ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save className="w-5 h-5" />}
+                  <span>{saveLoading ? "Saving..." : isEditing ? "Update PR" : "Save PR"}</span>
                 </button>
               </div>
             </div>

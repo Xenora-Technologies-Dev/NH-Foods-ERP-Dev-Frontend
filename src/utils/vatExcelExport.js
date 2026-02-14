@@ -25,7 +25,7 @@ const formatDate = (date) => {
 };
 
 /**
- * Format number to 2 decimal places
+ * Format number to 4 decimal places
  */
 const formatNumber = (num) => {
   if (num === null || num === undefined) return 0;

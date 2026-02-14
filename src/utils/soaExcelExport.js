@@ -18,7 +18,7 @@ const formatDate = (dateString) => {
 };
 
 /**
- * Format number with 2 decimal places
+ * Format number with 4 decimal places
  */
 const formatNumber = (num) => {
   return (num || 0).toFixed(2);
@@ -226,12 +226,16 @@ export const exportStatementOfAccountExcel = (statement) => {
 
   // ===== GENERATE FILENAME AND SAVE =====
   const customerNameClean = (customer.customerName || 'Customer').replace(/[^a-zA-Z0-9]/g, '_');
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10);
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const dateTimeStr = `${dateStr}_${hh}-${mm}`;
   const periodStr = period.from && period.to 
     ? `_${period.from}_to_${period.to}`.replace(/[^a-zA-Z0-9_-]/g, '')
     : '';
   
-  const filename = `SOA_${customerNameClean}${periodStr}_${dateStr}.xlsx`;
+  const filename = `SOA_${customerNameClean}${periodStr}_${dateTimeStr}.xlsx`;
 
   // Save file
   XLSX.writeFile(wb, filename);

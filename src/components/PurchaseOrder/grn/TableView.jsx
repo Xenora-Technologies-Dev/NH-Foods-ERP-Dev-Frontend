@@ -100,9 +100,15 @@ const TableView = ({ grns, onView, onConvert, onCancel, onDelete }) => {
               <td className="px-6 py-4 whitespace-nowrap">
                 <div className="flex items-center gap-2">
                   <FileText className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-700">
-                    {grn.poNumber || grn.purchaseOrderId?.transactionNo || "-"}
-                  </span>
+                  {grn.entryMode === "direct" ? (
+                    <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-medium">
+                      Direct GRN
+                    </span>
+                  ) : (
+                    <span className="text-gray-700">
+                      {grn.poNumber || grn.purchaseOrderId?.transactionNo || "-"}
+                    </span>
+                  )}
                 </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">

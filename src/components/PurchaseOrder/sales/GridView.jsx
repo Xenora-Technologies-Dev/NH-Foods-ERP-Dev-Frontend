@@ -48,12 +48,11 @@ const GridView = ({
                   }}
                 />
                 <div>
-                  <h3 className="text-lg font-bold text-slate-800">{so.transactionNo}</h3>
+                  <h3 className="text-lg font-bold text-slate-800">{so.displayTransactionNo || so.orderNumber || so.transactionNo}</h3>
                   <p className="text-sm text-slate-600">{so.customerName}</p>
                 </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <div className={`w-2 h-2 rounded-full ${getPriorityColor(so.priority)}`} title={`${so.priority} Priority`}></div>
+              <div className="flex flex-col items-end space-y-1">
                 <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(so.status)}`}>
                   {getStatusIcon(so.status)}
                   <span className="ml-1">{so.status}</span>

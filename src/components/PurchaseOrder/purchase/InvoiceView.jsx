@@ -191,13 +191,13 @@ const handleConvertToInvoice = async () => {
   }
 };
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="flex justify-between mb-4">
-          <button onClick={handleBack} className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700">
+    <div className="min-h-screen bg-gray-50 py-4 sm:py-8">
+      <div className="max-w-4xl mx-auto px-2 sm:px-4">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 mb-4">
+          <button onClick={handleBack} className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 active:scale-95 min-h-[44px]">
             <ArrowLeft className="w-4 h-4" /> Back to List
           </button>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             <button
               onClick={async () => {
                 setIsGeneratingPDF(true);
@@ -208,7 +208,7 @@ const handleConvertToInvoice = async () => {
                 }
               }}
               disabled={isGeneratingPDF}
-              className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              className="flex items-center gap-2 px-4 sm:px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 active:scale-95 min-h-[44px] text-sm"
             >
               {isGeneratingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               {isGeneratingPDF ? "Generating…" : "Download"}
@@ -223,7 +223,7 @@ const handleConvertToInvoice = async () => {
                 w.document.close();
                 setTimeout(() => { w.focus(); w.print(); w.close(); }, 300);
               }}
-              className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              className="flex items-center gap-2 px-4 sm:px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 active:scale-95 min-h-[44px] text-sm"
             >
               <Printer className="w-4 h-4" /> Print
             </button>
@@ -250,6 +250,9 @@ const handleConvertToInvoice = async () => {
             boxSizing: "border-box",
           }}
         >
+          {/* Color coded top bar - Green for Purchase */}
+          <div style={{ height: 6, background: "linear-gradient(90deg, #166534, #22c55e)", marginBottom: 12, borderRadius: 3 }} />
+
           <div style={{ textAlign: "right", fontWeight: "bold", marginBottom: 9 }}>
             <span id="copy-label">Purchase Order</span>
           </div>
@@ -292,7 +295,7 @@ const handleConvertToInvoice = async () => {
                 <strong>VAT Reg. No:</strong> {profileData.vatNumber}
               </div>
 
-              <div style={{ fontWeight: 700, textDecoration: "underline", marginTop: 6, fontSize: 13 }}>
+              <div style={{ fontWeight: 700, textDecoration: "underline", marginTop: 6, fontSize: 13, color: "#166534" }}>
                 {isApproved ? "PURCHASE ENTRY" : "PURCHASE ORDER"}
               </div>
             </div>
@@ -306,8 +309,8 @@ const handleConvertToInvoice = async () => {
               <div style={{ fontWeight: 700 }}>VENDOR:</div>
               <div style={{ marginTop: 6 }}>{vendor.vendorId || ""}</div>
               <div style={{ fontWeight: 700, marginTop: 6 }}>{vendor.vendorName || ""}</div>
-              <div style={{ marginTop: 4 }}>{vendor.address || profileData.addressLine1}</div>
-              <div style={{ marginTop: 4 }}>TEL: {vendor.phone || profileData.phoneNumber}, Email: {vendor.email || profileData.email}</div>
+              <div style={{ marginTop: 4 }}>{vendor.address || ""}</div>
+              <div style={{ marginTop: 4 }}>TEL: {vendor.phone || ""}, Email: {vendor.email || ""}</div>
               <div style={{ marginTop: 4 }}>VAT Reg. No: {vendorTRN}</div>
             </div>
 
@@ -340,7 +343,7 @@ const handleConvertToInvoice = async () => {
           {/* Items */}
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, marginBottom: 10 }}>
             <thead>
-              <tr style={{ background: "#fffacd" }}>
+              <tr style={{ background: "#dcfce7" }}>
                 <th style={{ width: 30, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>Line</th>
                 <th style={{ width: 64, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>CODE</th>
                 <th style={{ textAlign: "left", padding: "8px 10px 8px 22px", borderBottom: "1px solid #777" }}>Item Description</th>

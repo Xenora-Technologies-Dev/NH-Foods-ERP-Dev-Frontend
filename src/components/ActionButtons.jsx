@@ -24,7 +24,7 @@ export const FormActionButtons = ({
         <button
           onClick={onDelete}
           disabled={isSaving || isDeleting}
-          className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 min-h-[48px]"
         >
           {isDeleting ? (
             <>
@@ -44,7 +44,7 @@ export const FormActionButtons = ({
         <button
           onClick={onCancel}
           disabled={isSaving || isDeleting}
-          className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-200 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+          className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-200 font-medium flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 min-h-[48px]"
         >
           <X size={16} />
           {cancelText}
@@ -53,7 +53,7 @@ export const FormActionButtons = ({
         <button
           onClick={onSave}
           disabled={isSaving || isDeleting}
-          className={`flex-1 px-4 py-3 rounded-xl transition-all duration-200 font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-white ${
+          className={`flex-1 px-4 py-3 rounded-xl transition-all duration-200 font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-white active:scale-95 min-h-[48px] ${
             variant === 'danger'
               ? 'bg-red-600 hover:bg-red-700'
               : variant === 'secondary'
@@ -142,7 +142,7 @@ export const HeaderActionButton = ({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center gap-2 rounded-xl font-medium transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed ${sizeClasses[size]} ${variantClasses[variant]} ${className}`}
+      className={`flex items-center gap-2 rounded-xl font-medium transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 min-h-[44px] ${sizeClasses[size]} ${variantClasses[variant]} ${className}`}
     >
       <Icon size={20} />
       {label}

@@ -43,3 +43,9 @@ export const decimalRound = (v, decimals = 2) => {
   const m = Math.pow(10, decimals);
   return Math.round(Number(v || 0) * m) / m;
 };
+
+/** Round to 2 decimal places — use for all monetary/qty values */
+export const r2 = (v) => decimalRound(v, 2);
+
+/** Format to 2-decimal-place string — use for display & payload values */
+export const toF2 = (v) => r2(v).toFixed(2);

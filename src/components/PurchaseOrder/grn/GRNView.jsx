@@ -62,6 +62,7 @@ const GRNView = ({
   const isConverted = grn.status === "CONVERTED" || grn.convertedToPurchase;
   const canConvert = grn.status === "RECEIVED" && !grn.convertedToPurchase;
   const canCancel = grn.status === "RECEIVED" && !grn.convertedToPurchase;
+  const isDirectGRN = grn.entryMode === "direct";
 
   // Calculate totals
   const subtotal = useMemo(() => 
@@ -249,253 +250,213 @@ const GRNView = ({
           </div>
         )}
 
+        {/* Direct GRN Badge */}
+        {isDirectGRN && (
+          <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-center gap-2 text-orange-800">
+            <span className="px-2 py-1 bg-orange-200 text-orange-800 text-xs font-bold rounded-full">
+              DIRECT GRN
+            </span>
+            <span className="font-medium">
+              This GRN was created without a Purchase Order (Direct Entry).
+            </span>
+            {grn.referenceNumber && (
+              <span className="ml-auto text-sm">
+                Ref: <strong>{grn.referenceNumber}</strong>
+              </span>
+            )}
+          </div>
+        )}
+
         {/* GRN Document */}
         <div
           id="grn-content"
-          className="bg-white rounded-lg shadow-lg overflow-hidden"
-          style={{ fontFamily: "Arial, sans-serif" }}
+          style={{
+            width: "210mm",
+            minHeight: "297mm",
+            padding: "10mm",
+            background: "#fff",
+            fontFamily: "Arial, Helvetica, sans-serif",
+            fontSize: 11,
+            color: "#000",
+            boxSizing: "border-box",
+          }}
         >
-          {/* Header */}
-          <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                {profileData.logo && (
-                  <img
-                    src={profileData.logo}
-                    alt="Company Logo"
-                    className="h-16 mb-2"
-                  />
-                )}
-                <h1 className="text-2xl font-bold">{profileData.companyName}</h1>
-                <p className="text-blue-200">{profileData.companyNameArabic}</p>
+          {/* Color coded top bar - Teal for GRN */}
+          <div style={{ height: 6, background: "linear-gradient(90deg, #0d9488, #14b8a6)", marginBottom: 12, borderRadius: 3 }} />
+
+          <div style={{ textAlign: "right", fontWeight: "bold", marginBottom: 9 }}>
+            <span>Goods Received Note</span>
+          </div>
+
+          {/* Header block */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+            <div style={{ width: "18%", textAlign: "left" }}>
+              {profileData.logo ? (
+                <img src={profileData.logo} alt="logo" style={{ width: 110 }} />
+              ) : (
+                <div style={{ width: 100, height: 100 }} />
+              )}
+            </div>
+
+            <div style={{ width: "52%", textAlign: "center", paddingLeft: 8, paddingRight: 8 }}>
+              <div style={{ fontWeight: "700", direction: "rtl", fontSize: 13 }}>{profileData.companyNameArabic}</div>
+              <div style={{ fontWeight: 800, fontSize: 15, marginTop: 4, whiteSpace: "nowrap" }}>
+                {profileData.companyName}
               </div>
-              <div className="text-right">
-                <h2 className="text-3xl font-bold mb-2">GOODS RECEIVED NOTE</h2>
-                <p className="text-blue-200 text-lg">{grn.grnNumber}</p>
+              <div style={{ marginTop: 6, fontSize: 11, lineHeight: 1.4 }}>
+                <div>
+                  {profileData.addressLine1 || "Dubai, United Arab Emirates."}
+                  <span style={{ display: "inline-block", margin: "0 8px" }}>|</span>
+                  <span>Tel: {profileData.phoneNumber}</span>
+                </div>
+                <div>
+                  Email: {profileData.email}
+                  <span style={{ display: "inline-block", margin: "0 8px" }}>|</span>
+                  Web: {profileData.website}
+                </div>
+              </div>
+              <div style={{ marginTop: 6, fontSize: 11 }}>
+                <strong>VAT Reg. No:</strong> {profileData.vatNumber}
+              </div>
+              <div style={{ fontWeight: 700, textDecoration: "underline", marginTop: 6, fontSize: 13, color: "#0d9488" }}>
+                GOODS RECEIVED NOTE
+              </div>
+              {isDirectGRN && (
+                <div style={{ marginTop: 4, fontSize: 10, color: "#9a3412", fontWeight: 600 }}>(Direct Entry - No PO)</div>
+              )}
+            </div>
+
+            <div style={{ width: "28%", textAlign: "right", fontSize: 11 }} />
+          </div>
+
+          {/* Vendor + meta */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <div style={{ width: "58%", fontSize: 11 }}>
+              <div style={{ fontWeight: 700 }}>VENDOR:</div>
+              <div style={{ marginTop: 6 }}>{vendor.vendorId || ""}</div>
+              <div style={{ fontWeight: 700, marginTop: 6 }}>{grn.vendorName || vendor.vendorName || "Unknown Vendor"}</div>
+              <div style={{ marginTop: 4 }}>{vendor.address || ""}</div>
+              <div style={{ marginTop: 4 }}>TEL: {vendor.phone || ""}, Email: {vendor.email || ""}</div>
+              {vendorTRN && <div style={{ marginTop: 4 }}>VAT Reg. No: {vendorTRN}</div>}
+            </div>
+
+            <div style={{ width: "38%", textAlign: "right", fontSize: 11 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ textAlign: "left", minWidth: 120 }}>
+                  <div style={{ fontWeight: 700 }}>GRN No:</div>
+                  <div style={{ fontWeight: 700, marginTop: 6 }}>Date:</div>
+                  <div style={{ fontWeight: 700, marginTop: 6 }}>Received:</div>
+                  {!isDirectGRN && <div style={{ fontWeight: 700, marginTop: 6 }}>PO No:</div>}
+                  {grn.deliveryNoteNo && <div style={{ fontWeight: 700, marginTop: 6 }}>Delivery Note:</div>}
+                </div>
+                <div style={{ textAlign: "right", minWidth: 140 }}>
+                  <div style={{ fontWeight: 700, color: "#0d9488" }}>{grn.grnNumber}</div>
+                  <div style={{ marginTop: 6 }}>{formatDateGB(grn.grnDate)}</div>
+                  <div style={{ marginTop: 6 }}>{formatDateGB(grn.receivedDate)}</div>
+                  {!isDirectGRN && <div style={{ marginTop: 6 }}>{grn.poNumber}</div>}
+                  {grn.deliveryNoteNo && <div style={{ marginTop: 6 }}>{grn.deliveryNoteNo}</div>}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Info Section */}
-          <div className="p-6 grid grid-cols-2 gap-6 border-b">
-            {/* Vendor Info */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">
-                Vendor Details
-              </h3>
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <p className="font-bold text-lg">
-                  {grn.vendorName || vendor.vendorName || "Unknown Vendor"}
-                </p>
-                {vendor.address && <p className="text-gray-600">{vendor.address}</p>}
-                {vendorTRN && (
-                  <p className="text-sm text-gray-500 mt-2">TRN: {vendorTRN}</p>
-                )}
-              </div>
-            </div>
+          <div style={{ height: 1, background: "#000", marginBottom: 8 }} />
 
-            {/* GRN Info */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">
-                GRN Details
-              </h3>
-              <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">GRN Date:</span>
-                  <span className="font-medium">
-                    {new Date(grn.grnDate).toLocaleDateString()}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Received Date:</span>
-                  <span className="font-medium">
-                    {new Date(grn.receivedDate).toLocaleDateString()}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">PO Inv No:</span>
-                  <span className="font-medium text-blue-600">{grn.poNumber}</span>
-                </div>
-                {grn.deliveryNoteNo && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Delivery Note:</span>
-                    <span className="font-medium">{grn.deliveryNoteNo}</span>
-                  </div>
-                )}
-                {grn.deliveryChallanNo && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Challan No:</span>
-                    <span className="font-medium">{grn.deliveryChallanNo}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Delivery Info */}
-          {(grn.vehicleNo || grn.driverName || grn.receivedBy) && (
-            <div className="px-6 py-3 bg-gray-50 border-b flex gap-8 text-sm">
-              {grn.vehicleNo && (
-                <div>
-                  <span className="text-gray-500">Vehicle:</span>{" "}
-                  <span className="font-medium">{grn.vehicleNo}</span>
-                </div>
-              )}
-              {grn.driverName && (
-                <div>
-                  <span className="text-gray-500">Driver:</span>{" "}
-                  <span className="font-medium">{grn.driverName}</span>
-                </div>
-              )}
-              {grn.receivedBy && (
-                <div>
-                  <span className="text-gray-500">Received By:</span>{" "}
-                  <span className="font-medium">{grn.receivedBy}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Items Table */}
-          <div className="p-6">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="border p-2 text-left text-xs font-semibold text-gray-600">
-                    #
-                  </th>
-                  <th className="border p-2 text-left text-xs font-semibold text-gray-600">
-                    Item Code
-                  </th>
-                  <th className="border p-2 text-left text-xs font-semibold text-gray-600">
-                    Description
-                  </th>
-                  <th className="border p-2 text-center text-xs font-semibold text-gray-600">
-                    PO Qty
-                  </th>
-                  <th className="border p-2 text-center text-xs font-semibold text-gray-600">
-                    Received
-                  </th>
-                  <th className="border p-2 text-center text-xs font-semibold text-gray-600">
-                    Pending
-                  </th>
-                  <th className="border p-2 text-right text-xs font-semibold text-gray-600">
-                    Rate
-                  </th>
-                  <th className="border p-2 text-center text-xs font-semibold text-gray-600">
-                    VAT %
-                  </th>
-                  <th className="border p-2 text-right text-xs font-semibold text-gray-600">
-                    Amount
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {(grn.items || []).map((item, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="border p-2 text-center text-sm">{index + 1}</td>
-                    <td className="border p-2 text-sm">{item.itemCode || "-"}</td>
-                    <td className="border p-2 text-sm">
-                      <div>
-                        <p>{item.description}</p>
-                        {item.brand && (
-                          <p className="text-xs text-gray-500">{item.brand}</p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="border p-2 text-center text-sm">{item.poQty}</td>
-                    <td className="border p-2 text-center text-sm font-medium text-green-600">
-                      {item.receivedQty}
-                    </td>
-                    <td className="border p-2 text-center text-sm">
-                      <span
-                        className={`px-2 py-0.5 rounded ${
-                          item.pendingQty > 0
-                            ? "bg-yellow-100 text-yellow-700"
-                            : "bg-green-100 text-green-700"
-                        }`}
-                      >
-                        {item.pendingQty}
-                      </span>
-                    </td>
-                    <td className="border p-2 text-right text-sm">
-                      {(item.rate || item.price || 0).toFixed(2)}
-                    </td>
-                    <td className="border p-2 text-center text-sm">
-                      {item.vatPercent || 0}%
-                    </td>
-                    <td className="border p-2 text-right text-sm font-medium">
-                      {(item.grandTotal || item.lineTotal || 0).toFixed(2)}
-                    </td>
+          {/* Items */}
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, marginBottom: 10 }}>
+            <thead>
+              <tr style={{ background: "#ccfbf1" }}>
+                <th style={{ width: 30, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>Line</th>
+                <th style={{ width: 64, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>CODE</th>
+                <th style={{ textAlign: "left", padding: "8px 10px 8px 22px", borderBottom: "1px solid #777" }}>Item Description</th>
+                {!isDirectGRN && <th style={{ width: 55, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>PO Qty</th>}
+                <th style={{ width: 60, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>Received</th>
+                {!isDirectGRN && <th style={{ width: 55, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>Pending</th>}
+                <th style={{ width: 72, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>Rate</th>
+                <th style={{ width: 54, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>VAT %</th>
+                <th style={{ width: 84, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>VAT Amt</th>
+                <th style={{ width: 100, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>TOTAL AED</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(grn.items || []).map((item, idx) => {
+                const rate = parseFloat(item.rate || item.price || 0);
+                const vatAmt = parseFloat(item.vatAmount || 0);
+                const total = parseFloat(item.grandTotal || item.lineTotal || 0);
+                return (
+                  <tr key={idx}>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{idx + 1}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{item.itemCode || "-"}</td>
+                    <td style={{ padding: "8px 10px 8px 22px", verticalAlign: "top" }}>{item.description}{item.brand ? ` (${item.brand})` : ""}</td>
+                    {!isDirectGRN && <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{item.poQty}</td>}
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top", fontWeight: 600, color: "#059669" }}>{item.receivedQty}</td>
+                    {!isDirectGRN && <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top", color: item.pendingQty > 0 ? "#d97706" : "#059669" }}>{item.pendingQty}</td>}
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{formatNumber(rate)}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{item.vatPercent || 0}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{formatNumber(vatAmt)}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{formatNumber(total)}</td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                );
+              })}
+            </tbody>
+          </table>
 
-            {/* Totals */}
-            <div className="flex justify-end mt-4">
-              <div className="w-72">
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-600">Subtotal:</span>
-                  <span className="font-medium">AED {subtotal.toFixed(2)}</span>
+          <div style={{ minHeight: 40 }} />
+
+          {/* Totals */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+            <div style={{ width: "38%", fontSize: 11 }}>
+              <div style={{ border: "1px solid #000", padding: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <div>SUBTOTAL</div>
+                  <div style={{ minWidth: 100, textAlign: "right" }}>{formatNumber(subtotal)}</div>
                 </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-600">VAT:</span>
-                  <span className="font-medium">AED {vatTotal.toFixed(2)}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <div>VAT</div>
+                  <div style={{ minWidth: 100, textAlign: "right" }}>{formatNumber(vatTotal)}</div>
                 </div>
-                <div className="flex justify-between py-3 bg-blue-50 px-3 -mx-3 rounded">
-                  <span className="font-bold text-lg">Grand Total:</span>
-                  <span className="font-bold text-lg text-blue-600">
-                    AED {grandTotal.toFixed(2)}
-                  </span>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, paddingTop: 6, borderTop: "1px solid #000", fontWeight: 800 }}>
+                  <div>GRAND TOTAL</div>
+                  <div style={{ minWidth: 100, textAlign: "right" }}>{formatNumber(grandTotal)}</div>
                 </div>
               </div>
-            </div>
-
-            {/* Amount in Words */}
-            <div className="mt-4 p-3 bg-gray-50 rounded">
-              <p className="text-sm">
-                <span className="font-semibold">Amount in Words:</span>{" "}
-                {amountInWords}
-              </p>
             </div>
           </div>
 
           {/* Notes */}
           {grn.notes && (
-            <div className="px-6 pb-6">
-              <h4 className="font-semibold text-gray-700 mb-2">Notes:</h4>
-              <p className="text-gray-600 text-sm">{grn.notes}</p>
+            <div style={{ marginTop: 12, fontSize: 10 }}>
+              <div style={{ fontWeight: 700 }}>Notes:</div>
+              <div style={{ marginTop: 4 }}>{grn.notes}</div>
             </div>
           )}
 
-          {/* Footer */}
-          <div className="bg-gray-100 p-6 border-t">
-            <div className="grid grid-cols-3 gap-8">
-              <div className="text-center">
-                <div className="border-t-2 border-gray-400 pt-2 mt-8">
-                  <p className="font-semibold">Received By</p>
-                </div>
+          {/* Signatures */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24, alignItems: "flex-start" }}>
+            <div style={{ width: "30%", textAlign: "center" }}>
+              <div style={{ borderTop: "1px solid #000", paddingTop: 6, marginTop: 40 }}>
+                <div style={{ fontWeight: 600, fontSize: 10 }}>Received By</div>
               </div>
-              <div className="text-center">
-                <div className="border-t-2 border-gray-400 pt-2 mt-8">
-                  <p className="font-semibold">Checked By</p>
-                </div>
+            </div>
+            <div style={{ width: "30%", textAlign: "center" }}>
+              <div style={{ borderTop: "1px solid #000", paddingTop: 6, marginTop: 40 }}>
+                <div style={{ fontWeight: 600, fontSize: 10 }}>Checked By</div>
               </div>
-              <div className="text-center">
-                <div className="border-t-2 border-gray-400 pt-2 mt-8">
-                  <p className="font-semibold">Approved By</p>
-                </div>
+            </div>
+            <div style={{ width: "30%", textAlign: "center" }}>
+              <div style={{ borderTop: "1px solid #000", paddingTop: 6, marginTop: 40 }}>
+                <div style={{ fontWeight: 600, fontSize: 10 }}>Approved By</div>
               </div>
             </div>
           </div>
 
-          {/* Company Footer */}
-          <div className="bg-blue-900 text-white text-center py-3 text-sm">
-            <p>{profileData.addressLine1} | {profileData.addressLine2}</p>
-            <p>Tel: {profileData.phoneNumber} | Email: {profileData.email}</p>
-            {profileData.vatNumber && <p>TRN: {profileData.vatNumber}</p>}
+          {/* Footer */}
+          <div style={{ marginTop: 18, fontSize: 10 }}>
+            <div>This is computer generated document. Therefore signature is not required.</div>
+            <div style={{ marginTop: 6 }}>For {profileData.companyName}</div>
           </div>
+
+          <div style={{ textAlign: "center", marginTop: 18, fontSize: 10 }}>Page 1 of 1</div>
         </div>
       </div>
     </div>

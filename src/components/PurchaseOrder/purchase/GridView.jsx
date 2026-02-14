@@ -65,13 +65,15 @@ const GridView = ({
                   )}`}
                   title={`${po.priority} Priority`}
                 ></div>
-                <div
-                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(
-                    po.status
-                  )}`}
-                >
-                  {getStatusIcon(po.status)}
-                  <span className="ml-1">{po.status.replace("_", " ")}</span>
+                <div className="flex flex-col items-end space-y-1">
+                  <div
+                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(
+                      po.status
+                    )}`}
+                  >
+                    {getStatusIcon(po.status)}
+                    <span className="ml-1">{po.status.replace("_", " ")}</span>
+                  </div>
                 </div>
               </div>
             </div>

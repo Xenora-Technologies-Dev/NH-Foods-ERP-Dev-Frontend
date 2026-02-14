@@ -181,15 +181,16 @@ const TableView = ({
                   AED {po.totalAmount}
                 </td>
                 <td className="px-4 py-4">
-                  
-                  <span
-                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
-                      po.status
-                    )}`}
-                  >
-                    {getStatusIcon(po.status)}
-                    {po.status}
-                  </span>
+                  <div className="flex flex-col space-y-1">
+                    <span
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
+                        po.status
+                      )}`}
+                    >
+                      {getStatusIcon(po.status)}
+                      {po.status}
+                    </span>
+                  </div>
                 </td>
                 {/* <td className="px-4 py-4">
                   <div className="flex items-center justify-center">

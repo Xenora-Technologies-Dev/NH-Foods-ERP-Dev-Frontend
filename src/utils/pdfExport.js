@@ -296,3 +296,138 @@ export const exportBalanceSheetPDF = (report) => {
   // Save PDF
   doc.save(`Balance_Sheet_${report.year}${report.month ? `_${report.month}` : ''}.pdf`);
 };
+
+/**
+ * Export Item Profitability Report to PDF
+ */
+export const exportItemProfitabilityPDF = (report) => {
+  const doc = new jsPDF('l', 'mm', 'a4'); // landscape for wide table
+  const pageWidth = doc.internal.pageSize.getWidth();
+  let yPosition = 15;
+
+  // Company Header
+  doc.setFontSize(14);
+  doc.setFont(undefined, 'bold');
+  doc.text('NH FOODSTUFF TRADING LLC S.O.C.', pageWidth / 2, yPosition, { align: 'center' });
+  yPosition += 6;
+  doc.setFontSize(9);
+  doc.setFont(undefined, 'normal');
+  doc.text('Dubai, UAE', pageWidth / 2, yPosition, { align: 'center' });
+
+  yPosition += 10;
+  doc.setFontSize(14);
+  doc.setFont(undefined, 'bold');
+  doc.text('ITEM PROFITABILITY ANALYSIS REPORT', pageWidth / 2, yPosition, { align: 'center' });
+
+  yPosition += 8;
+  doc.setFontSize(9);
+  doc.setFont(undefined, 'normal');
+  doc.text(`Period: ${report.dateRange?.label || 'All Time'}`, pageWidth / 2, yPosition, { align: 'center' });
+
+  yPosition += 5;
+  doc.text(`Generated: ${new Date().toLocaleString('en-GB')}`, pageWidth / 2, yPosition, { align: 'center' });
+
+  yPosition += 8;
+
+  // Summary
+  const summary = report.summary || {};
+  doc.setFontSize(10);
+  doc.setFont(undefined, 'bold');
+  doc.text('Summary:', 14, yPosition);
+  yPosition += 5;
+  doc.setFont(undefined, 'normal');
+  doc.setFontSize(8);
+  const summaryText = [
+    `Total Items: ${summary.totalItems || 0}`,
+    `Profitable: ${summary.profitableItems || 0}`,
+    `Loss: ${summary.lossItems || 0}`,
+    `Total Purchase: AED ${(summary.totalPurchaseValue || 0).toFixed(2)}`,
+    `Total Sales: AED ${(summary.totalSalesValue || 0).toFixed(2)}`,
+    `Net Profit/Loss: AED ${(summary.totalProfit || 0).toFixed(2)} (${(summary.overallProfitPercentage || 0).toFixed(2)}%)`,
+  ];
+  doc.text(summaryText.join('   |   '), 14, yPosition);
+
+  yPosition += 8;
+
+  // Table data
+  const items = report.items || [];
+  const tableData = items.map((item) => [
+    item.itemCode || '-',
+    item.itemName || '-',
+    item.category || '-',
+    item.uom || '-',
+    (item.purchaseQty || 0).toString(),
+    (item.salesQty || 0).toString(),
+    (item.avgPurchasePrice || 0).toFixed(2),
+    (item.avgSalesPrice || 0).toFixed(2),
+    (item.totalPurchaseValue || 0).toFixed(2),
+    (item.totalSalesValue || 0).toFixed(2),
+    (item.profitLoss || 0).toFixed(2),
+    `${(item.profitPercentage || 0).toFixed(2)}%`,
+    item.isProfitable ? 'PROFIT' : 'LOSS',
+  ]);
+
+  autoTable(doc, {
+    head: [[
+      'Code', 'Item Name', 'Category', 'UOM',
+      'Pur Qty', 'Sales Qty',
+      'Avg Pur', 'Avg Sales',
+      'Total Pur', 'Total Sales',
+      'P/L (AED)', 'Margin %', 'Status',
+    ]],
+    body: tableData,
+    startY: yPosition,
+    headStyles: {
+      fillColor: [79, 70, 229], // indigo
+      textColor: 255,
+      fontStyle: 'bold',
+      fontSize: 7,
+    },
+    bodyStyles: {
+      fontSize: 7,
+    },
+    alternateRowStyles: { fillColor: [245, 245, 255] },
+    columnStyles: {
+      0: { cellWidth: 18 },
+      1: { cellWidth: 35 },
+      2: { cellWidth: 20 },
+      3: { cellWidth: 12, halign: 'center' },
+      4: { halign: 'right', cellWidth: 16 },
+      5: { halign: 'right', cellWidth: 16 },
+      6: { halign: 'right', cellWidth: 18 },
+      7: { halign: 'right', cellWidth: 18 },
+      8: { halign: 'right', cellWidth: 22 },
+      9: { halign: 'right', cellWidth: 22 },
+      10: { halign: 'right', cellWidth: 20 },
+      11: { halign: 'right', cellWidth: 16 },
+      12: { halign: 'center', cellWidth: 16 },
+    },
+    margin: { top: 10, right: 8, bottom: 10, left: 8 },
+    didParseCell: function (data) {
+      if (data.section === 'body') {
+        // Color profit/loss column
+        if (data.column.index === 10) {
+          const val = parseFloat(data.cell.raw) || 0;
+          data.cell.styles.textColor = val >= 0 ? [22, 163, 74] : [220, 38, 38]; // green/red
+          data.cell.styles.fontStyle = 'bold';
+        }
+        // Color margin % column
+        if (data.column.index === 11) {
+          const val = parseFloat(data.cell.raw) || 0;
+          data.cell.styles.textColor = val >= 0 ? [22, 163, 74] : [220, 38, 38];
+        }
+        // Color status column
+        if (data.column.index === 12) {
+          const isProfit = data.cell.raw === 'PROFIT';
+          data.cell.styles.textColor = isProfit ? [22, 163, 74] : [220, 38, 38];
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+    },
+  });
+
+  // Generate filename with date-time stamp
+  const now = new Date();
+  const dateTimeStamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+  doc.save(`Item_Profitability_Report_${dateTimeStamp}.pdf`);
+};

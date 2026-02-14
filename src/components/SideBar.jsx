@@ -1,10 +1,8 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   ChevronDown,
-  ChevronRight,
-  ChevronLeft,
   HelpCircle,
   LogOut,
   Settings,
@@ -13,40 +11,65 @@ import {
   CreditCard,
   FileText,
   ShoppingCart,
-  Package,
   Box,
   Barcode,
-  BookOpen,
   Ruler,
   Users,
   BarChart3,
-  Shield,
   Zap,
   DollarSign,
   TrendingUp,
-  Archive,
   Calculator,
   Wallet,
   ShoppingBag,
   Truck,
   Warehouse,
-  Database,
   Scale,
   UserPlus,
-  PieChart,
-  Activity,
   ArrowLeftRight,
-  Percent,
   UserCheck,
   Briefcase,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
 } from "lucide-react";
 
-const Sidebar = () => {
+// Breakpoints matching Tailwind defaults
+const BP_MD = 768;
+const BP_LG = 1024;
+
+const Sidebar = ({ isMobileOpen, onMobileClose }) => {
   const [expandedSections, setExpandedSections] = useState({});
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // null = auto (follows screen size), true/false = user override
+  const [userCollapsed, setUserCollapsed] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
+  const sidebarRef = useRef(null);
+
+  // Responsive state
+  const [screenSize, setScreenSize] = useState(() => {
+    if (typeof window === "undefined") return "lg";
+    if (window.innerWidth < BP_MD) return "sm";
+    if (window.innerWidth < BP_LG) return "md";
+    return "lg";
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      const w = window.innerWidth;
+      setScreenSize(w < BP_MD ? "sm" : w < BP_LG ? "md" : "lg");
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Determine collapsed state: user override > screen-size default
+  const isSidebarCollapsed = useMemo(() => {
+    if (screenSize === "sm") return false; // mobile uses drawer, not collapse
+    if (userCollapsed !== null) return userCollapsed;
+    return screenSize === "md"; // auto-collapse on medium screens
+  }, [screenSize, userCollapsed]);
 
   // Mock user role
   const userRole = "Admin";
@@ -268,6 +291,11 @@ const Sidebar = () => {
             text: "Statement of Account",
             to: "/statement-of-account",
           },
+          {
+            icon: <FileText strokeWidth={1.5} size={20} />,
+            text: "Item Profitability",
+            to: "/item-profitability",
+          },
         ].filter(() => userRole === "Admin" || userRole === "Accountant"),
       },
     ];
@@ -296,13 +324,25 @@ const Sidebar = () => {
     }));
   };
 
-  const toggleSidebar = () => {
-    setIsSidebarCollapsed(!isSidebarCollapsed);
-  };
+  const toggleSidebar = useCallback(() => {
+    if (screenSize === "sm") {
+      // On mobile, close the drawer
+      onMobileClose?.();
+    } else {
+      setUserCollapsed((prev) => (prev === null ? screenSize !== "md" : !prev));
+    }
+  }, [screenSize, onMobileClose]);
 
-  const handleNavigation = (path) => {
-    navigate(path);
-  };
+  const handleNavigation = useCallback(
+    (path) => {
+      navigate(path);
+      // Close sidebar on mobile after navigation
+      if (screenSize === "sm" && onMobileClose) {
+        onMobileClose();
+      }
+    },
+    [navigate, screenSize, onMobileClose]
+  );
 
   const handleLogout = (e) => {
     e.preventDefault();
@@ -335,80 +375,127 @@ const Sidebar = () => {
     }
   };
 
+  // Whether sidebar is visible (for mobile drawer)
+  const isVisible = screenSize !== "sm" || isMobileOpen;
+
   return (
     <>
-      {/* Mobile overlay when sidebar is open on small screens */}
-      {!isSidebarCollapsed && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 sm:hidden" onClick={toggleSidebar} />
+      {/* Mobile overlay */}
+      {screenSize === "sm" && isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[998] transition-opacity duration-300"
+          onClick={onMobileClose}
+        />
       )}
 
-      <div
-        className={`sm:relative fixed sm:static top-0 left-0 h-screen flex flex-col bg-white text-gray-800 shadow-2xl transition-all duration-500 ease-out border-r border-gray-200/50 z-50 ${
-          isSidebarCollapsed ? "w-0 sm:w-20 -ml-0" : "w-72 sm:w-72"
-        } ${!isSidebarCollapsed ? "translate-x-0" : "-translate-x-full sm:translate-x-0"}`}
+      <aside
+        ref={sidebarRef}
+        className={`
+          erp-sidebar
+          ${screenSize === "sm"
+            ? `fixed top-0 left-0 h-full z-[999] transition-transform duration-300 ease-in-out w-72
+               ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}`
+            : `h-full shrink-0 transition-[width] duration-300 ease-in-out
+               ${isSidebarCollapsed ? "w-[68px]" : "w-64"}`
+          }
+          flex flex-col bg-white text-gray-800 border-r border-gray-200 shadow-sm
+        `}
       >
         {/* Header */}
-        <div className="relative flex items-center justify-between p-4 sm:p-6 border-b border-gray-200/50 backdrop-blur-xl">
-          {!isSidebarCollapsed && (
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center shadow-lg">
-                <Zap className="w-5 h-5 text-gray-800" />
+        <div className="flex items-center h-16 px-3 border-b border-gray-100 shrink-0">
+          {!isSidebarCollapsed || screenSize === "sm" ? (
+            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+              <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0 shadow-sm">
+                <Zap className="w-5 h-5 text-white" />
               </div>
-              <div className="hidden sm:block">
-                <span className="text-xl font-bold text-gray-800">
+              <div className="min-w-0">
+                <div className="text-base font-bold text-gray-900 leading-tight truncate">
                   ERP NEXUS
-                </span>
-                <div className="text-xs text-gray-600 -mt-1">
+                </div>
+                <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
                   Enterprise System
                 </div>
               </div>
             </div>
+          ) : (
+            <div className="flex items-center justify-center w-full">
+              <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center shadow-sm">
+                <Zap className="w-5 h-5 text-white" />
+              </div>
+            </div>
           )}
-          <button
-            onClick={toggleSidebar}
-            className="relative p-2 rounded-xl bg-gray-100/50 backdrop-blur-sm transition-all duration-300 border border-gray-200/50 hover:bg-gray-200/50 hover:border-gray-300/50 sm:ml-auto"
-            aria-label={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-          >
-            {isSidebarCollapsed ? (
-              <ChevronRight strokeWidth={2} size={18} className="text-gray-600" />
-            ) : (
-              <ChevronLeft strokeWidth={2} size={18} className="text-gray-600" />
-            )}
-          </button>
+
+          {/* Collapse toggle (desktop/tablet only) */}
+          {screenSize !== "sm" && (
+            <button
+              onClick={toggleSidebar}
+              className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors ml-1 shrink-0"
+              aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {isSidebarCollapsed ? (
+                <PanelLeftOpen size={18} strokeWidth={1.5} />
+              ) : (
+                <PanelLeftClose size={18} strokeWidth={1.5} />
+              )}
+            </button>
+          )}
+
+          {/* Close button (mobile only) */}
+          {screenSize === "sm" && (
+            <button
+              onClick={onMobileClose}
+              className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors ml-1 shrink-0"
+              aria-label="Close menu"
+            >
+              <X size={18} strokeWidth={1.5} />
+            </button>
+          )}
         </div>
 
         {/* User Profile */}
-        {!isSidebarCollapsed && (
-          <div className="p-4 border-b border-gray-200/50">
-            <div className="flex items-center space-x-3 p-3 rounded-xl bg-gray-100/50 backdrop-blur-xl border border-gray-200/50 shadow-lg">
-              <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center shadow-md">
-                <User className="w-5 h-5 text-gray-800" />
+        {(!isSidebarCollapsed || screenSize === "sm") && (
+          <div className="px-3 py-3 border-b border-gray-100 shrink-0">
+            <div className="flex items-center gap-2.5 p-2 rounded-lg bg-gray-50">
+              <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center shrink-0">
+                <User className="w-4 h-4 text-indigo-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-gray-800">
+                <div className="text-sm font-semibold text-gray-800 truncate">
                   Administrator
                 </div>
-                <div className="text-xs text-gray-600 truncate">
+                <div className="text-xs text-gray-400 truncate">
                   admin@company.com
                 </div>
               </div>
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
+              <div className="w-2 h-2 bg-emerald-400 rounded-full shrink-0" title="Online"></div>
+            </div>
+          </div>
+        )}
+
+        {/* Collapsed user avatar */}
+        {isSidebarCollapsed && screenSize !== "sm" && (
+          <div className="flex justify-center py-3 border-b border-gray-100 shrink-0">
+            <div className="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center" title="Administrator">
+              <User className="w-4 h-4 text-indigo-600" />
             </div>
           </div>
         )}
 
         {/* Navigation */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-white">
-          <nav className="space-y-2 p-4">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 sidebar-scrollbar">
+          <nav className="space-y-0.5">
             <SidebarItem
-              icon={<LayoutDashboard strokeWidth={1.5} size={22} />}
+              icon={<LayoutDashboard strokeWidth={1.5} size={20} />}
               text="Dashboard"
               to="/dashboard"
               active={currentPath === "/dashboard"}
-              isCollapsed={isSidebarCollapsed}
+              isCollapsed={isSidebarCollapsed && screenSize !== "sm"}
               special={true}
               onClick={() => handleNavigation("/dashboard")}
             />
+
+            <div className="pt-1" />
 
             {navigationSections.map((section, index) => (
               <SidebarSection
@@ -423,7 +510,7 @@ const Sidebar = () => {
                   section.children.some((child) => child.to === currentPath) ||
                   section.to === currentPath
                 }
-                isCollapsed={isSidebarCollapsed}
+                isCollapsed={isSidebarCollapsed && screenSize !== "sm"}
                 delay={index * 50}
                 children={section.children}
                 handleNavigation={handleNavigation}
@@ -434,39 +521,39 @@ const Sidebar = () => {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200/50 p-4 space-y-2 backdrop-blur-xl">
+        <div className="border-t border-gray-100 p-2 space-y-0.5 shrink-0">
           <SidebarItem
-            icon={<Settings strokeWidth={1.5} size={22} />}
+            icon={<Settings strokeWidth={1.5} size={20} />}
             text="Settings"
             to="/settings"
             active={currentPath === "/settings"}
-            isCollapsed={isSidebarCollapsed}
+            isCollapsed={isSidebarCollapsed && screenSize !== "sm"}
             onClick={() => handleNavigation("/settings")}
           />
           <SidebarItem
-            icon={<HelpCircle strokeWidth={1.5} size={22} />}
+            icon={<HelpCircle strokeWidth={1.5} size={20} />}
             text="Help Center"
             to="/help-center"
             active={currentPath === "/help-center"}
-            isCollapsed={isSidebarCollapsed}
+            isCollapsed={isSidebarCollapsed && screenSize !== "sm"}
             onClick={() => handleNavigation("/help-center")}
           />
           <button
             onClick={handleLogout}
             type="button"
-            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-300 ${
-              isSidebarCollapsed ? "justify-center" : ""
-            } bg-gray-100/50 backdrop-blur-xl border border-gray-200/50 hover:bg-gray-200/50 hover:border-gray-300/50 cursor-pointer`}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-200 group ${
+              isSidebarCollapsed && screenSize !== "sm" ? "justify-center" : ""
+            } text-gray-500 hover:bg-red-50 hover:text-red-600`}
             aria-label="Log Out"
-            title={isSidebarCollapsed ? "Log Out" : ""}
+            title={isSidebarCollapsed && screenSize !== "sm" ? "Log Out" : ""}
           >
-            <LogOut strokeWidth={1.5} size={22} className="text-gray-600" />
-            {!isSidebarCollapsed && (
-              <span className="font-medium text-gray-600">Log Out</span>
+            <LogOut strokeWidth={1.5} size={20} className="shrink-0 group-hover:text-red-500" />
+            {(!isSidebarCollapsed || screenSize === "sm") && (
+              <span className="text-sm font-medium">Log Out</span>
             )}
           </button>
         </div>
-      </div>
+      </aside>
     </>
   );
 };
@@ -482,25 +569,24 @@ const SidebarItem = React.memo(
       aria-label={text}
     >
       <div
-        className={`relative flex items-center gap-3 p-3 rounded-xl transition-all duration-300 ${
+        className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-200 ${
           isCollapsed ? "justify-center" : ""
         } ${
           active
             ? special
-              ? "bg-gray-200 text-gray-800 shadow-lg border border-gray-200/50"
-              : "bg-gray-100 text-gray-800 shadow-md border border-gray-200/50"
-            : "text-gray-600 hover:bg-gray-200/50 hover:border-gray-300/50 border border-transparent"
+              ? "bg-indigo-50 text-indigo-700 font-semibold"
+              : "bg-indigo-50 text-indigo-700 font-semibold"
+            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
         }`}
       >
-        <div
-          className={`relative z-10 p-2 rounded-lg ${
-            active && special ? "bg-gray-300/50" : "bg-gray-200/50"
-          }`}
-        >
+        {active && (
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-indigo-600 rounded-r-full" />
+        )}
+        <span className={`shrink-0 ${active ? "text-indigo-600" : "text-gray-400 group-hover:text-gray-600"}`}>
           {icon}
-        </div>
+        </span>
         {!isCollapsed && (
-          <span className="font-medium truncate relative z-10 text-sm">
+          <span className="text-sm truncate">
             {text}
           </span>
         )}
@@ -528,87 +614,80 @@ const SidebarSection = React.memo(
     const handleSectionClick = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (e.target.closest(".toggle-arrow")) {
-        onToggle();
-        return;
-      }
       if (!isCollapsed) {
-        handleNavigation(sectionTo);
         onToggle();
       } else {
-        // In collapsed state, just expand the section
+        // In collapsed state, expand the sidebar section
         onToggle();
       }
     };
 
     return (
-      <div className="w-full group" style={{ animationDelay: `${delay}ms` }}>
+      <div className="w-full">
         <button
           onClick={handleSectionClick}
-          className={`relative w-full flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-300 ${
+          className={`relative w-full flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 ${
             isCollapsed ? "justify-center" : ""
           } ${
-            hasActiveChild || currentPath === sectionTo
-              ? "bg-gray-200 text-gray-800 shadow-lg border border-gray-200/50"
-              : "text-gray-600 hover:bg-gray-200/50 hover:border-gray-300/50 border border-transparent"
+            hasActiveChild
+              ? "bg-indigo-50/60 text-indigo-700"
+              : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
           }`}
           title={isCollapsed ? text : ""}
           type="button"
           aria-label={text}
           aria-expanded={expanded && !isCollapsed}
         >
-          <div className="relative z-10 p-2 rounded-lg bg-gray-200/50">
+          <span className={`shrink-0 ${hasActiveChild ? "text-indigo-600" : "text-gray-400"}`}>
             {icon}
-          </div>
+          </span>
           {!isCollapsed && (
             <>
-              <span className="font-medium flex-1 truncate relative z-10 text-sm">
+              <span className="text-sm font-medium flex-1 truncate text-left">
                 {text}
               </span>
-              <div
-                className={`toggle-arrow transform transition-transform duration-300 relative z-10 p-1 rounded ${
+              <ChevronDown
+                strokeWidth={1.5}
+                size={16}
+                className={`shrink-0 text-gray-400 transition-transform duration-200 ${
                   expanded ? "rotate-180" : ""
                 }`}
-              >
-                <ChevronDown strokeWidth={1.5} size={18} className="text-gray-600" />
-              </div>
+              />
             </>
           )}
         </button>
 
+        {/* Children dropdown */}
         <div
-          className={`overflow-hidden transition-all duration-500 ease-out ${
-            expanded && !isCollapsed ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"
+          className={`overflow-hidden transition-all duration-300 ease-in-out ${
+            expanded && !isCollapsed ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
           }`}
         >
-          <div className="ml-6 mt-2 space-y-1 border-l border-gray-200/50 pl-4">
+          <div className="ml-5 mt-0.5 space-y-0.5 border-l-2 border-gray-100 pl-3 py-0.5">
             {children.map((child) => (
               <button
                 key={child.to}
                 className="w-full block cursor-pointer group"
-                title={isCollapsed ? child.text : ""}
                 onClick={() => handleNavigation(child.to)}
                 type="button"
                 aria-label={child.text}
               >
                 <div
-                  className={`relative flex items-center gap-3 p-2.5 rounded-lg transition-all duration-300 ${
+                  className={`relative flex items-center gap-2.5 px-2.5 py-[7px] rounded-md transition-all duration-200 ${
                     currentPath === child.to
-                      ? "bg-gray-100 text-gray-800 border border-gray-200/50 shadow-md"
-                      : "text-gray-600 hover:bg-gray-200/50 hover:border-gray-300/50 border border-transparent"
+                      ? "bg-indigo-50 text-indigo-700 font-medium"
+                      : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
                   }`}
                 >
                   {currentPath === child.to && (
-                    <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-6 bg-gray-400 rounded-r-full"></div>
+                    <div className="absolute -left-[15px] top-1/2 -translate-y-1/2 w-[2px] h-4 bg-indigo-500 rounded-r-full" />
                   )}
-                  <div className="relative z-10 ml-1 p-1.5 rounded-md bg-gray-200/50">
+                  <span className={`shrink-0 ${currentPath === child.to ? "text-indigo-500" : "text-gray-400"}`}>
                     {child.icon}
-                  </div>
-                  {!isCollapsed && (
-                    <span className="font-medium text-sm truncate relative z-10">
-                      {child.text}
-                    </span>
-                  )}
+                  </span>
+                  <span className="text-sm truncate">
+                    {child.text}
+                  </span>
                 </div>
               </button>
             ))}

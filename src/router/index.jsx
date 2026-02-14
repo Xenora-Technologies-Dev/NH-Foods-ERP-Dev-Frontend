@@ -1,47 +1,63 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { Route, Routes, Navigate } from "react-router-dom";
+import { PageListSkeleton } from "../components/ui/Skeletons";
 
-import Dashboard from "../pages/dashboardPage.jsx";
+// Layout and Login load eagerly (always needed)
 import Layout from "../components/Layout.jsx";
-import VendorCreation from "../components/VendorModule/VendorManagement.jsx";
-import CustomerCreation from "../components/Customer/CustomerManagement.jsx";
-import StockCreation from "../components/Stock/StockManagement.jsx";
-import UnitOfMeasure from "../components/UnitOfMeasure/UnitOfMeasure.jsx";
-import Staff from "../components/Staff/staff.jsx";
-import Settings from "../components/Settings/Settings.jsx";
-import NotFound from "../components/NotFound.jsx";
 import ERPLogin from "../components/Login/Login.jsx";
-import PurchaseOrderPage from "../components/PurchaseOrder/purchase/PurchaseOrderPage.jsx";
-import ApprovedPurchase from "../components/PurchaseOrder/purchase/ApprovedPurchase.jsx";
-import SalesOrderPage from "../components/PurchaseOrder/sales/SalesOrderPage.jsx";
-import ApprovedSales from "../components/PurchaseOrder/sales/ApprovedSales.jsx";
-import InventoryManagement from "../components/Inventory/InventoryManagement.jsx";
-import PurchaseReturnPage from "../components/PurchaseOrder/purchaseReturn/PurchaseReturnPage.jsx";
-import SalesReturnPage from "../components/PurchaseOrder/salesReturn/SalesReturnPage.jsx";
-import CategoryManagement from "../components/Inventory/CategoryManagement.jsx";
-import ReceiptVoucherManagement from "../components/FinancialModules/Receipt/ReceiptVoucher.jsx";
-import PaymentVoucherManagement from "../components/FinancialModules/Payment/PaymentVoucher.jsx";
-import PurchaseAccounts from "../components/AccountsModule/Purchase/PurchaseAccount.jsx";
-import SaleAccountsManagement from "../components/AccountsModule//Sales/SaleAccountsManagement.jsx";
-import TransactionsManagement from "../components/AccountsModule/Transaction/TransactionsManagement.jsx";
-import ChartOfAccountsManagement from "../components/AccountsModule/ChartOfAccounts/ChartOfAccountsManagement.jsx";
-import ExpenseAccountsPage from "../components/AccountsModule/Expense/ExpenseAccountsPage.jsx";
-import ExpenseTypesPage from "../components/AccountsModule/Expense/ExpenseTypesPage.jsx";
-import ExpenseHistoryPage from "../components/AccountsModule/Expense/ExpenseHistoryPage.jsx";
-import JournalVoucherManagement from "../components/FinancialModules/Journal/JournalVoucherManagement.jsx";
-import ContraVoucherManagement from "../components/FinancialModules/Contra/ContraVoucherManagement.jsx";
-import ExpenseVoucherManagement from "../components/FinancialModules/Expense/ExpenseVoucherManagement.jsx";
-import StockDetail from "../components/Stock/StockDetail.jsx";
-import VatReports from "../components/Reports/VATReportCreate.jsx";
-import TrialBalanceReport from "../components/Reports/TrialBalanceReport.jsx";
-import ProfitLossReport from "../components/Reports/ProfitLossReport.jsx";
-import BalanceSheetReport from "../components/Reports/BalanceSheetReport.jsx";
-import StatementOfAccount from "../components/Reports/StatementOfAccount.jsx";
-import VendorDetailsPage from "../components/AccountsModule/Purchase/VendorDetailsPage.jsx";
-import CustomerDetailsPage from "../components/AccountsModule/Sales/CustomerDetailsPage.jsx";
-import GRNPage from "../components/PurchaseOrder/grn/GRNPage.jsx";
+import NotFound from "../components/NotFound.jsx";
+
+// ─── Lazy-loaded route components (code splitting) ───────────
+// Each page loads its JS bundle only when the user navigates to it.
+// This reduces the initial bundle from ~3.1MB to a fraction.
+const Dashboard = lazy(() => import("../pages/dashboardPage.jsx"));
+const VendorCreation = lazy(() => import("../components/VendorModule/VendorManagement.jsx"));
+const CustomerCreation = lazy(() => import("../components/Customer/CustomerManagement.jsx"));
+const StockCreation = lazy(() => import("../components/Stock/StockManagement.jsx"));
+const StockDetail = lazy(() => import("../components/Stock/StockDetail.jsx"));
+const UnitOfMeasure = lazy(() => import("../components/UnitOfMeasure/UnitOfMeasure.jsx"));
+const Staff = lazy(() => import("../components/Staff/staff.jsx"));
+const Settings = lazy(() => import("../components/Settings/Settings.jsx"));
+const PurchaseOrderPage = lazy(() => import("../components/PurchaseOrder/purchase/PurchaseOrderPage.jsx"));
+const ApprovedPurchase = lazy(() => import("../components/PurchaseOrder/purchase/ApprovedPurchase.jsx"));
+const SalesOrderPage = lazy(() => import("../components/PurchaseOrder/sales/SalesOrderPage.jsx"));
+const ApprovedSales = lazy(() => import("../components/PurchaseOrder/sales/ApprovedSales.jsx"));
+const InventoryManagement = lazy(() => import("../components/Inventory/InventoryManagement.jsx"));
+const PurchaseReturnPage = lazy(() => import("../components/PurchaseOrder/purchaseReturn/PurchaseReturnPage.jsx"));
+const SalesReturnPage = lazy(() => import("../components/PurchaseOrder/salesReturn/SalesReturnPage.jsx"));
+const CategoryManagement = lazy(() => import("../components/Inventory/CategoryManagement.jsx"));
+const ReceiptVoucherManagement = lazy(() => import("../components/FinancialModules/Receipt/ReceiptVoucher.jsx"));
+const PaymentVoucherManagement = lazy(() => import("../components/FinancialModules/Payment/PaymentVoucher.jsx"));
+const JournalVoucherManagement = lazy(() => import("../components/FinancialModules/Journal/JournalVoucherManagement.jsx"));
+const ContraVoucherManagement = lazy(() => import("../components/FinancialModules/Contra/ContraVoucherManagement.jsx"));
+const ExpenseVoucherManagement = lazy(() => import("../components/FinancialModules/Expense/ExpenseVoucherManagement.jsx"));
+const PurchaseAccounts = lazy(() => import("../components/AccountsModule/Purchase/PurchaseAccount.jsx"));
+const SaleAccountsManagement = lazy(() => import("../components/AccountsModule//Sales/SaleAccountsManagement.jsx"));
+const TransactionsManagement = lazy(() => import("../components/AccountsModule/Transaction/TransactionsManagement.jsx"));
+const ChartOfAccountsManagement = lazy(() => import("../components/AccountsModule/ChartOfAccounts/ChartOfAccountsManagement.jsx"));
+const ExpenseAccountsPage = lazy(() => import("../components/AccountsModule/Expense/ExpenseAccountsPage.jsx"));
+const ExpenseTypesPage = lazy(() => import("../components/AccountsModule/Expense/ExpenseTypesPage.jsx"));
+const ExpenseHistoryPage = lazy(() => import("../components/AccountsModule/Expense/ExpenseHistoryPage.jsx"));
+const VatReports = lazy(() => import("../components/Reports/VATReportCreate.jsx"));
+const TrialBalanceReport = lazy(() => import("../components/Reports/TrialBalanceReport.jsx"));
+const ProfitLossReport = lazy(() => import("../components/Reports/ProfitLossReport.jsx"));
+const BalanceSheetReport = lazy(() => import("../components/Reports/BalanceSheetReport.jsx"));
+const StatementOfAccount = lazy(() => import("../components/Reports/StatementOfAccount.jsx"));
+const ItemProfitabilityReport = lazy(() => import("../components/Reports/ItemProfitabilityReport.jsx"));
+const VendorDetailsPage = lazy(() => import("../components/AccountsModule/Purchase/VendorDetailsPage.jsx"));
+const CustomerDetailsPage = lazy(() => import("../components/AccountsModule/Sales/CustomerDetailsPage.jsx"));
+const GRNPage = lazy(() => import("../components/PurchaseOrder/grn/GRNPage.jsx"));
+
+// Suspense fallback shown while lazy chunk loads
+const LazyFallback = () => (
+  <div className="p-8">
+    <PageListSkeleton rows={8} />
+  </div>
+);
+
 export default function AdminRouter() {
   return (
+    <Suspense fallback={<LazyFallback />}>
     <Routes>
       <Route path="/" element={<ERPLogin />} />
       <Route element={<Layout />}>
@@ -95,9 +111,11 @@ export default function AdminRouter() {
         <Route path="/profit-loss" element={<ProfitLossReport />} />
         <Route path="/balance-sheet" element={<BalanceSheetReport />} />
         <Route path="/statement-of-account" element={<StatementOfAccount />} />
+        <Route path="/item-profitability" element={<ItemProfitabilityReport />} />
       </Route>
       {/* </Route> */}
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </Suspense>
   );
 }

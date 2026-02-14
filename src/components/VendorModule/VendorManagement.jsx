@@ -28,12 +28,14 @@ import {
   Filter,
 } from "lucide-react";
 import axiosInstance from "../../axios/axios";
+import { useVendorList, useInvalidateQueries } from "../../hooks/useDataFetching";
+import { PageListSkeleton, RefetchIndicator } from "../ui/Skeletons";
 
 // Session management utilities (using memory storage for Claude environment)
 const SessionManager = {
   storage: {},
 
-  get: (key) => {
+  get(key) {
     try {
       return this.storage[`vendor_session_${key}`] || null;
     } catch {
@@ -41,7 +43,7 @@ const SessionManager = {
     }
   },
 
-  set: (key, value) => {
+  set(key, value) {
     try {
       this.storage[`vendor_session_${key}`] = value;
     } catch (error) {
@@ -49,7 +51,7 @@ const SessionManager = {
     }
   },
 
-  remove: (key) => {
+  remove(key) {
     try {
       delete this.storage[`vendor_session_${key}`];
     } catch (error) {
@@ -57,7 +59,7 @@ const SessionManager = {
     }
   },
 
-  clear: () => {
+  clear() {
     Object.keys(this.storage).forEach((key) => {
       if (key.startsWith("vendor_session_")) {
         delete this.storage[key];
@@ -67,7 +69,11 @@ const SessionManager = {
 };
 
 const VendorManagement = () => {
-  const [vendors, setVendors] = useState([]);
+  // React Query for data fetching with caching
+  const { data: vendorData, isLoading, isFetching, refetch } = useVendorList();
+  const { invalidateVendors } = useInvalidateQueries();
+  const vendors = vendorData?.items || [];
+
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [editVendorId, setEditVendorId] = useState(null);
@@ -84,7 +90,6 @@ const VendorManagement = () => {
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [showToast, setShowToast] = useState({
     visible: false,
     message: "",
@@ -100,13 +105,13 @@ const VendorManagement = () => {
   });
 
   // New UX enhancement states
-  const [isDraftSaved, setIsDraftSaved] = useState(false);
-  const [lastSaveTime, setLastSaveTime] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState("table"); // table, card
   const [selectedVendors, setSelectedVendors] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [isDraftSaved, setIsDraftSaved] = useState(false);
+  const [lastSaveTime, setLastSaveTime] = useState(null);
 
   // Refs for enhanced UX
   const formRef = useRef(null);
@@ -174,36 +179,6 @@ const VendorManagement = () => {
     SessionManager.set("viewMode", viewMode);
   }, [viewMode]);
 
-  const fetchVendors = useCallback(async (showRefreshIndicator = false) => {
-    try {
-      if (showRefreshIndicator) {
-        setIsRefreshing(true);
-      } else {
-        setIsLoading(true);
-      }
-
-      const res = await axiosInstance.get("/vendors/vendors");
-      setVendors(res.data.data || []);
-
-      if (showRefreshIndicator) {
-        showToastMessage("Data refreshed successfully!", "success");
-      }
-    } catch (error) {
-      console.error("Failed to fetch vendors:", error);
-      showToastMessage(
-        error.response?.data?.message || "Failed to fetch vendors.",
-        "error"
-      );
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchVendors();
-  }, [fetchVendors]);
-
   const showToastMessage = useCallback((message, type = "success") => {
     setShowToast({ visible: true, message, type });
     setTimeout(
@@ -211,6 +186,18 @@ const VendorManagement = () => {
       3000
     );
   }, []);
+
+  // Refresh handler using React Query
+  const fetchVendors = useCallback(async (showRefreshIndicator = false) => {
+    if (showRefreshIndicator) {
+      setIsRefreshing(true);
+      await refetch();
+      showToastMessage("Data refreshed successfully!", "success");
+      setIsRefreshing(false);
+    }
+  }, [refetch, showToastMessage]);
+
+  // No useEffect needed — React Query handles initial fetch automatically
 
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
@@ -253,7 +240,7 @@ const VendorManagement = () => {
         showToastMessage("Vendor created successfully!", "success");
       }
 
-      await fetchVendors();
+      await invalidateVendors();
       resetForm();
 
       // Clear session data after successful submission
@@ -267,7 +254,7 @@ const VendorManagement = () => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [editVendorId, formData, fetchVendors, validateForm, showToastMessage]);
+  }, [editVendorId, formData, invalidateVendors, validateForm, showToastMessage]);
 
   const handleEdit = useCallback((vendor) => {
     setEditVendorId(vendor._id);
@@ -303,7 +290,7 @@ const VendorManagement = () => {
     setDeleteConfirmation((prev) => ({ ...prev, isDeleting: true }));
     try {
       await axiosInstance.delete(`/vendors/vendors/${deleteConfirmation.id}`);
-      await fetchVendors();
+      await invalidateVendors();
       showToastMessage("Vendor deleted successfully!", "success");
       hideDeleteConfirmation();
     } catch (error) {
@@ -312,7 +299,7 @@ const VendorManagement = () => {
         "error"
       );
     }
-  }, [deleteConfirmation.id, fetchVendors, showToastMessage]);
+  }, [deleteConfirmation.id, invalidateVendors, showToastMessage]);
 
   const hideDeleteConfirmation = useCallback(() => {
     setDeleteConfirmation({
@@ -458,15 +445,10 @@ const VendorManagement = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2
-            size={48}
-            className="text-blue-600 animate-spin mx-auto mb-4"
-          />
-          <p className="text-gray-600 text-lg">Loading vendors...</p>
-        </div>
-      </div>
+      <>
+        <RefetchIndicator show={isFetching} />
+        <PageListSkeleton statCards={4} tableRows={8} tableColumns={5} />
+      </>
     );
   }
 

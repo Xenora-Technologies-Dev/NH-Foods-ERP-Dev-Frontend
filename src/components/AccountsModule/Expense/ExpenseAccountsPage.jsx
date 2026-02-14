@@ -23,8 +23,10 @@ import {
   Receipt,
   FileText,
   Wallet,
+  Download,
 } from "lucide-react";
 import axiosInstance from "../../../axios/axios";
+import { exportExpenseAccountsExcel } from "../../../utils/excelExport";
 import { useNavigate } from "react-router-dom";
 
 // Toast notification component
@@ -309,6 +311,14 @@ const ExpenseAccountsPage = () => {
                 size={20}
                 className={`text-gray-600 ${isRefreshing ? "animate-spin" : ""}`}
               />
+            </button>
+            <button
+              onClick={() => exportExpenseAccountsExcel(accounts, { search: searchTerm })}
+              disabled={accounts.length === 0}
+              className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Export to Excel"
+            >
+              <Download size={18} /> Export
             </button>
             <button
               onClick={openAddModal}

@@ -178,384 +178,190 @@ const CreditNoteView = ({ returnData, customer, onBack }) => {
             width: "210mm",
             minHeight: "297mm",
             margin: "0 auto",
-            padding: "15mm",
+            padding: "10mm",
             background: "#fff",
             fontFamily: "Arial, Helvetica, sans-serif",
-            fontSize: "11px",
+            fontSize: 11,
             color: "#000",
             boxSizing: "border-box",
-            overflow: "visible",
           }}
         >
-          {/* Header */}
-          <div
-            style={{
-              background: "linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)",
-              color: "#fff",
-              padding: "20px",
-              borderRadius: "8px",
-              marginBottom: "20px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-            }}
-          >
-            <div>
-              <h1 style={{ margin: 0, fontSize: "22px", fontWeight: "bold" }}>
-                {profileData.companyName}
-              </h1>
+          {/* Color coded top bar - Rose for Credit Note */}
+          <div style={{ height: 6, background: "linear-gradient(90deg, #be123c, #f43f5e)", marginBottom: 12, borderRadius: 3 }} />
+
+          <div style={{ textAlign: "right", fontWeight: "bold", marginBottom: 9 }}>
+            <span>Credit Note</span>
+          </div>
+
+          {/* Header block */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+            <div style={{ width: "18%", textAlign: "left" }}>
+              {profileData.logo ? (
+                <img src={profileData.logo} alt="logo" style={{ width: 110 }} />
+              ) : (
+                <div style={{ width: 100, height: 100 }} />
+              )}
+            </div>
+
+            <div style={{ width: "52%", textAlign: "center", paddingLeft: 8, paddingRight: 8 }}>
               {profileData.companyNameArabic && (
-                <p style={{ margin: "4px 0", fontSize: "14px", direction: "rtl" }}>
-                  {profileData.companyNameArabic}
-                </p>
+                <div style={{ fontWeight: "700", direction: "rtl", fontSize: 13 }}>{profileData.companyNameArabic}</div>
               )}
-            </div>
-            <div style={{ textAlign: "right", fontSize: "11px" }}>
-              <p style={{ margin: "2px 0" }}>📍 {profileData.addressLine1}</p>
-              <p style={{ margin: "2px 0" }}>📞 {profileData.phoneNumber}</p>
-              <p style={{ margin: "2px 0" }}>✉️ {profileData.email}</p>
-            </div>
-          </div>
-
-          {/* Document Title */}
-          <div
-            style={{
-              textAlign: "center",
-              marginBottom: "25px",
-              paddingBottom: "10px",
-              borderBottom: "2px solid #3b82f6",
-            }}
-          >
-            <h2
-              style={{
-                color: "#1e40af",
-                fontSize: "24px",
-                margin: 0,
-                fontWeight: "bold",
-                letterSpacing: "2px",
-              }}
-            >
-              CREDIT NOTE
-            </h2>
-            <p style={{ color: "#666", margin: "5px 0 0 0", fontSize: "12px" }}>
-              Official Document
-            </p>
-          </div>
-
-          {/* Document Info */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginBottom: "20px",
-              padding: "15px",
-              background: "#f8fafc",
-              borderRadius: "8px",
-              border: "1px solid #e2e8f0",
-            }}
-          >
-            <div>
-              <p style={{ margin: "4px 0" }}>
-                <strong>Credit Note No:</strong>{" "}
-                <span style={{ color: "#1e40af", fontWeight: "bold" }}>
-                  {ret.creditNoteNo}
-                </span>
-              </p>
-              <p style={{ margin: "4px 0" }}>
-                <strong>Return No:</strong> {ret.transactionNo}
-              </p>
-              <p style={{ margin: "4px 0" }}>
-                <strong>Returned Date:</strong> {formatDate(ret.date)}
-              </p>
-            </div>
-            <div style={{ 
-              background: "#e0f2fe", 
-              padding: "10px 15px", 
-              borderRadius: "8px",
-              border: "1px solid #7dd3fc"
-            }}>
-              <p style={{ margin: "0 0 4px 0", fontSize: "10px", color: "#0369a1", fontWeight: "bold" }}>
-                ORIGINAL INVOICE DETAILS
-              </p>
-              <p style={{ margin: "4px 0" }}>
-                <strong>Invoice No:</strong>{" "}
-                <span style={{ color: "#1e40af", fontWeight: "bold" }}>
-                  {ret.originalInvoiceNo}
-                </span>
-              </p>
-              <p style={{ margin: "4px 0" }}>
-                <strong>Invoice Date:</strong> {formatDate(ret.originalInvoiceDate || ret.invoiceDate)}
-              </p>
-            </div>
-            <div>
-              <p style={{ margin: "4px 0" }}>
-                <strong>Status:</strong>{" "}
-                <span
-                  style={{
-                    background: "#22c55e",
-                    color: "#fff",
-                    padding: "4px 12px",
-                    borderRadius: "12px",
-                    fontSize: "10px",
-                    display: "inline-block",
-                  }}
-                >
-                  ✓ CONFIRMED
-                </span>
-              </p>
-              {ret.reference && (
-                <p style={{ margin: "4px 0" }}>
-                  <strong>Reference:</strong> {ret.reference}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Customer Details */}
-          <div
-            style={{
-              marginBottom: "20px",
-              padding: "15px",
-              border: "1px solid #e2e8f0",
-              borderRadius: "8px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", marginBottom: "10px" }}>
-              <div
-                style={{
-                  width: "32px",
-                  height: "32px",
-                  background: "#e0f2fe",
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: "10px",
-                }}
-              >
-                👤
+              <div style={{ fontWeight: 800, fontSize: 15, marginTop: 4, whiteSpace: "nowrap" }}>
+                {profileData.companyName}
               </div>
-              <div>
-                <p style={{ margin: 0, fontWeight: "bold", fontSize: "14px" }}>
-                  {customer?.customerName || ret.partyId?.customerName || "Customer"}
-                </p>
-                <p style={{ margin: 0, color: "#666", fontSize: "10px" }}>Customer</p>
+              <div style={{ marginTop: 6, fontSize: 11, lineHeight: 1.4 }}>
+                <div>
+                  {profileData.addressLine1}
+                  <span style={{ display: "inline-block", margin: "0 8px" }}>|</span>
+                  <span>Tel: {profileData.phoneNumber}</span>
+                </div>
+                <div>
+                  Email: {profileData.email}
+                  {profileData.website && (
+                    <>
+                      <span style={{ display: "inline-block", margin: "0 8px" }}>|</span>
+                      Web: {profileData.website}
+                    </>
+                  )}
+                </div>
+              </div>
+              {profileData.vatNumber && (
+                <div style={{ marginTop: 6, fontSize: 11 }}>
+                  <strong>VAT Reg. No:</strong> {profileData.vatNumber}
+                </div>
+              )}
+              <div style={{ fontWeight: 700, textDecoration: "underline", marginTop: 6, fontSize: 13, color: "#be123c" }}>
+                CREDIT NOTE
               </div>
             </div>
-            <div style={{ fontSize: "11px", color: "#666" }}>
-              {customer?.address && <p style={{ margin: "2px 0" }}>{customer.address}</p>}
-              {customer?.email && <p style={{ margin: "2px 0" }}>Email: {customer.email}</p>}
-              {customer?.trnNumber && (
-                <p style={{ margin: "2px 0" }}>TRN: {customer.trnNumber}</p>
-              )}
+
+            <div style={{ width: "28%", textAlign: "right", fontSize: 11 }} />
+          </div>
+
+          {/* Customer + Meta */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <div style={{ width: "58%", fontSize: 11 }}>
+              <div style={{ fontWeight: 700 }}>BILL TO:</div>
+              <div style={{ fontWeight: 700, marginTop: 6 }}>
+                {customer?.customerName || ret.partyId?.customerName || "Customer"}
+              </div>
+              {customer?.address && <div style={{ marginTop: 4 }}>{customer.address}</div>}
+              {customer?.email && <div style={{ marginTop: 4 }}>Email: {customer.email}</div>}
+              {customer?.trnNumber && <div style={{ marginTop: 4 }}>VAT Reg. No: {customer.trnNumber}</div>}
+            </div>
+
+            <div style={{ width: "38%", textAlign: "right", fontSize: 11 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ textAlign: "left", minWidth: 120 }}>
+                  <div style={{ fontWeight: 700 }}>Credit Note No:</div>
+                  <div style={{ fontWeight: 700, marginTop: 6 }}>Return No:</div>
+                  <div style={{ fontWeight: 700, marginTop: 6 }}>Date:</div>
+                  <div style={{ fontWeight: 700, marginTop: 6 }}>Orig. Invoice:</div>
+                  <div style={{ fontWeight: 700, marginTop: 6 }}>Invoice Date:</div>
+                </div>
+                <div style={{ textAlign: "right", minWidth: 140 }}>
+                  <div style={{ fontWeight: 700, color: "#be123c" }}>{ret.creditNoteNo}</div>
+                  <div style={{ marginTop: 6 }}>{ret.transactionNo}</div>
+                  <div style={{ marginTop: 6 }}>{formatDate(ret.date)}</div>
+                  <div style={{ marginTop: 6 }}>{ret.originalInvoiceNo}</div>
+                  <div style={{ marginTop: 6 }}>{formatDate(ret.originalInvoiceDate || ret.invoiceDate)}</div>
+                </div>
+              </div>
             </div>
           </div>
+
+          <div style={{ height: 1, background: "#000", marginBottom: 8 }} />
 
           {/* Items Table */}
-          <div style={{ marginBottom: "20px" }}>
-            <h3
-              style={{
-                fontSize: "14px",
-                fontWeight: "bold",
-                marginBottom: "10px",
-                color: "#1e40af",
-              }}
-            >
-              RETURNED ITEMS
-            </h3>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: "10px",
-              }}
-            >
-              <thead>
-                <tr style={{ background: "#1e40af", color: "#fff" }}>
-                  <th style={{ padding: "10px", textAlign: "center", width: "40px" }}>
-                    S.NO
-                  </th>
-                  <th style={{ padding: "10px", textAlign: "left" }}>ITEM DESCRIPTION</th>
-                  <th style={{ padding: "10px", textAlign: "center", width: "60px" }}>
-                    QTY
-                  </th>
-                  <th style={{ padding: "10px", textAlign: "right", width: "80px" }}>
-                    UNIT PRICE
-                  </th>
-                  <th style={{ padding: "10px", textAlign: "right", width: "80px" }}>
-                    EX VAT
-                  </th>
-                  <th style={{ padding: "10px", textAlign: "center", width: "50px" }}>
-                    VAT %
-                  </th>
-                  <th style={{ padding: "10px", textAlign: "right", width: "80px" }}>
-                    VAT AMT
-                  </th>
-                  <th style={{ padding: "10px", textAlign: "right", width: "100px" }}>
-                    TOTAL (AED)
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {ret.items?.map((item, index) => {
-                  const unitPrice = item.price || (item.rate / (item.qty || 1)) || 0;
-                  const exVat = item.lineTotal || item.rate || 0;
-                  const vatAmt = item.vatAmount || 0;
-                  const total = exVat + vatAmt;
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, marginBottom: 10 }}>
+            <thead>
+              <tr style={{ background: "#ffe4e6" }}>
+                <th style={{ width: 30, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>Line</th>
+                <th style={{ width: 64, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>CODE</th>
+                <th style={{ textAlign: "left", padding: "8px 10px 8px 22px", borderBottom: "1px solid #777" }}>Item Description</th>
+                <th style={{ width: 60, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>Qty</th>
+                <th style={{ width: 72, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>Unit Price</th>
+                <th style={{ width: 84, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>Value</th>
+                <th style={{ width: 54, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>VAT %</th>
+                <th style={{ width: 84, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>VAT Amount</th>
+                <th style={{ width: 120, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>TOTAL AED</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ret.items?.map((item, idx) => {
+                const unitPrice = item.price || (item.rate / (item.qty || 1)) || 0;
+                const exVat = item.lineTotal || item.rate || 0;
+                const vatAmt = item.vatAmount || 0;
+                const total = exVat + vatAmt;
+                return (
+                  <tr key={idx}>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{idx + 1}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{item.itemCode || "-"}</td>
+                    <td style={{ padding: "8px 10px 8px 22px", verticalAlign: "top" }}>{item.description}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{item.qty || item.returnQty}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{formatNumber(unitPrice)}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{formatNumber(exVat)}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{item.vatPercent || 0}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{formatNumber(vatAmt)}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{formatNumber(total)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
 
-                  return (
-                    <tr
-                      key={index}
-                      style={{
-                        background: index % 2 === 0 ? "#f8fafc" : "#fff",
-                        borderBottom: "1px solid #e2e8f0",
-                      }}
-                    >
-                      <td style={{ padding: "10px", textAlign: "center" }}>{index + 1}</td>
-                      <td style={{ padding: "10px" }}>
-                        <strong>{item.description}</strong>
-                        {item.itemCode && (
-                          <span style={{ color: "#666", fontSize: "9px", display: "block" }}>
-                            Code: {item.itemCode}
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ padding: "10px", textAlign: "center" }}>{item.qty || item.returnQty}</td>
-                      <td style={{ padding: "10px", textAlign: "right" }}>{formatNumber(unitPrice)}</td>
-                      <td style={{ padding: "10px", textAlign: "right" }}>{formatNumber(exVat)}</td>
-                      <td style={{ padding: "10px", textAlign: "center" }}>{item.vatPercent || 0}%</td>
-                      <td style={{ padding: "10px", textAlign: "right" }}>{formatNumber(vatAmt)}</td>
-                      <td
-                        style={{
-                          padding: "10px",
-                          textAlign: "right",
-                          fontWeight: "bold",
-                          color: "#1e40af",
-                        }}
-                      >
-                        AED {formatNumber(total)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <div style={{ minHeight: 40 }} />
 
           {/* Totals */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              marginBottom: "20px",
-            }}
-          >
-            <div
-              style={{
-                width: "280px",
-                background: "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)",
-                border: "1px solid #bae6fd",
-                borderRadius: "8px",
-                padding: "15px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  padding: "5px 0",
-                  borderBottom: "1px dashed #93c5fd",
-                }}
-              >
-                <span>Subtotal:</span>
-                <span>AED {formatNumber(subtotal)}</span>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  padding: "5px 0",
-                  borderBottom: "1px dashed #93c5fd",
-                }}
-              >
-                <span>VAT:</span>
-                <span>AED {formatNumber(vatTotal)}</span>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  padding: "10px 0 5px 0",
-                  fontWeight: "bold",
-                  fontSize: "16px",
-                  color: "#1e40af",
-                }}
-              >
-                <span>Total Credit:</span>
-                <span>AED {formatNumber(grandTotal)}</span>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+            <div style={{ width: "38%", fontSize: 11 }}>
+              <div style={{ border: "1px solid #000", padding: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <div>SUBTOTAL</div>
+                  <div style={{ minWidth: 100, textAlign: "right" }}>{formatNumber(subtotal)}</div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <div>VAT</div>
+                  <div style={{ minWidth: 100, textAlign: "right" }}>{formatNumber(vatTotal)}</div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, paddingTop: 6, borderTop: "1px solid #000", fontWeight: 800 }}>
+                  <div>TOTAL CREDIT</div>
+                  <div style={{ minWidth: 100, textAlign: "right" }}>{formatNumber(grandTotal)}</div>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Notes */}
           {ret.notes && (
-            <div
-              style={{
-                marginBottom: "20px",
-                padding: "10px 15px",
-                background: "#fffbeb",
-                border: "1px solid #fde68a",
-                borderRadius: "8px",
-              }}
-            >
-              <strong>Notes:</strong> {ret.notes}
+            <div style={{ marginTop: 12, fontSize: 10 }}>
+              <div style={{ fontWeight: 700 }}>Notes:</div>
+              <div style={{ marginTop: 4 }}>{ret.notes}</div>
             </div>
           )}
 
-          {/* Status Confirmation */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              marginBottom: "20px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "12px 24px",
-                background: "#dcfce7",
-                border: "2px solid #22c55e",
-                borderRadius: "8px",
-              }}
-            >
-              <span style={{ fontSize: "16px" }}>✓</span>
-              <span style={{ fontWeight: "bold", color: "#166534", fontSize: "12px" }}>
-                CREDIT NOTE CONFIRMED
-              </span>
+          {/* Signatures */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24, alignItems: "flex-start" }}>
+            <div style={{ width: "45%", textAlign: "center" }}>
+              <div style={{ borderTop: "1px solid #000", paddingTop: 6, marginTop: 40 }}>
+                <div style={{ fontWeight: 600, fontSize: 10 }}>Authorized Signature</div>
+              </div>
+            </div>
+            <div style={{ width: "45%", textAlign: "center" }}>
+              <div style={{ borderTop: "1px solid #000", paddingTop: 6, marginTop: 40 }}>
+                <div style={{ fontWeight: 600, fontSize: 10 }}>Received By</div>
+              </div>
             </div>
           </div>
 
           {/* Footer */}
-          <div
-            style={{
-              marginTop: "30px",
-              paddingTop: "15px",
-              borderTop: "1px solid #e2e8f0",
-              textAlign: "center",
-              fontSize: "10px",
-              color: "#666",
-            }}
-          >
-            <p style={{ margin: "4px 0" }}>
-              This is a computer-generated document. No signature required.
-            </p>
-            <p style={{ margin: "4px 0" }}>
-              For queries, please contact: {profileData.email}
-            </p>
+          <div style={{ marginTop: 18, fontSize: 10 }}>
+            <div>This is a computer-generated document. No signature required.</div>
+            <div style={{ marginTop: 6 }}>For {profileData.companyName}</div>
           </div>
+
+          <div style={{ textAlign: "center", marginTop: 18, fontSize: 10 }}>Page 1 of 1</div>
         </div>
       </div>
     </div>

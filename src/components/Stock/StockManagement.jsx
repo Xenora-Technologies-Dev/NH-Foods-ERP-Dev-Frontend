@@ -40,32 +40,34 @@ import axiosInstance from "../../axios/axios";
 import DirhamIcon from "../../assets/dirham.svg";
 import BarcodeGenerator from "react-barcode";
 import { saveAs } from "file-saver";
+import { useStockList, useVendorList, useInvalidateQueries } from "../../hooks/useDataFetching";
+import { PageListSkeleton, RefetchIndicator } from "../ui/Skeletons";
 
 // SessionManager and getColorFilter remain unchanged
 const SessionManager = {
   storage: {},
-  get: (key) => {
+  get(key) {
     try {
       return this.storage[`stock_session_${key}`] || null;
     } catch {
       return null;
     }
   },
-  set: (key, value) => {
+  set(key, value) {
     try {
       this.storage[`stock_session_${key}`] = value;
     } catch (error) {
       console.warn("Session storage failed:", error);
     }
   },
-  remove: (key) => {
+  remove(key) {
     try {
       delete this.storage[`stock_session_${key}`];
     } catch (error) {
       console.warn("Session removal failed:", error);
     }
   },
-  clear: () => {
+  clear() {
     Object.keys(this.storage).forEach((key) => {
       if (key.startsWith("stock_session_")) {
         delete this.storage[key];
@@ -195,11 +197,17 @@ const FormSelect = ({
 };
 
 const StockManagement = () => {
-  const [stockItems, setStockItems] = useState([]);
-  const [vendors, setVendors] = useState([]);
+  // React Query for data fetching with caching
+  const { data: stockData, isLoading, isFetching, refetch } = useStockList();
+  const { invalidateStock } = useInvalidateQueries();
+  const stockItems = stockData?.items || [];
+
+  // ── Cached vendor data via React Query ──
+  const { data: vendorData } = useVendorList();
+  const vendors = useMemo(() => vendorData?.items || [], [vendorData]);
   const [categories, setCategories] = useState([]);
   const [units, setUnits] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading_unused, setIsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [editItemId, setEditItemId] = useState(null);
@@ -289,18 +297,7 @@ const StockManagement = () => {
     }
   }, [showToastMessage]);
 
-  const fetchVendors = useCallback(async () => {
-    try {
-      const res = await axiosInstance.get("/vendors/vendors");
-      setVendors(res.data.data || []);
-    } catch (error) {
-      console.error("Failed to fetch vendors:", error);
-      showToastMessage(
-        error.response?.data?.message || "Failed to fetch vendors.",
-        "error"
-      );
-    }
-  }, [showToastMessage]);
+  // Vendors are now provided by React Query hook
 
   const fetchUnits = useCallback(async () => {
     try {
@@ -315,10 +312,9 @@ const StockManagement = () => {
   useEffect(() => {
     if (showModal) {
       fetchCategories();
-      fetchVendors();
       fetchUnits();
     }
-  }, [showModal, fetchCategories, fetchVendors, fetchUnits]);
+  }, [showModal, fetchCategories, fetchUnits]);
 
   useEffect(() => {
     if (!isManualItemId && !editItemId && formData.category && showModal) {
@@ -411,38 +407,20 @@ const StockManagement = () => {
     });
   }, [filterCategory, filterVendor, filterStatus, showLowStock]);
 
+  // Refresh handler using React Query
   const fetchStockItems = useCallback(
     async (showRefreshIndicator = false) => {
-      try {
-        if (showRefreshIndicator) {
-          setIsRefreshing(true);
-        } else {
-          setIsLoading(true);
-        }
-
-        const response = await axiosInstance.get("/stock/stock");
-        setStockItems(response.data.data?.stocks || []);
-
-        if (showRefreshIndicator) {
-          showToastMessage("Data refreshed successfully!", "success");
-        }
-      } catch (error) {
-        console.error("Failed to fetch stock items:", error);
-        showToastMessage(
-          error.response?.data?.message || "Failed to fetch stock items.",
-          "error"
-        );
-      } finally {
-        setIsLoading(false);
+      if (showRefreshIndicator) {
+        setIsRefreshing(true);
+        await refetch();
+        showToastMessage("Data refreshed successfully!", "success");
         setIsRefreshing(false);
       }
     },
-    [showToastMessage]
+    [refetch, showToastMessage]
   );
 
-  useEffect(() => {
-    fetchStockItems();
-  }, [fetchStockItems]);
+  // No useEffect needed for stock — React Query handles initial fetch
 
   const handleChange = useCallback(
     (e) => {
@@ -540,7 +518,7 @@ const StockManagement = () => {
         showToastMessage("Stock item created successfully!", "success");
       }
 
-      await fetchStockItems();
+      await invalidateStock();
       resetForm();
       SessionManager.remove("formData");
       SessionManager.remove("lastSaveTime");
@@ -552,7 +530,7 @@ const StockManagement = () => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [editItemId, formData, fetchStockItems, validateForm, showToastMessage]);
+  }, [editItemId, formData, invalidateStock, validateForm, showToastMessage]);
 
   const handleEdit = useCallback((item) => {
     console.log(item)
@@ -608,12 +586,9 @@ const StockManagement = () => {
 
     try {
       await axiosInstance.delete(`/stock/stock/${deleteConfirmation.itemId}`);
-      setStockItems((prev) =>
-        prev.filter((item) => item._id !== deleteConfirmation.itemId)
-      );
+      await invalidateStock();
       showToastMessage("Stock item deleted successfully!", "success");
       hideDeleteConfirmation();
-      await fetchStockItems();
     } catch (error) {
       showToastMessage(
         error.response?.data?.message || "Failed to delete stock item.",
@@ -623,7 +598,7 @@ const StockManagement = () => {
     }
   }, [
     deleteConfirmation.itemId,
-    fetchStockItems,
+    invalidateStock,
     showToastMessage,
     hideDeleteConfirmation,
   ]);
@@ -888,7 +863,7 @@ const StockManagement = () => {
       (item) => item.status === "Active"
     ).length;
     const lowStockItems = stockItems.filter(
-      (item) => item.currentStock <= item.reorderLevel
+      (item) => item.status === "Active" && item.currentStock <= item.reorderLevel
     ).length;
     const totalValue = stockItems
       .filter((item) => item.status === "Active")
@@ -1037,26 +1012,34 @@ const StockManagement = () => {
           </div>
         </div>
 
-        <div className="flex items-center space-x-2 mt-4 sm:mt-0">
+        <div className="flex items-center space-x-2 mt-4 sm:mt-0 flex-wrap gap-2">
           <button
-            onClick={() => handleNavigateToCategory()}
-            className="p-2 rounded-lg bg-white shadow-sm hover:shadow-md transition-all duration-200 hover:bg-indigo-50 hover:text-indigo-600"
-            title="Manage Categories"
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 shadow-sm hover:shadow-md ${
+              showFilters
+                ? "bg-indigo-600 text-white shadow-indigo-200"
+                : "bg-white text-gray-700 border border-gray-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200"
+            }`}
           >
-            <Tag size={16} className="text-gray-600 hover:text-indigo-600" />
+            <Filter size={16} />
+            <span>{showFilters ? "Hide Filters" : "Filters"}</span>
+            {(filterCategory || filterVendor || filterStatus || showLowStock) && (
+              <span className={`w-2 h-2 rounded-full ${showFilters ? 'bg-white' : 'bg-indigo-600'}`} />
+            )}
           </button>
+
           <button
             onClick={handleExport}
-            className="p-2 rounded-lg bg-white shadow-sm hover:shadow-md transition-all duration-200"
-            title="Export to CSV"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm bg-emerald-600 text-white hover:bg-emerald-700 transition-all duration-200 shadow-sm hover:shadow-md shadow-emerald-200"
           >
-            <Download size={16} className="text-gray-600" />
+            <Download size={16} />
+            <span>Export All</span>
           </button>
 
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="p-2 rounded-lg bg-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
+            className="p-2.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50 hover:bg-gray-50"
             title="Refresh data"
           >
             <RefreshCw
@@ -1066,15 +1049,11 @@ const StockManagement = () => {
           </button>
 
           <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`p-2 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 ${
-              showFilters
-                ? "bg-indigo-100 text-indigo-600"
-                : "bg-white text-gray-600"
-            }`}
-            title="Toggle filters"
+            onClick={() => handleNavigateToCategory()}
+            className="p-2.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 hover:bg-indigo-50 hover:text-indigo-600"
+            title="Manage Categories"
           >
-            <Filter size={16} />
+            <Tag size={16} className="text-gray-600" />
           </button>
         </div>
       </div>
@@ -1102,78 +1081,79 @@ const StockManagement = () => {
             {
               title: "Total Items",
               count: stockStats.totalItems,
-              icon: <Box size={24} />,
+              icon: <Box size={22} />,
               bgColor: "bg-indigo-50",
               textColor: "text-indigo-700",
               borderColor: "border-indigo-200",
               iconBg: "bg-indigo-100",
               iconColor: "text-indigo-600",
+              subtitle: "In inventory",
+              onClick: () => {
+                setFilterCategory("");
+                setFilterVendor("");
+                setFilterStatus("");
+                setShowLowStock(false);
+              },
             },
             {
               title: "Active Items",
               count: stockStats.activeItems,
-              icon: <CheckCircle size={24} />,
+              icon: <CheckCircle size={22} />,
               bgColor: "bg-emerald-50",
               textColor: "text-emerald-700",
               borderColor: "border-emerald-200",
               iconBg: "bg-emerald-100",
               iconColor: "text-emerald-600",
+              subtitle: "Currently available",
+              onClick: () => {
+                setFilterStatus("Active");
+                setShowFilters(true);
+              },
             },
             {
               title: "Low Stock Alert",
               count: stockStats.lowStockItems,
-              icon: <AlertTriangle size={24} />,
-              bgColor: "bg-red-50",
-              textColor: "text-red-700",
-              borderColor: "border-red-200",
-              iconBg: "bg-red-100",
-              iconColor: "text-red-600",
+              icon: <AlertTriangle size={22} />,
+              bgColor: stockStats.lowStockItems > 0 ? "bg-red-50" : "bg-gray-50",
+              textColor: stockStats.lowStockItems > 0 ? "text-red-700" : "text-gray-600",
+              borderColor: stockStats.lowStockItems > 0 ? "border-red-200" : "border-gray-200",
+              iconBg: stockStats.lowStockItems > 0 ? "bg-red-100" : "bg-gray-100",
+              iconColor: stockStats.lowStockItems > 0 ? "text-red-600" : "text-gray-500",
+              subtitle: "Need restocking",
+              onClick: () => {
+                setShowLowStock(true);
+                setShowFilters(true);
+              },
             },
             {
               title: "Total Value",
-              count: formatCurrency(stockStats.totalValue),
-              icon: <img src={DirhamIcon} alt="AED" className="w-6 h-6" />,
+              count: `AED ${Number(stockStats.totalValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              icon: <img src={DirhamIcon} alt="AED" className="w-5.5 h-5.5" />,
               bgColor: "bg-purple-50",
               textColor: "text-purple-700",
               borderColor: "border-purple-200",
               iconBg: "bg-purple-100",
               iconColor: "text-purple-600",
+              subtitle: "Active stock valuation",
+              onClick: null,
             },
           ].map((card, index) => (
             <div
               key={index}
-              className={`${card.bgColor} ${card.borderColor} rounded-2xl p-6 border transition-all duration-300 hover:shadow-lg cursor-pointer hover:scale-105`}
+              onClick={card.onClick || undefined}
+              className={`${card.bgColor} ${card.borderColor} rounded-2xl p-5 border transition-all duration-300 hover:shadow-lg ${card.onClick ? 'cursor-pointer hover:scale-[1.02]' : ''}`}
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-3 ${card.iconBg} rounded-xl`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className={`p-2.5 ${card.iconBg} rounded-xl`}>
                   <div className={card.iconColor}>{card.icon}</div>
                 </div>
-                <button
-                  className={`text-xs ${card.textColor} hover:opacity-80 transition-opacity font-medium`}
-                  onClick={() => {
-                    if (card.title.includes("Active"))
-                      setFilterStatus("Active");
-                    else if (card.title.includes("Low Stock"))
-                      setShowLowStock(true);
-                  }}
-                >
-                  {card.title.includes("Value")
-                    ? "View Details →"
-                    : "View All →"}
-                </button>
               </div>
-              <h3 className={`text-sm font-medium ${card.textColor} mb-2`}>
+              <p className={`text-xs font-medium ${card.textColor} uppercase tracking-wider mb-1`}>
                 {card.title}
-              </h3>
-              <p className="text-3xl font-bold text-gray-900">{card.count}</p>
+              </p>
+              <p className={`text-2xl font-bold text-gray-900 ${card.title === 'Total Value' ? 'text-lg' : ''}`}>{card.count}</p>
               <p className="text-xs text-gray-500 mt-1">
-                {card.title.includes("Total Items")
-                  ? "In inventory"
-                  : card.title.includes("Active")
-                  ? "Currently available"
-                  : card.title.includes("Low Stock")
-                  ? "Need restocking"
-                  : "Current valuation"}
+                {card.subtitle}}
               </p>
             </div>
           ))}
@@ -1225,66 +1205,74 @@ const StockManagement = () => {
             </div>
 
             {showFilters && (
-              <div className="flex flex-col sm:flex-row gap-4 p-4 bg-gray-50 rounded-lg">
-                <select
-                  value={filterCategory}
-                  onChange={(e) => setFilterCategory(e.target.value)}
-                  className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                >
-                  <option value="">All Categories</option>
-                  {categories.map((cat) => (
-                    <option key={cat._id} value={cat.name}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="p-4 bg-gradient-to-r from-gray-50 to-indigo-50/30 rounded-xl border border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Filter By</p>
+                  {(filterCategory || filterVendor || filterStatus || showLowStock) && (
+                    <button
+                      onClick={() => {
+                        setFilterCategory("");
+                        setFilterVendor("");
+                        setFilterStatus("");
+                        setShowLowStock(false);
+                        setSearchTerm("");
+                      }}
+                      className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 font-medium transition-colors"
+                    >
+                      <X size={12} />
+                      Clear All
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                  >
+                    <option value="">All Categories</option>
+                    {categories.map((cat) => (
+                      <option key={cat._id} value={cat.name}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
 
-                <select
-                  value={filterVendor}
-                  onChange={(e) => setFilterVendor(e.target.value)}
-                  className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                >
-                  <option value="">All Vendors</option>
-                  {vendors.map((vendor) => (
-                    <option key={vendor._id} value={vendor.vendorName}>
-                      {vendor.vendorName}
-                    </option>
-                  ))}
-                </select>
+                  <select
+                    value={filterVendor}
+                    onChange={(e) => setFilterVendor(e.target.value)}
+                    className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                  >
+                    <option value="">All Vendors</option>
+                    {vendors.map((vendor) => (
+                      <option key={vendor._id} value={vendor.vendorName}>
+                        {vendor.vendorName}
+                      </option>
+                    ))}
+                  </select>
 
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                >
-                  <option value="">All Status</option>
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                  >
+                    <option value="">All Status</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
 
-                <button
-                  onClick={() => setShowLowStock(!showLowStock)}
-                  className={`px-4 py-2 rounded-lg border transition-all duration-200 ${
-                    showLowStock
-                      ? "bg-red-100 border-red-300 text-red-700"
-                      : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  Low Stock Only
-                </button>
-
-                <button
-                  onClick={() => {
-                    setFilterCategory("");
-                    setFilterVendor("");
-                    setFilterStatus("");
-                    setShowLowStock(false);
-                    setSearchTerm("");
-                  }}
-                  className="px-4 py-2 text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                >
-                  Clear Filters
-                </button>
+                  <button
+                    onClick={() => setShowLowStock(!showLowStock)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all duration-200 ${
+                      showLowStock
+                        ? "bg-red-100 border-red-300 text-red-700"
+                        : "bg-white border-gray-200 text-gray-600 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
+                    }`}
+                  >
+                    <AlertTriangle size={14} />
+                    Low Stock
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1357,9 +1345,11 @@ const StockManagement = () => {
                             <p className="text-sm font-semibold text-gray-900">
                               {item.itemName.toUpperCase()}
                             </p>
-                            <p className="text-xs text-gray-500">
-                              ID: {item.itemId || item._id}
-                            </p>
+                            {item.itemId && (
+                              <p className="text-xs text-gray-500">
+                                ID: {item.itemId}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -1372,10 +1362,7 @@ const StockManagement = () => {
                               handleNavigateToCategory(item.category?._id);
                             }}
                           >
-                            {item.category?.name.toUpperCase() || "N/A"}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {item.unitOfMeasure}
+                            {item.category?.name?.toUpperCase() || "N/A"}
                           </p>
                         </div>
                       </td>
@@ -1389,10 +1376,10 @@ const StockManagement = () => {
                           <StockIcon size={16} className={stockStatus.color} />
                           <div>
                             <p className="text-sm font-bold text-gray-900">
-                              {item.currentStock}
+                              {Number(item.currentStock).toFixed(2)}
                             </p>
                             <p className={`text-xs ${stockStatus.color}`}>
-                              Reorder: {item.reorderLevel}
+                              Reorder: {Number(item.reorderLevel).toFixed(2)}
                             </p>
                           </div>
                         </div>

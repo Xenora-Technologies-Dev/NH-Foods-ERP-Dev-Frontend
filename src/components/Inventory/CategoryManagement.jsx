@@ -24,7 +24,7 @@ import axiosInstance from "../../axios/axios";
 const SessionManager = {
   storage: {},
 
-  get: (key) => {
+  get(key) {
     try {
       return this.storage[`category_session_${key}`] || null;
     } catch {
@@ -32,7 +32,7 @@ const SessionManager = {
     }
   },
 
-  set: (key, value) => {
+  set(key, value) {
     try {
       this.storage[`category_session_${key}`] = value;
     } catch (error) {
@@ -40,7 +40,7 @@ const SessionManager = {
     }
   },
 
-  remove: (key) => {
+  remove(key) {
     try {
       delete this.storage[`category_session_${key}`];
     } catch (error) {
@@ -48,7 +48,7 @@ const SessionManager = {
     }
   },
 
-  clear: () => {
+  clear() {
     Object.keys(this.storage).forEach((key) => {
       if (key.startsWith("category_session_")) {
         delete this.storage[key];
@@ -133,6 +133,14 @@ const CategoryManagement = () => {
     SessionManager.set("searchTerm", searchTerm);
   }, [searchTerm]);
 
+  const showToastMessage = useCallback((message, type = "success") => {
+    setShowToast({ visible: true, message, type });
+    setTimeout(
+      () => setShowToast((prev) => ({ ...prev, visible: false })),
+      3000
+    );
+  }, []);
+
   const fetchCategories = useCallback(
     async (showRefreshIndicator = false) => {
       setIsLoading(showRefreshIndicator ? false : true);
@@ -181,14 +189,6 @@ const CategoryManagement = () => {
     fetchCategories();
     fetchStats();
   }, [fetchCategories, fetchStats]);
-
-  const showToastMessage = useCallback((message, type = "success") => {
-    setShowToast({ visible: true, message, type });
-    setTimeout(
-      () => setShowToast((prev) => ({ ...prev, visible: false })),
-      3000
-    );
-  }, []);
 
   const handleChange = useCallback(
     (e) => {

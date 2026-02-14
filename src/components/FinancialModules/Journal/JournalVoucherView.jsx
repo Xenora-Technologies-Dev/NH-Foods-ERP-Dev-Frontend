@@ -276,11 +276,13 @@ const imgData = canvas.toDataURL("image/jpeg", 0.92);
             color: "#000",
           }}
         >
+          {/* Color coded top bar - Slate for Journal Voucher */}
+          <div style={{ height: 6, background: "linear-gradient(90deg, #475569, #94a3b8)", marginBottom: 12, borderRadius: 3 }} />
           <div
             style={{
               textAlign: "center",
               marginBottom: "20px",
-              borderBottom: "2px solid #8B5CF6",
+              borderBottom: "2px solid #475569",
               paddingBottom: "15px",
             }}
           >
@@ -306,7 +308,7 @@ const imgData = canvas.toDataURL("image/jpeg", 0.92);
             </h2>
             <div
               style={{
-                backgroundColor: "#c8a2c8",
+                backgroundColor: "#475569",
                 color: "white",
                 padding: "8px",
                 margin: "0 -20mm 20px -20mm",
@@ -371,7 +373,7 @@ const imgData = canvas.toDataURL("image/jpeg", 0.92);
           </div>
           <div
             style={{
-              backgroundColor: "#e6d7e6",
+              backgroundColor: "#e2e8f0",
               padding: "10px",
               marginBottom: "20px",
             }}
@@ -413,7 +415,7 @@ const imgData = canvas.toDataURL("image/jpeg", 0.92);
             }}
           >
             <thead>
-              <tr style={{ backgroundColor: "#e6d7e6" }}>
+              <tr style={{ backgroundColor: "#e2e8f0" }}>
                 <th
                   style={{
                     border: "1px solid #000",

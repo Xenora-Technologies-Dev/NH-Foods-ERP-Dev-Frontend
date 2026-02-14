@@ -47,6 +47,8 @@ import GridView from "./GridView";
 import SaleInvoiceView from "./InvoiceView";
 import { exportSalesOrdersToExcel } from "../../../utils/excelExport";
 import PaginationControl from "../../Pagination/PaginationControl";
+import { useCustomerList, useStockList } from "../../../hooks/useDataFetching";
+import { PageListSkeleton, RefetchIndicator } from "../../ui/Skeletons";
 
 const SalesOrderManagement = () => {
   const [activeView, setActiveView] = useState("dashboard");
@@ -63,8 +65,12 @@ const SalesOrderManagement = () => {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [notifications, setNotifications] = useState([]);
   const [selectedSOs, setSelectedSOs] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [stockItems, setStockItems] = useState([]);
+  // ── Cached data via React Query (shared across all pages) ──
+  const { data: customerData, isLoading: customersLoading, isFetching: customersFetching } = useCustomerList();
+  const { data: stockData, isLoading: stockLoading, isFetching: stockFetching } = useStockList();
+  const customers = useMemo(() => customerData?.items || [], [customerData]);
+  const stockItems = useMemo(() => stockData?.items || [], [stockData]);
+
   const [salesOrders, setSalesOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [formErrors, setFormErrors] = useState({});
@@ -105,10 +111,8 @@ const SalesOrderManagement = () => {
     ],
   });
 
-  // Fetch data on mount
+  // Fetch transactions on mount (customers & stock from React Query cache)
   useEffect(() => {
-    fetchCustomers();
-    fetchStockItems();
     fetchTransactions();
   }, []);
 
@@ -132,63 +136,21 @@ const SalesOrderManagement = () => {
     }
   }, [activeView]);
 
-  const fetchCustomers = async () => {
-    setIsLoading(true);
-    try {
-      const response = await axiosInstance.get("/customers/customers");
-      setCustomers(response.data.data || []);
-    } catch (error) {
-      addNotification(
-        "Failed to fetch customers: " +
-          (error.response?.data?.message || error.message),
-        "error"
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchStockItems = async () => {
-    setIsLoading(true);
-    try {
-      const response = await axiosInstance.get("/stock/stock");
-      const stocks = response.data.data?.stocks || response.data.data || [];
-      setStockItems(
-        stocks.map((item) => ({
-          _id: item._id,
-          itemId: item.itemId,
-          itemName: item.itemName,
-          sku: item.sku,
-          category: item.category,
-          unitOfMeasure: item.unitOfMeasure,
-          unitOfMeasureDetails: item.unitOfMeasureDetails || {},
-          currentStock: item.currentStock,
-          purchasePrice: item.purchasePrice,
-          salesPrice: item.salesPrice,
-          reorderLevel: item.reorderLevel,
-          status: item.status,
-          taxPercent: item.taxPercent || 5,
-        }))
-      );
-    } catch (error) {
-      addNotification(
-        "Failed to fetch stock items: " +
-          (error.response?.data?.message || error.message),
-        "error"
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Customers and stock items are now provided by React Query hooks above
 
   const fetchTransactions = async () => {
     setIsLoading(true);
     try {
+      // When showing "ALL" statuses, exclude APPROVED/PAID/PARTIAL from sales orders
+      // because those belong in the Sales Invoice view (ApprovedSales)
+      const isInvoiceStatus = (s) => ["APPROVED", "PAID", "PARTIAL"].includes(s);
       const response = await axiosInstance.get("/transactions/transactions", {
         params: {
           type: "sales_order",
           search: debouncedSearchTerm,
           status: statusFilter !== "ALL" ? statusFilter : undefined,
+          // Server-side exclusion: when no specific status filter, exclude invoice statuses
+          excludeStatus: statusFilter === "ALL" ? "APPROVED,PAID,PARTIAL" : undefined,
           partyId: customerFilter !== "ALL" ? customerFilter : undefined,
           dateFilter: dateFilter !== "ALL" ? dateFilter : undefined,
           limit: 1000, // Fetch up to 1000 records for display
@@ -196,8 +158,11 @@ const SalesOrderManagement = () => {
       });
 
       const transactions = response.data?.data || [];
-      // Exclude APPROVED orders from the main Sales list unless user explicitly selects status=APPROVED
-      const txs = statusFilter === "ALL" ? transactions.filter((t) => t.status !== "APPROVED") : transactions;
+      // Double-check client-side: exclude APPROVED/PAID/PARTIAL from Sales Order list
+      // These should only appear in the Sales Invoice view (ApprovedSales)
+      const txs = statusFilter === "ALL"
+        ? transactions.filter((t) => !isInvoiceStatus(t.status))
+        : transactions;
       // DEBUG: Log raw backend rows for LPO/DOC/Discount audit
       //console.log("[FETCH SO LIST] rows:", transactions.map(t => ({ id: t._id, lpono: t.lpono ?? t.refNo, docno: t.docno ?? t.docNo, discount: t.discount })));
       console.log("Transaction Fetch from backend "+transactions);
@@ -213,9 +178,10 @@ const SalesOrderManagement = () => {
             if (!digits) return tx;
             return digits.slice(-5).padStart(5, '0');
           }
-          return tx;
+          // For DRAFT SOs (especially manual), transactionNo may be null; fall back to orderNumber
+          return tx || t.orderNumber || '';
         } catch (e) {
-          return t.transactionNo;
+          return t.transactionNo || t.orderNumber || '';
         }
       };
 
@@ -261,10 +227,11 @@ const SalesOrderManagement = () => {
 
   const fetchAllForExport = async () => {
     try {
-      // Fetch all sales orders from database (no pagination limit)
+      // Fetch all sales orders from database (excluding invoice statuses)
       const response = await axiosInstance.get("/transactions/transactions", {
         params: {
           type: "sales_order",
+          excludeStatus: "APPROVED,PAID,PARTIAL",
           limit: 10000, // Fetch up to 10000 records
         },
       });
@@ -295,9 +262,9 @@ const SalesOrderManagement = () => {
           if (!digits) return tx;
           return digits.slice(-5).padStart(5, '0');
         }
-        return tx;
+        return tx || t.orderNumber || '';
       } catch (e) {
-        return t.transactionNo;
+        return t.transactionNo || t.orderNumber || '';
       }
     };
 
@@ -356,6 +323,8 @@ const SalesOrderManagement = () => {
       "Sales Order saved successfully! Showing invoice...",
       "success"
     );
+    // Scroll to top after React re-renders the invoice view
+    setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 150);
     setTimeout(resetForm, 0);
   };
 
@@ -415,6 +384,7 @@ const editSO = (so) => {
       category: stock.category || "",
       unitOfMeasure: stock.unitOfMeasure || "",
       unitOfMeasureDetails: stock.unitOfMeasureDetails || {},
+      uom: stock.unitOfMeasure?.shortCode || stock.unitOfMeasure?.unitName || "",
       stockDetails: it.stockDetails || {},
       currentStock: typeof stock.currentStock === "number" ? stock.currentStock : 0,
     };
@@ -433,8 +403,8 @@ const editSO = (so) => {
       priority: so.priority || "Medium",
       terms: so.terms || "",
       notes: so.notes || "",
-      refNo: so.refNo || "",
-      docNo: so.docNo || "",
+      refNo: (so.refNo && so.refNo !== '-') ? so.refNo : "",
+      docNo: (so.docNo && so.docNo !== '-') ? so.docNo : "",
       discount: (so.discount ?? 0).toString(),
       items: formItems,
     });
@@ -639,6 +609,10 @@ const editSO = (so) => {
         return "bg-slate-100 text-slate-700 border-slate-200";
       case "APPROVED":
         return "bg-blue-100 text-blue-700 border-blue-200";
+      case "PAID":
+        return "bg-emerald-100 text-emerald-700 border-emerald-200";
+      case "PARTIAL":
+        return "bg-orange-100 text-orange-700 border-orange-200";
       case "INVOICED":
         return "bg-purple-100 text-purple-700 border-purple-200";
       default:
@@ -652,6 +626,10 @@ const editSO = (so) => {
         return <Edit3 className="w-3 h-3" />;
       case "APPROVED":
         return <CheckSquare className="w-3 h-3" />;
+      case "PAID":
+        return <DollarSign className="w-3 h-3" />;
+      case "PARTIAL":
+        return <DollarSign className="w-3 h-3" />;
       case "INVOICED":
         return <Receipt className="w-3 h-3" />;
       default:
@@ -929,190 +907,131 @@ const updateSalesOrderStatus = (id, newStatus) => {
 
   const Dashboard = () => (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg hover:shadow-xl transition-all duration-300">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-600">Total Orders</p>
-              <p className="text-3xl font-bold text-slate-900">
-                {statistics.total}
-              </p>
-              <div className="flex items-center mt-2">
-                {statistics.growthRate >= 0 ? (
-                  <TrendingUp className="w-4 h-4 text-emerald-500 mr-1" />
-                ) : (
-                  <TrendingDown className="w-4 h-4 text-rose-500 mr-1" />
-                )}
-                <span
-                  className={`text-sm font-medium ${
-                    statistics.growthRate >= 0
-                      ? "text-emerald-600"
-                      : "text-rose-600"
-                  }`}
-                >
-                  {Math.abs(statistics.growthRate).toFixed(1)}% from last month
-                </span>
-              </div>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Orders</p>
+              <p className="text-2xl font-bold text-slate-900 mt-1">{statistics.total}</p>
             </div>
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-              <ShoppingCart className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
+              <ShoppingCart className="w-5 h-5 text-slate-600" />
             </div>
+          </div>
+          <div className="flex items-center mt-3">
+            {statistics.growthRate >= 0 ? (
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-500 mr-1" />
+            ) : (
+              <TrendingDown className="w-3.5 h-3.5 text-rose-500 mr-1" />
+            )}
+            <span className={`text-xs font-medium ${statistics.growthRate >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+              {Math.abs(statistics.growthRate).toFixed(1)}% vs last month
+            </span>
           </div>
         </div>
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg hover:shadow-xl transition-all duration-300">
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-600">Approved</p>
-              <p className="text-3xl font-bold text-blue-600">
-                {statistics.confirmed}
-              </p>
-              <p className="text-sm text-slate-500 mt-2">Ready for dispatch</p>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Draft</p>
+              <p className="text-2xl font-bold text-amber-600 mt-1">{statistics.draft}</p>
             </div>
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-              <CheckSquare className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center">
+              <Edit3 className="w-5 h-5 text-amber-600" />
             </div>
           </div>
+          <p className="text-xs text-slate-500 mt-3">Awaiting confirmation</p>
         </div>
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg hover:shadow-xl transition-all duration-300">
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-600">Total Value</p>
-              <p className="text-3xl font-bold text-emerald-600">
-                AED {statistics.totalValue.toLocaleString()}
-              </p>
-              <p className="text-sm text-slate-500 mt-2">
-                Invoiced: AED {statistics.invoicedValue.toLocaleString()}
-              </p>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Value</p>
+              <p className="text-2xl font-bold text-emerald-600 mt-1">AED {statistics.totalValue.toLocaleString()}</p>
             </div>
-            <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
+              <DollarSign className="w-5 h-5 text-emerald-600" />
             </div>
           </div>
+          <p className="text-xs text-slate-500 mt-3">Invoiced: AED {statistics.invoicedValue.toLocaleString()}</p>
         </div>
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg hover:shadow-xl transition-all duration-300">
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-600">This Month</p>
-              <p className="text-3xl font-bold text-indigo-600">
-                {statistics.thisMonthSOs}
-              </p>
-              <p className="text-sm text-slate-500 mt-2">New orders created</p>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">This Month</p>
+              <p className="text-2xl font-bold text-blue-600 mt-1">{statistics.thisMonthSOs}</p>
             </div>
-            <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
-              <BarChart3 className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+              <BarChart3 className="w-5 h-5 text-blue-600" />
             </div>
           </div>
+          <p className="text-xs text-slate-500 mt-3">Orders created this month</p>
         </div>
       </div>
 
+      {/* Recent Orders + Quick Status */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
-          <h3 className="text-lg font-semibold text-slate-900 mb-4">
-            Recent Sales Orders
-          </h3>
-          <div className="space-y-3">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-800">Recent Sales Orders</h3>
+            <span className="text-xs text-slate-500">{salesOrders.length} total</span>
+          </div>
+          <div className="divide-y divide-slate-100">
             {salesOrders.slice(0, 5).map((so) => (
               <div
                 key={so.id}
-                className="flex items-center justify-between py-3 px-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+                onClick={() => { setSelectedSO(so); setActiveView("invoice"); }}
+                className="flex items-center justify-between px-5 py-3 hover:bg-slate-50 transition-colors cursor-pointer"
               >
-                <div className="flex items-center space-x-3">
-                  <div
-                    className={`w-2 h-2 rounded-full ${getPriorityColor(
-                      so.priority
-                    )}`}
-                  ></div>
-                  <div>
-                    <p className="font-medium text-slate-900">
-                     {so.displayTransactionNo || so.transactionNo}
-                    </p>
-
-                    <p className="text-sm text-slate-600">{so.customerName}</p>
+                <div className="flex items-center space-x-3 min-w-0">
+                  <div className={`w-1.5 h-8 rounded-full ${getPriorityColor(so.priority)}`}></div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-900 truncate">{so.displayTransactionNo || so.orderNumber || so.transactionNo}</p>
+                    <p className="text-xs text-slate-500 truncate">{so.customerName}</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div
-                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(
-                      so.status
-                    )}`}
-                  >
+                <div className="flex items-center space-x-3 flex-shrink-0">
+                  <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(so.status)}`}>
                     {getStatusIcon(so.status)}
                     <span className="ml-1">{so.status}</span>
                   </div>
-                  <p className="text-sm text-slate-600 mt-1">
-                    AED {parseFloat(so.totalAmount).toLocaleString()}
-                  </p>
+                  <p className="text-sm font-medium text-slate-700 tabular-nums">AED {parseFloat(so.totalAmount).toLocaleString()}</p>
                 </div>
               </div>
             ))}
+            {salesOrders.length === 0 && (
+              <div className="px-5 py-8 text-center text-sm text-slate-400">No sales orders yet</div>
+            )}
           </div>
-          <button
-            onClick={() => setActiveView("list")}
-            className="w-full mt-4 py-2 text-blue-600 hover:text-blue-700 font-medium text-sm"
-          >
-            View All Orders
-          </button>
+          <div className="px-5 py-3 border-t border-slate-100 bg-slate-50">
+            <button onClick={() => setActiveView("list")} className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+              View All Orders &rarr;
+            </button>
+          </div>
         </div>
 
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
-          <h3 className="text-lg font-semibold text-slate-900 mb-4">
-            Status Overview
-          </h3>
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-sm text-slate-700">Approved</span>
-                <span className="text-xs font-medium text-blue-600">
-                  {statistics.confirmed}
-                </span>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+          <div className="px-5 py-4 border-b border-slate-100">
+            <h3 className="text-sm font-semibold text-slate-800">Status Breakdown</h3>
+          </div>
+          <div className="p-5 space-y-4">
+            {[
+              { label: "Draft", count: statistics.draft, color: "bg-slate-400", bgColor: "bg-slate-100", textColor: "text-slate-600" },
+              { label: "Approved", count: statistics.confirmed, color: "bg-blue-500", bgColor: "bg-blue-100", textColor: "text-blue-600" },
+              { label: "Invoiced", count: statistics.invoiced, color: "bg-purple-500", bgColor: "bg-purple-100", textColor: "text-purple-600" },
+            ].map((item) => (
+              <div key={item.label}>
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-xs font-medium text-slate-600">{item.label}</span>
+                  <span className={`text-xs font-semibold ${item.textColor}`}>{item.count}</span>
+                </div>
+                <div className={`h-1.5 ${item.bgColor} rounded-full overflow-hidden`}>
+                  <div
+                    className={`h-full ${item.color} rounded-full transition-all duration-500`}
+                    style={{ width: `${statistics.total > 0 ? (item.count / statistics.total) * 100 : 0}%` }}
+                  ></div>
+                </div>
               </div>
-              <div className="h-2 bg-blue-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-500 transition-all duration-500 ease-out"
-                  style={{
-                    width: `${
-                      (statistics.confirmed / statistics.total) * 100 || 0
-                    }%`,
-                  }}
-                ></div>
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-sm text-slate-700">Invoiced</span>
-                <span className="text-xs font-medium text-purple-600">
-                  {statistics.invoiced}
-                </span>
-              </div>
-              <div className="h-2 bg-purple-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-purple-500 transition-all duration-500 ease-out"
-                  style={{
-                    width: `${
-                      (statistics.invoiced / statistics.total) * 100 || 0
-                    }%`,
-                  }}
-                ></div>
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-sm text-slate-700">Draft</span>
-                <span className="text-xs font-medium text-slate-600">
-                  {statistics.draft}
-                </span>
-              </div>
-              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-slate-400 transition-all duration-500 ease-out"
-                  style={{
-                    width: `${
-                      (statistics.draft / statistics.total) * 100 || 0
-                    }%`,
-                  }}
-                ></div>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
@@ -1210,8 +1129,8 @@ const updateSalesOrderStatus = (id, newStatus) => {
                 >
                   <option value="ALL">All Statuses</option>
                   <option value="DRAFT">Draft</option>
-                  <option value="APPROVED">Approved</option>
-                  <option value="INVOICED">Invoiced</option>
+                  <option value="REJECTED">Rejected</option>
+                  <option value="CANCELLED">Cancelled</option>
                 </select>
                 <select
                   value={customerFilter}
@@ -1313,10 +1232,9 @@ const updateSalesOrderStatus = (id, newStatus) => {
       </div>
 
       <div className="p-8">
-        {isLoading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-          </div>
+        {(customersFetching || stockFetching) && <RefetchIndicator />}
+        {(customersLoading || stockLoading || isLoading) ? (
+          <PageListSkeleton rows={6} />
         ) : (
           <>
             {activeView === "dashboard" && <Dashboard />}

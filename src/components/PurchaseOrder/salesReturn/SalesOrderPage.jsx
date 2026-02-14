@@ -252,7 +252,7 @@ const SalesReturnOrderManagement = () => {
       "Sales Return Order saved successfully! Showing invoice...",
       "success"
     );
-    // Reset form after navigation
+    window.scrollTo({ top: 0, behavior: "smooth" });
     setTimeout(resetForm, 0);
   };
 

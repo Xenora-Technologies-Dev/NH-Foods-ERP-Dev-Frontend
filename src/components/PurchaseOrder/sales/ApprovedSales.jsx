@@ -7,6 +7,8 @@ import SaleInvoiceView from "./InvoiceView";
 import Modal from "../../Modal";
 import PaginationControl from "../../Pagination/PaginationControl";
 import { exportSalesInvoicesToExcel } from "../../../utils/excelExport";
+import { useCustomerList } from "../../../hooks/useDataFetching";
+import { PageListSkeleton, RefetchIndicator } from "../../ui/Skeletons";
 
 const ApprovedSales = () => {
   const [viewMode, setViewMode] = useState("table");
@@ -18,33 +20,27 @@ const ApprovedSales = () => {
   const [sortOrder, setSortOrder] = useState("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [customers, setCustomers] = useState([]);
+  // ── Cached customer data via React Query ──
+  const { data: customerData, isLoading: customersLoading, isFetching: customersFetching } = useCustomerList();
+  const customers = useMemo(() => customerData?.items || [], [customerData]);
+
   const [salesOrders, setSalesOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState(null);
 
   useEffect(() => {
-    fetchCustomers();
-  }, []);
-
-  useEffect(() => {
     fetchTransactions();
   }, [searchTerm, customerFilter, dateFilter]);
 
-  const fetchCustomers = async () => {
-    try {
-      const response = await axiosInstance.get("/customers/customers");
-      setCustomers(response.data.data || []);
-    } catch (e) {}
-  };
+  // Customers are now provided by React Query hook above
 
   const fetchAllForExport = async () => {
     try {
-      // Fetch all approved sales invoices from database (no pagination limit)
+      // Fetch all approved/paid/partial sales invoices from database (no pagination limit)
       const response = await axiosInstance.get("/transactions/transactions", {
         params: {
           type: "sales_order",
-          status: "APPROVED",
+          status: "APPROVED,PAID,PARTIAL",
           limit: 10000, // Fetch up to 10000 records
         },
       });
@@ -72,7 +68,7 @@ const ApprovedSales = () => {
     const formatDisplayTransactionNo = (t) => {
       try {
         const raw = getInvoiceNumberRaw(t);
-        if (t.status === "APPROVED" && raw) {
+        if (["APPROVED", "PAID", "PARTIAL"].includes(t.status) && raw) {
           const digits = String(raw).replace(/^SO/i, "").replace(/\D/g, "");
           return digits ? digits.padStart(4, "0") : raw;
         }
@@ -111,7 +107,8 @@ const ApprovedSales = () => {
         params: {
           type: "sales_order",
           search: searchTerm,
-          status: "APPROVED",
+          // Fetch approved invoices — also include PAID/PARTIAL for backward compat with legacy data
+          status: "APPROVED,PAID,PARTIAL",
           partyId: customerFilter !== "ALL" ? customerFilter : undefined,
           dateFilter: dateFilter !== "ALL" ? dateFilter : undefined,
           limit: 1000, // Fetch up to 1000 records for display
@@ -124,7 +121,7 @@ const ApprovedSales = () => {
       const formatDisplayTransactionNo = (t) => {
         try {
           const raw = getInvoiceNumberRaw(t);
-          if (t.status === "APPROVED" && raw) {
+          if (["APPROVED", "PAID", "PARTIAL"].includes(t.status) && raw) {
             const digits = String(raw).replace(/^SO/i, "").replace(/\D/g, "");
             return digits ? digits.padStart(4, "0") : raw;
           }
@@ -136,17 +133,21 @@ const ApprovedSales = () => {
           id: t._id,
           transactionNo: getInvoiceNumberRaw(t),
           orderNumber: t.orderNumber,
+          invoiceNumber: t.invoiceNumber || null,
           displayTransactionNo: formatDisplayTransactionNo(t),
           customerId: t.partyId,
           customerName: t.party?.customerName || t.partyName,
           date: t.date,
           approvedAt: t.approvedAt || t.updatedAt || t.approvedDate || null,
           deliveryDate: t.deliveryDate,
+          // Status is unified: APPROVED=unpaid, PAID=fully paid, PARTIAL=partially paid
           status: t.status,
           totalAmount: Number(t.totalAmount || 0).toFixed(2),
           items: t.items || [],
           terms: t.terms || "",
           notes: t.notes || "",
+          paidAmount: Number(t.paidAmount || 0).toFixed(2),
+          outstandingAmount: Number(t.outstandingAmount || 0).toFixed(2),
           createdBy: t.createdBy,
           createdAt: t.createdAt,
           invoiceGenerated: t.invoiceGenerated,
@@ -222,7 +223,18 @@ const ApprovedSales = () => {
   const totalPages = Math.ceil(filteredSOs.length / itemsPerPage);
   const paginatedSOs = filteredSOs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  const getStatusColor = () => "bg-blue-100 text-blue-700 border-blue-200";
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "APPROVED":
+        return "bg-blue-100 text-blue-700 border-blue-200";
+      case "PAID":
+        return "bg-emerald-100 text-emerald-700 border-emerald-200";
+      case "PARTIAL":
+        return "bg-orange-100 text-orange-700 border-orange-200";
+      default:
+        return "bg-blue-100 text-blue-700 border-blue-200";
+    }
+  };
   const getStatusIcon = () => null;
   const getPriorityColor = () => "bg-yellow-500";
 
@@ -320,10 +332,9 @@ const ApprovedSales = () => {
       )}
 
       <div className="p-8">
-        {isLoading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-          </div>
+        {customersFetching && <RefetchIndicator />}
+        {(customersLoading || isLoading) ? (
+          <PageListSkeleton rows={6} />
         ) : (
           <>
             {viewMode === "table" ? (

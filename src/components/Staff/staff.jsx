@@ -34,12 +34,14 @@ import {
   Eye,
 } from "lucide-react";
 import axiosInstance from "../../axios/axios";
+import { useStaffList, useInvalidateQueries } from "../../hooks/useDataFetching";
+import { PageListSkeleton, RefetchIndicator } from "../ui/Skeletons";
 
 // Session management utilities
 const SessionManager = {
   storage: {},
 
-  get: (key) => {
+  get(key) {
     try {
       return this.storage[`staff_session_${key}`] || null;
     } catch {
@@ -47,7 +49,7 @@ const SessionManager = {
     }
   },
 
-  set: (key, value) => {
+  set(key, value) {
     try {
       this.storage[`staff_session_${key}`] = value;
     } catch (error) {
@@ -55,7 +57,7 @@ const SessionManager = {
     }
   },
 
-  remove: (key) => {
+  remove(key) {
     try {
       delete this.storage[`staff_session_${key}`];
     } catch (error) {
@@ -63,7 +65,7 @@ const SessionManager = {
     }
   },
 
-  clear: () => {
+  clear() {
     Object.keys(this.storage).forEach((key) => {
       if (key.startsWith("staff_session_")) {
         delete this.storage[key];
@@ -73,8 +75,11 @@ const SessionManager = {
 };
 
 const StaffManagement = () => {
-  const [staff, setStaff] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // React Query for data fetching with caching
+  const { data: staffData, isLoading, isFetching, refetch } = useStaffList();
+  const { invalidateStaff } = useInvalidateQueries();
+  const staff = staffData?.items || [];
+
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [editStaffId, setEditStaffId] = useState(null);
@@ -137,35 +142,18 @@ const StaffManagement = () => {
     );
   }, []);
 
+  // Refresh handler using React Query
   const fetchStaff = useCallback(
     async (showRefreshIndicator = false) => {
-      try {
-        if (showRefreshIndicator) {
-          setIsLoading(true);
-        } else {
-          setIsLoading(true);
-        }
-        const response = await axiosInstance.get("/staff/staff");
-        setStaff(response.data.data?.staff || []);
-        if (showRefreshIndicator) {
-          showToastMessage("Staff data refreshed successfully!", "success");
-        }
-      } catch (error) {
-        console.error("Failed to fetch staff:", error);
-        showToastMessage(
-          error.response?.data?.message || "Failed to fetch staff.",
-          "error"
-        );
-      } finally {
-        setIsLoading(false);
+      if (showRefreshIndicator) {
+        await refetch();
+        showToastMessage("Staff data refreshed successfully!", "success");
       }
     },
-    [showToastMessage]
+    [refetch, showToastMessage]
   );
 
-  useEffect(() => {
-    fetchStaff();
-  }, [fetchStaff]);
+  // No useEffect needed — React Query handles initial fetch
 
   useEffect(() => {
     const savedFormData = SessionManager.get("formData");
@@ -306,7 +294,7 @@ const StaffManagement = () => {
         showToastMessage("Staff member added successfully!", "success");
       }
 
-      await fetchStaff();
+      await invalidateStaff();
       resetForm();
 
       SessionManager.remove("formData");
@@ -319,7 +307,7 @@ const StaffManagement = () => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [editStaffId, formData, fetchStaff, validateForm, showToastMessage]);
+  }, [editStaffId, formData, invalidateStaff, validateForm, showToastMessage]);
 
   const handleEdit = useCallback((staffMember) => {
     setEditStaffId(staffMember._id);
@@ -381,12 +369,9 @@ const StaffManagement = () => {
 
     try {
       await axiosInstance.delete(`/staff/staff/${deleteConfirmation.staffId}`);
-      setStaff((prev) =>
-        prev.filter((s) => s._id !== deleteConfirmation.staffId)
-      );
+      await invalidateStaff();
       showToastMessage("Staff member deleted successfully!", "success");
       hideDeleteConfirmation();
-      await fetchStaff();
     } catch (error) {
       showToastMessage(
         error.response?.data?.message || "Failed to delete staff member.",
@@ -396,7 +381,7 @@ const StaffManagement = () => {
     }
   }, [
     deleteConfirmation.staffId,
-    fetchStaff,
+    invalidateStaff,
     showToastMessage,
     hideDeleteConfirmation,
   ]);
@@ -553,15 +538,10 @@ const StaffManagement = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2
-            size={48}
-            className="text-indigo-600 animate-spin mx-auto mb-4"
-          />
-          <p className="text-gray-600 text-lg">Loading staff members...</p>
-        </div>
-      </div>
+      <>
+        <RefetchIndicator show={isFetching} />
+        <PageListSkeleton statCards={4} tableRows={8} tableColumns={6} />
+      </>
     );
   }
 

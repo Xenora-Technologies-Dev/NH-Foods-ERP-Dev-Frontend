@@ -25,6 +25,8 @@ import {
 import Select from "react-select";
 import axiosInstance from "../../../axios/axios";
 import CreditNoteView from "./CreditNoteView";
+import { useCustomerList } from "../../../hooks/useDataFetching";
+import { PageListSkeleton, RefetchIndicator } from "../../ui/Skeletons";
 
 // Toast notification component
 const Toast = ({ show, message, type }) =>
@@ -55,7 +57,10 @@ const StatCard = ({ title, count, icon, bgColor, textColor }) => (
 const SalesReturnPage = () => {
   // State management
   const [activeView, setActiveView] = useState("list"); // list, create, view
-  const [customers, setCustomers] = useState([]);
+  // ── Cached customer data via React Query ──
+  const { data: customerData, isLoading: customersLoading, isFetching: customersFetching } = useCustomerList();
+  const customers = useMemo(() => customerData?.items || [], [customerData]);
+
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [approvedInvoices, setApprovedInvoices] = useState([]);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -76,15 +81,7 @@ const SalesReturnPage = () => {
     setTimeout(() => setToast((prev) => ({ ...prev, show: false })), 3000);
   }, []);
 
-  // Fetch customers
-  const fetchCustomers = useCallback(async () => {
-    try {
-      const response = await axiosInstance.get("/customers/customers");
-      setCustomers(response.data.data || []);
-    } catch (error) {
-      showToast("Failed to fetch customers", "error");
-    }
-  }, [showToast]);
+  // Customers are now provided by React Query hook above
 
   // Fetch sales returns
   const fetchSalesReturns = useCallback(async () => {
@@ -286,9 +283,8 @@ const SalesReturnPage = () => {
 
   // Initial data fetch
   useEffect(() => {
-    fetchCustomers();
     fetchSalesReturns();
-  }, [fetchCustomers, fetchSalesReturns]);
+  }, [fetchSalesReturns]);
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -386,10 +382,9 @@ const SalesReturnPage = () => {
 
         {/* Returns Table */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-            </div>
+          {customersFetching && <RefetchIndicator />}
+          {(customersLoading || isLoading) ? (
+            <PageListSkeleton rows={5} />
           ) : filteredReturns.length === 0 ? (
             <div className="text-center py-20">
               <Receipt className="w-16 h-16 text-slate-300 mx-auto mb-4" />

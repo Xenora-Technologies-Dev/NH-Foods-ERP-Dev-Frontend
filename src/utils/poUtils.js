@@ -6,6 +6,10 @@ export const getStatusColor = (status) => {
       return "bg-amber-100 text-amber-700 border-amber-200";
     case "APPROVED":
       return "bg-emerald-100 text-emerald-700 border-emerald-200";
+    case "PAID":
+      return "bg-emerald-100 text-emerald-800 border-emerald-300";
+    case "PARTIAL":
+      return "bg-orange-100 text-orange-700 border-orange-200";
     case "REJECTED":
       return "bg-rose-100 text-rose-700 border-rose-200";
     default:
@@ -21,6 +25,10 @@ export const getStatusIcon = (status) => {
       return <Clock className="w-3 h-3" />;
     case "APPROVED":
       return <CheckCircle className="w-3 h-3" />;
+    case "PAID":
+      return <DollarSign className="w-3 h-3" />;
+    case "PARTIAL":
+      return <DollarSign className="w-3 h-3" />;
     case "REJECTED":
       return <XCircle className="w-3 h-3" />;
     default:
@@ -54,9 +62,10 @@ export const calculateTotals = (items) => {
     }
   });
 
+  const r4 = (v) => +(Number(v || 0).toFixed(2));
   return {
-    subtotal: subtotal.toFixed(2),
-    tax: totalTax.toFixed(2),
-    total: (subtotal + totalTax).toFixed(2),
+    subtotal: r4(subtotal).toFixed(2),
+    tax: r4(totalTax).toFixed(2),
+    total: r4(subtotal + totalTax).toFixed(2),
   };
 };

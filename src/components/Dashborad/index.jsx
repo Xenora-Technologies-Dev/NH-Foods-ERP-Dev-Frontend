@@ -5,475 +5,150 @@ import {
   TrendingUp,
   TrendingDown,
   DollarSign,
-  Users,
   Package,
   ShoppingCart,
   AlertTriangle,
-  CheckCircle,
   Clock,
-  BarChart3,
-  PieChart,
-  Activity,
   Calendar,
   RefreshCw,
-  Filter,
-  Download,
-  Eye,
   ArrowUpRight,
   ArrowDownRight,
-  Zap,
-  Target,
-  Briefcase,
-  CreditCard,
   Truck,
-  Warehouse,
   Receipt,
   FileText,
-  Bell,
-  Settings,
-  Archive,
-  Database,
-  Scale,
-  UserPlus,
-  BookOpen,
+  Users,
   Wallet,
-  Calculator,
-  ShoppingBag,
-  Box,
-  Barcode,
-  Star,
-  Award,
-  Flame,
-  Globe,
-  Shield,
-  Layers,
-  MousePointer,
-  Loader,
+  Scale,
+  ChevronRight,
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  PieChart as RechartsPieChart,
-  Cell,
-  RadialBarChart,
-  RadialBar,
-  ComposedChart,
-  Pie,
-} from "recharts";
 import axiosInstance from "../../axios/axios.js";
-import { formatAED, formatAmount } from "../../utils/currencyUtils.js";
+import { formatAED } from "../../utils/currencyUtils.js";
 import DirhamIcon from "../../assets/dirham.svg";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState("month");
-  const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(true);
-  const [kpiData, setKpiData] = useState([]);
-  const [salesData, setSalesData] = useState([]);
-  const [inventoryData, setInventoryData] = useState([]);
-  const [topItems, setTopItems] = useState([]);
-  const [recentActivities, setRecentActivities] = useState([]);
-  const [financialData, setFinancialData] = useState([]);
-  const [staffData, setStaffData] = useState([]);
+  const [kpiData, setKpiData] = useState(null);
   const [alerts, setAlerts] = useState([]);
+  const [recentActivities, setRecentActivities] = useState([]);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 60000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Fetch dashboard data from APIs
   useEffect(() => {
     fetchDashboardData();
-  }, [selectedPeriod]);
+  }, []);
 
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      // Fetch data in parallel
-      const [transactions, stock, staff, vouchers, vendors, customers] = await Promise.all([
-        axiosInstance.get("/transactions/transactions").catch((err) => {
-          console.error("Error fetching transactions:", err.message);
-          return { data: [] };
-        }),
-        axiosInstance.get("/stock/stock").catch((err) => {
-          console.error("Error fetching stock:", err.message);
-          return { data: { stocks: [] } };
-        }),
-        axiosInstance.get("/staff/staff").catch((err) => {
-          console.error("Error fetching staff:", err.message);
-          return { data: { staff: [] } };
-        }),
-        axiosInstance.get("/vouchers/vouchers").catch((err) => {
-          console.error("Error fetching vouchers:", err.message);
-          return { data: [] };
-        }),
-        axiosInstance.get("/vendors/vendors").catch((err) => {
-          console.error("Error fetching vendors:", err.message);
-          return { data: [] };
-        }),
-        axiosInstance.get("/customers/customers").catch((err) => {
-          console.error("Error fetching customers:", err.message);
-          return { data: [] };
-        }),
+      const [transactions, stock, staff, vouchers] = await Promise.all([
+        axiosInstance.get("/transactions/transactions").catch(() => ({ data: [] })),
+        axiosInstance.get("/stock/stock").catch(() => ({ data: { stocks: [] } })),
+        axiosInstance.get("/staff/staff").catch(() => ({ data: { staff: [] } })),
+        axiosInstance.get("/vouchers/vouchers").catch(() => ({ data: [] })),
       ]);
 
-      // Get current month name
-      const currentDate = new Date();
-      const monthName = currentDate.toLocaleString('default', { month: 'long' });
-      
-      // Debug log API responses
-      console.log("Dashboard API Responses:", { 
-        transactions: transactions.data, 
-        stock: stock.data, 
-        staff: staff.data, 
-        vouchers: vouchers.data 
+      // Parse transactions
+      const txnList = Array.isArray(transactions.data?.data)
+        ? transactions.data.data
+        : transactions.data?.data?.data || [];
+
+      const salesTxns = txnList.filter(t => t.type === "sales_order" || t.transactionType === "sales");
+      const purchaseTxns = txnList.filter(t => t.type === "purchase_order" || t.transactionType === "purchase");
+
+      const totalSales = salesTxns.reduce((sum, t) => sum + (parseFloat(t.amount) || parseFloat(t.totalAmount) || 0), 0);
+      const totalPurchase = purchaseTxns.reduce((sum, t) => sum + (parseFloat(t.amount) || parseFloat(t.totalAmount) || 0), 0);
+      const profit = totalSales - totalPurchase;
+      const marginPercent = totalSales > 0 ? ((profit / totalSales) * 100).toFixed(1) : "0.0";
+
+      // Current month stats
+      const now = new Date();
+      const monthName = now.toLocaleString("default", { month: "long" });
+      const thisMonth = now.getMonth();
+      const thisYear = now.getFullYear();
+      const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
+      const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
+
+      const thisMonthSales = salesTxns.filter(t => {
+        const d = new Date(t.createdAt || t.date);
+        return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+      });
+      const lastMonthSales = salesTxns.filter(t => {
+        const d = new Date(t.createdAt || t.date);
+        return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
       });
 
-      // Process KPI Data from real transactions
-      const processKPIs = (transactionsData, stockData) => {
-        // Handle transaction response: could be array or {data: array}
-        const txnList = Array.isArray(transactionsData?.data) 
-          ? transactionsData.data 
-          : transactionsData?.data?.data || [];
-        
-        const salesTransactions = txnList.filter(t => t.type === "sales_order" || t.transactionType === "sales");
-        const purchaseTransactions = txnList.filter(t => t.type === "purchase_order" || t.transactionType === "purchase");
-        
-        const totalSales = salesTransactions.reduce((sum, t) => sum + (t.amount || t.totalAmount || 0), 0);
-        const totalPurchase = purchaseTransactions.reduce((sum, t) => sum + (t.amount || t.totalAmount || 0), 0);
-        const profit = totalSales - totalPurchase;
-        const marginPercent = totalSales > 0 ? ((profit / totalSales) * 100).toFixed(1) : 0;
+      const thisMonthTotal = thisMonthSales.reduce((s, t) => s + (parseFloat(t.amount) || parseFloat(t.totalAmount) || 0), 0);
+      const lastMonthTotal = lastMonthSales.reduce((s, t) => s + (parseFloat(t.amount) || parseFloat(t.totalAmount) || 0), 0);
+      const salesGrowth = lastMonthTotal > 0 ? (((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100).toFixed(1) : null;
 
-        return [
-          {
-            id: 1,
-            title: `Sales (${monthName})`,
-            value: formatAED(totalSales),
-            displayAmount: totalSales,
-            change: "+12.5%",
-            trend: "up",
-            icon: <TrendingUp className="w-6 h-6" />,
-            bgColor: "bg-green-100/50",
-            borderColor: "border-green-200/50",
-            description: `${monthName} sales`,
-            target: formatAED(totalSales * 1.2),
-          },
-          {
-            id: 2,
-            title: `Purchases (${monthName})`,
-            value: formatAED(totalPurchase),
-            displayAmount: totalPurchase,
-            change: "+6.1%",
-            trend: "up",
-            icon: <TrendingDown className="w-6 h-6" />,
-            bgColor: "bg-blue-100/50",
-            borderColor: "border-blue-200/50",
-            description: `${monthName} purchases`,
-            target: formatAED(totalPurchase * 1.15),
-          },
-          {
-            id: 3,
-            title: `Gross Profit (${monthName})`,
-            value: formatAED(profit),
-            displayAmount: profit,
-            change: `${profit > 0 ? '+' : ''}${((profit / (totalPurchase || 1)) * 100).toFixed(1)}%`,
-            trend: profit > 0 ? "up" : "down",
-            icon: <Wallet className="w-6 h-6" />,
-            bgColor: "bg-purple-100/50",
-            borderColor: "border-purple-200/50",
-            description: `${monthName} profit`,
-            target: formatAED(profit * 1.2),
-          },
-          {
-            id: 4,
-            title: "Sales Orders",
-            value: salesTransactions.length.toString(),
-            change: "+15.3%",
-            trend: "up",
-            icon: <ShoppingCart className="w-6 h-6" />,
-            bgColor: "bg-orange-100/50",
-            borderColor: "border-orange-200/50",
-            description: `${monthName} orders created`,
-            target: (salesTransactions.length * 1.2).toString(),
-          },
-          {
-            id: 5,
-            title: "Purchase Orders",
-            value: purchaseTransactions.length.toString(),
-            change: "+4.2%",
-            trend: "up",
-            icon: <Truck className="w-6 h-6" />,
-            bgColor: "bg-red-100/50",
-            borderColor: "border-red-200/50",
-            description: `${monthName} orders placed`,
-            target: (purchaseTransactions.length * 1.3).toString(),
-          },
-          {
-            id: 6,
-            title: "Profit Margin",
-            value: `${marginPercent}%`,
-            change: "+2.3%",
-            trend: "up",
-            icon: <Scale className="w-6 h-6" />,
-            bgColor: "bg-indigo-100/50",
-            borderColor: "border-indigo-200/50",
-            description: `${monthName} margin`,
-            target: "25%",
-          },
-        ];
-      };
+      // Parse stock
+      let stocks = [];
+      if (Array.isArray(stock.data?.data)) stocks = stock.data.data;
+      else if (stock.data?.data?.stocks) stocks = stock.data.data.stocks;
+      else if (Array.isArray(stock.data?.stocks)) stocks = stock.data.stocks;
+      if (!Array.isArray(stocks)) stocks = [];
 
-      setKpiData(processKPIs(transactions.data, stock.data));
+      // Parse staff
+      let staffList = [];
+      if (Array.isArray(staff.data?.data)) staffList = staff.data.data;
+      else if (staff.data?.data?.staff) staffList = staff.data.data.staff;
+      else if (Array.isArray(staff.data?.staff)) staffList = staff.data.staff;
+      if (!Array.isArray(staffList)) staffList = [];
 
-      // Process Inventory Data
-      const processInventory = (stockData) => {
-        // Handle different response formats for stock data
-        let stocks = [];
-        if (Array.isArray(stockData?.data)) {
-          stocks = stockData.data;
-        } else if (stockData?.data?.stocks && Array.isArray(stockData.data.stocks)) {
-          stocks = stockData.data.stocks;
-        } else if (Array.isArray(stockData?.stocks)) {
-          stocks = stockData.stocks;
-        }
-        
-        console.log("Processed stocks for inventory:", stocks);
-        if (!Array.isArray(stocks) || stocks.length === 0) return [];
-        
-        const categoryMap = {};
-        stocks.forEach(s => {
-          const categoryObj = s.category;
-          const category = typeof categoryObj === "string"
-            ? categoryObj
-            : categoryObj?.name || "Uncategorized";
-          if (!categoryMap[category]) {
-            categoryMap[category] = { count: 0, value: 0 };
-          }
-          categoryMap[category].count += s.quantity || 0;
-          categoryMap[category].value += (s.quantity || 0) * (s.unitPrice || 0);
-        });
+      // Parse vouchers
+      let voucherList = [];
+      if (Array.isArray(vouchers.data?.data)) voucherList = vouchers.data.data;
+      else if (vouchers.data?.data?.data) voucherList = vouchers.data.data.data;
+      if (!Array.isArray(voucherList)) voucherList = [];
 
-        const colors = ["#1F1F1F", "#4B4B4B", "#6B7280", "#9CA3AF", "#D1D5DB"];
-        const total = Object.values(categoryMap).reduce((sum, cat) => sum + cat.count, 0);
-        
-        return Object.entries(categoryMap).slice(0, 5).map(([name, data], idx) => ({
-          name,
-          value: total > 0 ? ((data.count / total) * 100).toFixed(0) : 0,
-          count: data.count,
-          color: colors[idx % colors.length],
-        }));
-      };
+      setKpiData({
+        totalSales,
+        totalPurchase,
+        profit,
+        marginPercent,
+        salesGrowth,
+        monthName,
+        salesOrderCount: salesTxns.length,
+        purchaseOrderCount: purchaseTxns.length,
+        thisMonthOrders: thisMonthSales.length,
+        stockItemCount: stocks.length,
+        staffCount: staffList.length,
+        voucherCount: voucherList.length,
+        pendingOrders: txnList.filter(t => t.status === "DRAFT" || t.status === "PENDING").length,
+        lowStockItems: stocks.filter(s => (s.quantity || 0) < (s.reorderLevel || 50)).length,
+      });
 
-      setInventoryData(processInventory(stock.data));
+      // Build alerts from real data
+      const alertsList = [];
+      const lowStock = stocks.filter(s => (s.quantity || 0) < (s.reorderLevel || 50)).length;
+      if (lowStock > 0) {
+        alertsList.push({ type: "critical", message: `${lowStock} item${lowStock > 1 ? "s" : ""} running low on stock`, icon: <AlertTriangle className="w-4 h-4" /> });
+      }
+      const pendingCount = txnList.filter(t => t.status === "DRAFT" || t.status === "PENDING").length;
+      if (pendingCount > 0) {
+        alertsList.push({ type: "warning", message: `${pendingCount} order${pendingCount > 1 ? "s" : ""} pending action`, icon: <Clock className="w-4 h-4" /> });
+      }
+      if (stocks.length > 0) {
+        alertsList.push({ type: "info", message: `${stocks.length} stock items in inventory`, icon: <Package className="w-4 h-4" /> });
+      }
+      setAlerts(alertsList);
 
-      // Process Staff Data
-      const processStaff = (staffData) => {
-        // Handle different response formats for staff data
-        let staffList = [];
-        if (Array.isArray(staffData?.data)) {
-          staffList = staffData.data;
-        } else if (staffData?.data?.staff && Array.isArray(staffData.data.staff)) {
-          staffList = staffData.data.staff;
-        } else if (Array.isArray(staffData?.staff)) {
-          staffList = staffData.staff;
-        }
-        
-        console.log("Processed staff:", staffList);
-        if (!Array.isArray(staffList) || staffList.length === 0) return [];
-        
-        return staffList.slice(0, 5).map(s => ({
-          department: s.department || s.name || "General",
-          active: 1,
-          performance: Math.floor(Math.random() * 20 + 80),
-          efficiency: Math.floor(Math.random() * 10 + 85),
-        }));
-      };
+      // Recent activities: last 5 sales orders + last 5 purchase orders
+      const sortByDate = (a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0);
+      const recentSales = [...salesTxns].sort(sortByDate).slice(0, 5);
+      const recentPurchases = [...purchaseTxns].sort(sortByDate).slice(0, 5);
+      const combined = [...recentSales, ...recentPurchases].sort(sortByDate);
+      const recent = combined.map((t, idx) => ({
+        id: idx,
+        type: t.type?.includes("sales") || t.transactionType === "sales" ? "sale" : t.type?.includes("purchase") || t.transactionType === "purchase" ? "purchase" : "other",
+        txNo: t.transactionNo || t.referenceNumber || `TXN-${idx + 1}`,
+        party: t.party?.customerName || t.party?.vendorName || t.partyName || "",
+        amount: parseFloat(t.amount) || parseFloat(t.totalAmount) || 0,
+        status: t.status || "DRAFT",
+        date: t.createdAt || t.date,
+      }));
+      setRecentActivities(recent);
 
-      setStaffData(processStaff(staff.data));
-
-      // Process Top Items by Stock Value
-      const processTopItems = (stockData) => {
-        // Handle different response formats for stock data
-        let stocks = [];
-        if (Array.isArray(stockData?.data)) {
-          stocks = stockData.data;
-        } else if (stockData?.data?.stocks && Array.isArray(stockData.data.stocks)) {
-          stocks = stockData.data.stocks;
-        } else if (Array.isArray(stockData?.stocks)) {
-          stocks = stockData.stocks;
-        }
-        
-        if (!Array.isArray(stocks)) stocks = [];
-        
-        return stocks
-          .map(s => ({
-            name: typeof s.itemName === "string" ? s.itemName : (typeof s.name === "string" ? s.name : s.name?.name || "Unnamed"),
-            sales: (s.quantity || 0) * (s.unitPrice || 0),
-            units: s.quantity || 0,
-            growth: (Math.random() * 25 + 5).toFixed(1),
-            category: (typeof s.category === "string") ? s.category : s.category?.name || "General",
-          } ))
-          .sort((a, b) => b.sales - a.sales)
-          .slice(0, 5);
-      };
-
-      setTopItems(processTopItems(stock.data));
-
-      // Process Financial Data
-      const processFinancialData = (vouchersData) => {
-        // Handle different response formats for vouchers data
-        let voucherList = [];
-        if (Array.isArray(vouchersData?.data)) {
-          voucherList = vouchersData.data;
-        } else if (vouchersData?.data?.data && Array.isArray(vouchersData.data.data)) {
-          voucherList = vouchersData.data.data;
-        }
-        
-        if (!Array.isArray(voucherList)) voucherList = [];
-        
-        const groupedByType = {
-          "Receipt Voucher": { count: 0, amount: 0 },
-          "Payment Voucher": { count: 0, amount: 0 },
-          "Journal Voucher": { count: 0, amount: 0 },
-          "Contra Voucher": { count: 0, amount: 0 },
-          "Expense Voucher": { count: 0, amount: 0 },
-        };
-
-        voucherList.forEach(v => {
-          const type = v.voucherType || v.type || "Journal Voucher";
-          if (groupedByType[type]) {
-            groupedByType[type].count += 1;
-            groupedByType[type].amount += v.amount || 0;
-          }
-        });
-
-        return Object.entries(groupedByType).map(([module, data]) => ({
-          module,
-          processed: data.count,
-          amount: data.amount,
-          growth: (Math.random() * 15 + 5).toFixed(1),
-        }));
-      };
-
-      setFinancialData(processFinancialData(vouchers.data));
-
-      // Process Recent Activities from Transactions
-      const processRecentActivities = (transactionsData) => {
-        // Handle transaction response: could be array or {data: array}
-        const txnList = Array.isArray(transactionsData?.data) 
-          ? transactionsData.data 
-          : transactionsData?.data?.data || [];
-        
-        return txnList.slice(-6).reverse().map((t, idx) => ({
-          id: idx + 1,
-          type: t.type?.includes("sales") ? "sale" : t.type?.includes("purchase") ? "purchase" : "inventory",
-          description: `${t.transactionType || t.type} #${t.referenceNumber || `TXN-${idx}`}`,
-          time: t.createdAt ? `${Math.floor(Math.random() * 60)} minutes ago` : "Recently",
-          status: t.status || "success",
-          amount: formatAED(t.amount || t.totalAmount || 0),
-          user: t.createdBy || "System",
-        }));
-      };
-
-      setRecentActivities(processRecentActivities(transactions.data));
-
-      // Process Alerts
-      const processAlerts = (stockData, transactionsData) => {
-        // Handle different response formats for stock data
-        let stocks = [];
-        if (Array.isArray(stockData?.data)) {
-          stocks = stockData.data;
-        } else if (stockData?.data?.stocks && Array.isArray(stockData.data.stocks)) {
-          stocks = stockData.data.stocks;
-        } else if (Array.isArray(stockData?.stocks)) {
-          stocks = stockData.stocks;
-        }
-        
-        if (!Array.isArray(stocks)) stocks = [];
-        
-        // Handle transaction response: could be array or {data: array}
-        const txns = Array.isArray(transactionsData?.data) 
-          ? transactionsData.data 
-          : transactionsData?.data?.data || [];
-        
-        const lowStockItems = stocks.filter(s => s.quantity < (s.reorderLevel || 50)).length;
-        const pendingOrders = txns.filter(t => t.status === "pending").length;
-
-        return [
-          {
-            type: "critical",
-            message: `${lowStockItems} items are low in stock`,
-            count: lowStockItems,
-            icon: <AlertTriangle className="w-4 h-4" />,
-          },
-          {
-            type: "warning",
-            message: `${pendingOrders} orders pending approval`,
-            count: pendingOrders,
-            icon: <Clock className="w-4 h-4" />,
-          },
-          {
-            type: "info",
-            message: `${stocks.length} total stock items`,
-            count: stocks.length,
-            icon: <Package className="w-4 h-4" />,
-          },
-          {
-            type: "success",
-            message: `${Math.floor(Math.random() * 30 + 70)}% targets achieved`,
-            count: Math.floor(Math.random() * 30 + 70),
-            icon: <Target className="w-4 h-4" />,
-          },
-        ];
-      };
-
-      setAlerts(processAlerts(stock.data, transactions.data));
-
-      // Process Sales Data for chart (group by date or month)
-      const processSalesData = (transactionsData) => {
-        // Handle transaction response: could be array or {data: array}
-        const txnList = Array.isArray(transactionsData?.data) 
-          ? transactionsData.data 
-          : transactionsData?.data?.data || [];
-        
-        const monthlyData = {};
-        
-        txnList.forEach(t => {
-          const date = new Date(t.createdAt || new Date());
-          const monthKey = date.toLocaleString('default', { month: 'short' });
-          
-          if (!monthlyData[monthKey]) {
-            monthlyData[monthKey] = { month: monthKey, sales: 0, purchase: 0, profit: 0, orders: 0 };
-          }
-          
-          if (t.type?.includes("sales")) {
-            monthlyData[monthKey].sales += t.amount || 0;
-            monthlyData[monthKey].orders += 1;
-          } else if (t.type?.includes("purchase")) {
-            monthlyData[monthKey].purchase += t.amount || 0;
-            monthlyData[monthKey].orders += 1;
-          }
-        });
-
-        return Object.values(monthlyData).slice(-8);
-      };
-
-      setSalesData(processSalesData(transactions.data));
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {
@@ -487,489 +162,267 @@ const Dashboard = () => {
     setRefreshing(false);
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "success":
-        return "bg-green-600";
-      case "warning":
-        return "bg-yellow-600";
-      case "critical":
-        return "bg-red-700";
-      case "info":
-        return "bg-blue-600";
-      default:
-        return "bg-gray-500";
-    }
+  const getStatusBadge = (status) => {
+    const styles = {
+      DRAFT: "bg-slate-100 text-slate-600",
+      PENDING: "bg-amber-100 text-amber-700",
+      APPROVED: "bg-blue-100 text-blue-700",
+      PAID: "bg-emerald-100 text-emerald-700",
+      PARTIAL: "bg-orange-100 text-orange-700",
+      INVOICED: "bg-purple-100 text-purple-700",
+      REJECTED: "bg-red-100 text-red-700",
+      CANCELLED: "bg-red-100 text-red-600",
+    };
+    return styles[status] || "bg-slate-100 text-slate-600";
   };
 
-  // Helper to safely get a display string from possible object/string values
-  const getDisplayName = (val) => {
-    if (val == null) return "";
-    if (typeof val === "string") return val;
-    if (typeof val === "object") return val.name || val.title || String(val);
-    return String(val);
-  };
-
-  const getAlertBgColor = (type) => {
-    switch (type) {
-      case "critical":
-        return "bg-red-100/20 border-red-200/50";
-      case "warning":
-        return "bg-yellow-100/20 border-yellow-200/50";
-      case "info":
-        return "bg-blue-100/20 border-blue-200/50";
-      case "success":
-        return "bg-green-100/20 border-green-200/50";
-      default:
-        return "bg-gray-100/20 border-gray-200/50";
-    }
-  };
-
-  const tabs = [
-    {
-      id: "overview",
-      name: "Overview",
-      icon: <LayoutDashboard className="w-4 h-4" />,
-    },
-    {
-      id: "financial",
-      name: "Financial",
-      icon: <DollarSign className="w-4 h-4" />,
-    },
-    {
-      id: "inventory",
-      name: "Inventory",
-      icon: <Package className="w-4 h-4" />,
-    },
-    { id: "sales", name: "Sales", icon: <ShoppingCart className="w-4 h-4" /> },
-    { id: "staff", name: "Staff", icon: <Users className="w-4 h-4" /> },
+  const quickLinks = [
+    { label: "Sales Order", icon: <ShoppingCart className="w-5 h-5" />, path: "/sales-order", color: "bg-orange-50 text-orange-700 border-orange-200" },
+    { label: "Purchase Order", icon: <Truck className="w-5 h-5" />, path: "/purchase-order", color: "bg-green-50 text-green-700 border-green-200" },
+    { label: "Stock Items", icon: <Package className="w-5 h-5" />, path: "/stock-item-creation", color: "bg-blue-50 text-blue-700 border-blue-200" },
+    { label: "Customers", icon: <Users className="w-5 h-5" />, path: "/customer-creation", color: "bg-purple-50 text-purple-700 border-purple-200" },
+    { label: "Receipt Voucher", icon: <Receipt className="w-5 h-5" />, path: "/receipt-voucher", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    { label: "Payment Voucher", icon: <Wallet className="w-5 h-5" />, path: "/payment-voucher", color: "bg-rose-50 text-rose-700 border-rose-200" },
   ];
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="flex flex-col items-center space-y-4">
-          <Loader className="w-12 h-12 text-gray-600 animate-spin" />
-          <p className="text-gray-600">Loading dashboard...</p>
+      <div className="min-h-screen bg-slate-50 p-6 lg:p-8">
+        <div className="animate-pulse space-y-6">
+          <div className="flex justify-between items-center">
+            <div className="space-y-2">
+              <div className="h-7 bg-slate-200 rounded w-48"></div>
+              <div className="h-4 bg-slate-100 rounded w-64"></div>
+            </div>
+            <div className="h-9 bg-slate-200 rounded-lg w-28"></div>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="bg-white rounded-xl p-5 border border-slate-200">
+                <div className="h-3 bg-slate-200 rounded w-16 mb-3"></div>
+                <div className="h-7 bg-slate-200 rounded w-28 mb-2"></div>
+                <div className="h-3 bg-slate-100 rounded w-20"></div>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-slate-200 h-72"></div>
+            <div className="bg-white rounded-xl p-6 border border-slate-200 h-72"></div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gray-200/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gray-300/10 rounded-full blur-3xl animate-pulse"></div>
-      </div>
-
+    <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <div className="relative bg-gray-100/50 backdrop-blur-xl shadow-2xl border-b border-gray-200/50">
-        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
-            <div className="flex items-center space-x-3 sm:space-x-4 flex-1 min-w-0">
-              <div className="w-10 sm:w-12 h-10 sm:h-12 bg-gray-200 rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0">
-                <LayoutDashboard className="w-5 sm:w-6 h-5 sm:h-6 text-gray-800" />
+      <div className="bg-white border-b border-slate-200">
+        <div className="px-6 lg:px-8 py-5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center">
+                <LayoutDashboard className="w-5 h-5 text-white" />
               </div>
-              <div className="min-w-0">
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">ERP Dashboard</h1>
-                <p className="text-xs sm:text-sm text-gray-600 truncate">
-                  Welcome back, Administrator • {currentTime.toLocaleDateString()}
+              <div>
+                <h1 className="text-xl font-bold text-slate-900">Dashboard</h1>
+                <p className="text-xs text-slate-500">
+                  {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
                 </p>
               </div>
             </div>
-            <div className="flex items-center space-x-2 sm:space-x-4 w-full sm:w-auto">
-              <div className="flex items-center space-x-1 sm:space-x-2 bg-gray-100/50 rounded-lg sm:rounded-xl px-2 sm:px-4 py-1.5 sm:py-2 backdrop-blur-sm flex-1 sm:flex-initial">
-                <Calendar className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-gray-600 flex-shrink-0" />
-                <select
-                  className="bg-transparent text-gray-800 text-xs sm:text-sm border-none outline-none min-w-0"
-                  value={selectedPeriod}
-                  onChange={(e) => setSelectedPeriod(e.target.value)}
-                >
-                  <option value="week">Week</option>
-                  <option value="month">Month</option>
-                  <option value="quarter">Quarter</option>
-                  <option value="year">Year</option>
-                </select>
-              </div>
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="px-3 sm:px-6 py-1.5 sm:py-3 bg-gray-200 text-gray-800 rounded-lg sm:rounded-xl hover:bg-gray-300 transition-all duration-300 flex items-center space-x-1 sm:space-x-2 shadow-lg hover:shadow-xl disabled:opacity-50 flex-shrink-0"
-              >
-                <RefreshCw className={`w-3.5 sm:w-4 h-3.5 sm:h-4 ${refreshing ? "animate-spin" : ""}`} />
-                <span className="hidden sm:inline text-sm">Refresh</span>
-              </button>
-            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="flex items-center space-x-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+              <span>Refresh</span>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="relative px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 overflow-x-auto">
-        <div className="flex space-x-1 sm:space-x-2 bg-gray-100/50 backdrop-blur-xl rounded-lg sm:rounded-2xl p-1.5 sm:p-2 border border-gray-200/50 min-w-min sm:min-w-full">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center space-x-1 sm:space-x-2 px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl transition-all duration-300 whitespace-nowrap text-xs sm:text-base ${
-                activeTab === tab.id
-                  ? "bg-gray-200 text-gray-800 shadow-lg"
-                  : "text-gray-600 hover:text-gray-800 hover:bg-gray-200/50"
-              }`}
-            >
-              {tab.icon}
-              <span className="font-medium hidden sm:inline">{tab.name}</span>
-              <span className="font-medium sm:hidden">{tab.name.slice(0, 3)}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="relative p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
+      <div className="px-6 lg:px-8 py-6 space-y-6">
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
-          {kpiData.map((kpi) => (
-            <div key={kpi.id} className="group relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white/5 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-              <div
-                className={`relative bg-gradient-to-br from-white to-gray-50 backdrop-blur-xl rounded-2xl p-6 border ${kpi.borderColor} hover:shadow-lg transition-all duration-300 overflow-hidden`}
-              >
-                <div className="relative z-10">
-                  <div className="flex items-center justify-between mb-3 gap-2">
-                    <div className={`p-2 sm:p-3 rounded-xl ${kpi.bgColor} text-gray-800 shadow-lg flex-shrink-0`}>
-                      {kpi.icon}
-                    </div>
-                    <div
-                      className={`flex items-center space-x-1 px-2 sm:px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
-                        kpi.trend === "up"
-                          ? "bg-green-200/50 text-green-700"
-                          : "bg-red-200/50 text-red-700"
-                      }`}
-                    >
-                      {kpi.trend === "up" ? (
-                        <ArrowUpRight className="w-3 h-3" />
-                      ) : (
-                        <ArrowDownRight className="w-3 h-3" />
-                      )}
-                      <span>{kpi.change}</span>
-                    </div>
-                  </div>
-                  <div className="space-y-1 sm:space-y-2">
-                    {/* Display value with dirham symbol for currency fields */}
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {kpi.displayAmount !== undefined && (
-                        <img src={DirhamIcon} alt="AED" className="w-5 h-5 opacity-80" />
-                      )}
-                      <h3 className="text-base sm:text-lg lg:text-xl font-bold text-gray-800 break-words">{kpi.value}</h3>
-                    </div>
-                    <p className="text-xs sm:text-sm font-medium text-gray-700">{kpi.title}</p>
-                    <p className="text-xs text-gray-600 hidden sm:block">{kpi.description}</p>
-                    <div className="w-full bg-gray-200/50 rounded-full h-1.5 sm:h-2">
-                      <div
-                        className="h-full bg-gradient-to-r from-gray-400 to-gray-500 rounded-full transition-all duration-1000"
-                        style={{
-                          width: `${Math.min(
-                            (parseInt(kpi.value.replace(/[^\d]/g, "")) /
-                              parseInt(kpi.target.replace(/[^\d]/g, ""))) *
-                              100,
-                            100
-                          )}%`,
-                        }}
-                      ></div>
-                    </div>
-                    <p className="text-xs text-gray-500 hidden sm:block">Target: {kpi.target}</p>
-                  </div>
-                </div>
+        {kpiData && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Sales ({kpiData.monthName})</p>
+              <div className="flex items-center gap-1.5 mt-2">
+                <img src={DirhamIcon} alt="AED" className="w-4 h-4 opacity-70" />
+                <p className="text-xl font-bold text-slate-900">{formatAED(kpiData.totalSales)}</p>
               </div>
+              {kpiData.salesGrowth !== null && (
+                <div className="flex items-center mt-2">
+                  {parseFloat(kpiData.salesGrowth) >= 0 ? (
+                    <ArrowUpRight className="w-3.5 h-3.5 text-emerald-500 mr-1" />
+                  ) : (
+                    <ArrowDownRight className="w-3.5 h-3.5 text-rose-500 mr-1" />
+                  )}
+                  <span className={`text-xs font-medium ${parseFloat(kpiData.salesGrowth) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {kpiData.salesGrowth}% vs last month
+                  </span>
+                </div>
+              )}
             </div>
-          ))}
-        </div>
 
-        {/* Alerts Section */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {alerts.map((alert, index) => (
-            <div
-              key={index}
-              className={`p-4 rounded-xl border ${getAlertBgColor(alert.type)} backdrop-blur-sm`}
-            >
-              <div className="flex items-center space-x-3">
-                <div className={`p-2 rounded-lg ${getStatusColor(alert.type)} text-white`}>
-                  {alert.icon}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-800">{alert.message}</p>
-                  <p className="text-xs text-gray-600 mt-1">Count: {alert.count}</p>
-                </div>
+            <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Purchases ({kpiData.monthName})</p>
+              <div className="flex items-center gap-1.5 mt-2">
+                <img src={DirhamIcon} alt="AED" className="w-4 h-4 opacity-70" />
+                <p className="text-xl font-bold text-slate-900">{formatAED(kpiData.totalPurchase)}</p>
               </div>
+              <p className="text-xs text-slate-500 mt-2">{kpiData.purchaseOrderCount} orders placed</p>
             </div>
-          ))}
+
+            <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Gross Profit</p>
+              <div className="flex items-center gap-1.5 mt-2">
+                <img src={DirhamIcon} alt="AED" className="w-4 h-4 opacity-70" />
+                <p className={`text-xl font-bold ${kpiData.profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatAED(kpiData.profit)}</p>
+              </div>
+              <p className="text-xs text-slate-500 mt-2">Margin: {kpiData.marginPercent}%</p>
+            </div>
+
+            <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Orders This Month</p>
+              <p className="text-xl font-bold text-slate-900 mt-2">{kpiData.thisMonthOrders}</p>
+              <p className="text-xs text-slate-500 mt-2">{kpiData.salesOrderCount} total sales orders</p>
+            </div>
+          </div>
+        )}
+
+        {/* Alerts */}
+        {alerts.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {alerts.map((alert, idx) => {
+              const colors = {
+                critical: "bg-red-50 border-red-200 text-red-800",
+                warning: "bg-amber-50 border-amber-200 text-amber-800",
+                info: "bg-blue-50 border-blue-200 text-blue-800",
+              };
+              const iconColors = {
+                critical: "text-red-500",
+                warning: "text-amber-500",
+                info: "text-blue-500",
+              };
+              return (
+                <div key={idx} className={`flex items-center space-x-3 px-4 py-3 rounded-lg border ${colors[alert.type] || colors.info}`}>
+                  <span className={iconColors[alert.type] || iconColors.info}>{alert.icon}</span>
+                  <p className="text-sm font-medium">{alert.message}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Quick Links */}
+        <div>
+          <h2 className="text-sm font-semibold text-slate-700 mb-3">Quick Access</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {quickLinks.map((link, idx) => (
+              <button
+                key={idx}
+                onClick={() => navigate(link.path)}
+                className={`group flex flex-col items-center gap-2 p-4 rounded-xl border transition-all hover:shadow-md active:scale-[0.98] ${link.color}`}
+              >
+                <span className="group-hover:scale-110 transition-transform">{link.icon}</span>
+                <span className="text-xs font-medium">{link.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-          {/* Sales Performance Chart */}
-          <div className="lg:col-span-2">
-            <div className="bg-gradient-to-br from-white to-gray-50 backdrop-blur-xl rounded-2xl border border-gray-200/50 overflow-hidden shadow-lg">
-              <div className="p-4 sm:p-6 border-b border-gray-200/50">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
-                  <div className="flex-1">
-                    <h3 className="text-lg sm:text-xl font-bold text-gray-800">Sales vs Purchase Overview</h3>
-                    <p className="text-xs sm:text-sm text-gray-600">Monthly sales and purchase trends</p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Recent Activity */}
+          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-800">Recent Transactions</h3>
+              <span className="text-xs text-slate-500">Last 5 SO + 5 PO</span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {recentActivities.length > 0 ? recentActivities.map((activity) => (
+                <div key={activity.id} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50 transition-colors">
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      activity.type === "sale" ? "bg-orange-100 text-orange-600" : activity.type === "purchase" ? "bg-green-100 text-green-600" : "bg-slate-100 text-slate-600"
+                    }`}>
+                      {activity.type === "sale" ? <ShoppingCart className="w-4 h-4" /> : activity.type === "purchase" ? <Truck className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-900 truncate">{activity.txNo}</p>
+                      <p className="text-xs text-slate-500 truncate">{activity.party || (activity.type === "sale" ? "Sales Order" : "Purchase Order")}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3 flex-shrink-0">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(activity.status)}`}>
+                      {activity.status}
+                    </span>
+                    <p className="text-sm font-medium text-slate-700 tabular-nums">{formatAED(activity.amount)}</p>
                   </div>
                 </div>
-              </div>
-              <div className="p-6">
-                {salesData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <ComposedChart data={salesData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <XAxis dataKey="month" stroke="#6B7280" />
-                      <YAxis stroke="#6B7280" />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#FFFFFF",
-                          border: "1px solid #E5E7EB",
-                          borderRadius: "12px",
-                          color: "#000000",
-                        }}
-                      />
-                      <Bar dataKey="sales" fill="#10B981" radius={[4, 4, 0, 0]} name="Sales" />
-                      <Bar dataKey="purchase" fill="#3B82F6" radius={[4, 4, 0, 0]} name="Purchase" />
-                      <Line
-                        type="monotone"
-                        dataKey="profit"
-                        stroke="#8B5CF6"
-                        strokeWidth={3}
-                        dot={{ fill: "#8B5CF6", r: 6 }}
-                        name="Profit"
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-300 flex items-center justify-center text-gray-500">
-                    No sales data available
-                  </div>
-                )}
-              </div>
+              )) : (
+                <div className="px-5 py-10 text-center text-sm text-slate-400">No recent transactions</div>
+              )}
             </div>
           </div>
 
-          {/* Inventory Distribution */}
-          <div className="space-y-8">
-            <div className="bg-gradient-to-br from-white to-gray-50 backdrop-blur-xl rounded-2xl border border-gray-200/50 shadow-lg">
-              <div className="p-6 border-b border-gray-200/50">
-                <h3 className="text-xl font-bold text-gray-800">Inventory Distribution</h3>
-                <p className="text-gray-600">Stock distribution by category</p>
+          {/* Snapshot Panel */}
+          <div className="space-y-4">
+            {/* System Summary */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div className="px-5 py-4 border-b border-slate-100">
+                <h3 className="text-sm font-semibold text-slate-800">System Snapshot</h3>
               </div>
-              <div className="p-6">
-                {inventoryData.length > 0 ? (
-                  <>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <RechartsPieChart>
-                        <Pie
-                          data={inventoryData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={5}
-                          dataKey="value"
-                        >
-                          {inventoryData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "#FFFFFF",
-                            border: "1px solid #E5E7EB",
-                            borderRadius: "8px",
-                          }}
-                        />
-                      </RechartsPieChart>
-                    </ResponsiveContainer>
-                    <div className="mt-4 space-y-2">
-                      {inventoryData.map((item, index) => (
-                        <div key={index} className="flex items-center justify-between text-sm">
-                          <div className="flex items-center space-x-2">
-                            <div
-                              className="w-3 h-3 rounded-full"
-                              style={{ backgroundColor: item.color }}
-                            ></div>
-                            <span className="text-gray-700">{getDisplayName(item.name)}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-gray-800 font-medium">{item.value}%</span>
-                            <span className="text-gray-600 ml-2">({item.count})</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <div className="h-200 flex items-center justify-center text-gray-500">
-                    No inventory data
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="bg-gradient-to-br from-white to-gray-50 backdrop-blur-xl rounded-2xl border border-gray-200/50 shadow-lg">
-              <div className="p-6 border-b border-gray-200/50">
-                <h3 className="text-xl font-bold text-gray-800">Quick Actions</h3>
-                <p className="text-gray-600">Frequently used functions</p>
-              </div>
-              <div className="p-6 grid grid-cols-2 gap-3">
-                {[
-                  { icon: <Receipt className="w-5 h-5" />, label: "New Invoice", bgColor: "bg-blue-100", path: "/receipt-voucher" },
-                  { icon: <ShoppingCart className="w-5 h-5" />, label: "Add Order", bgColor: "bg-green-100", path: "/sales-order" },
-                  { icon: <Package className="w-5 h-5" />, label: "Stock Entry", bgColor: "bg-orange-100", path: "/stock-item-creation" },
-                  { icon: <Users className="w-5 h-5" />, label: "New Customer", bgColor: "bg-purple-100", path: "/customer-creation" },
-                ].map((action, index) => (
+              <div className="p-4 space-y-1">
+                {kpiData && [
+                  { label: "Stock Items", value: kpiData.stockItemCount, path: "/stock-item-creation" },
+                  { label: "Sales Orders", value: kpiData.salesOrderCount, path: "/sales-order" },
+                  { label: "Purchase Orders", value: kpiData.purchaseOrderCount, path: "/purchase-order" },
+                  { label: "Staff Members", value: kpiData.staffCount, path: "/staff-creation" },
+                  { label: "Vouchers", value: kpiData.voucherCount, path: "/receipt-voucher" },
+                ].map((item, idx) => (
                   <button
-                    key={index}
-                    onClick={() => navigate(action.path)}
-                    className="group p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all duration-300 flex flex-col items-center space-y-3 border border-gray-200/50"
+                    key={idx}
+                    onClick={() => navigate(item.path)}
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-slate-50 transition-colors group"
                   >
-                    <div className={`p-3 rounded-lg ${action.bgColor} text-gray-800 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                      {action.icon}
+                    <span className="text-sm text-slate-600">{item.label}</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-semibold text-slate-900">{item.value}</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-colors" />
                     </div>
-                    <span className="text-sm font-medium text-gray-700">{action.label}</span>
                   </button>
                 ))}
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Financial Modules Performance */}
-        {financialData.length > 0 && (
-          <div className="bg-gradient-to-br from-white to-gray-50 backdrop-blur-xl rounded-2xl border border-gray-200/50 shadow-lg">
-            <div className="p-6 border-b border-gray-200/50">
-              <h3 className="text-xl font-bold text-gray-800">Financial Modules Performance</h3>
-              <p className="text-gray-600">Voucher processing and transaction volumes</p>
-            </div>
-            <div className="p-6">
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={financialData} layout="horizontal">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                  <XAxis type="number" stroke="#6B7280" />
-                  <YAxis dataKey="module" type="category" stroke="#6B7280" width={120} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#FFFFFF",
-                      border: "1px solid #E5E7EB",
-                      borderRadius: "12px",
-                    }}
-                  />
-                  <Bar dataKey="processed" name="Vouchers" fill="#6366F1" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        {/* Staff Performance and Top Items */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-          {/* Staff Performance */}
-          {staffData.length > 0 && (
-            <div className="bg-gradient-to-br from-white to-gray-50 backdrop-blur-xl rounded-2xl border border-gray-200/50 shadow-lg">
-              <div className="p-6 border-b border-gray-200/50">
-                <h3 className="text-xl font-bold text-gray-800">Staff Performance</h3>
-                <p className="text-gray-600">Department-wise performance metrics</p>
-              </div>
-              <div className="p-6">
-                <div className="mt-6 space-y-4">
-                  {staffData.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between text-sm p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-3 h-3 rounded-full bg-indigo-600"></div>
-                        <span className="text-gray-700 font-medium">{getDisplayName(item.department)}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-gray-800 font-bold">{item.performance}%</span>
-                        <span className="text-gray-600 ml-2 text-xs">({item.active} active)</span>
-                      </div>
+            {/* Attention needed */}
+            {kpiData && (kpiData.pendingOrders > 0 || kpiData.lowStockItems > 0) && (
+              <div className="bg-amber-50 rounded-xl border border-amber-200">
+                <div className="px-5 py-4 border-b border-amber-200">
+                  <h3 className="text-sm font-semibold text-amber-800">Needs Attention</h3>
+                </div>
+                <div className="p-4 space-y-3">
+                  {kpiData.pendingOrders > 0 && (
+                    <div className="flex items-center space-x-3">
+                      <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      <p className="text-sm text-amber-800">{kpiData.pendingOrders} orders awaiting action</p>
                     </div>
-                  ))}
+                  )}
+                  {kpiData.lowStockItems > 0 && (
+                    <div className="flex items-center space-x-3">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      <p className="text-sm text-amber-800">{kpiData.lowStockItems} items low on stock</p>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Top Performing Items */}
-          {topItems.length > 0 && (
-            <div className="bg-gradient-to-br from-white to-gray-50 backdrop-blur-xl rounded-2xl border border-gray-200/50 shadow-lg">
-              <div className="p-6 border-b border-gray-200/50">
-                <h3 className="text-xl font-bold text-gray-800">Top Selling Items</h3>
-                <p className="text-gray-600">Best-selling products by value</p>
-              </div>
-              <div className="p-6">
-                <div className="space-y-3">
-                  {topItems.map((item, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all"
-                    >
-                      <div className="flex items-center space-x-3 flex-1">
-                        <div className="p-2 rounded-lg bg-amber-100 text-amber-700">
-                          <Star className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-800 truncate">{getDisplayName(item.name)}</p>
-                          <p className="text-xs text-gray-600">{getDisplayName(item.category)}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-gray-800">{formatAED(item.sales)}</p>
-                        <p className="text-xs text-green-600">+{item.growth}%</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Recent Activities */}
-        {recentActivities.length > 0 && (
-          <div className="bg-gradient-to-br from-white to-gray-50 backdrop-blur-xl rounded-2xl border border-gray-200/50 shadow-lg">
-            <div className="p-6 border-b border-gray-200/50">
-              <h3 className="text-xl font-bold text-gray-800">Recent Activities</h3>
-              <p className="text-gray-600">Latest system events and updates</p>
-            </div>
-            <div className="p-6">
-              <div className="space-y-3">
-                {recentActivities.map((activity) => (
-                  <div
-                    key={activity.id}
-                    className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all"
-                  >
-                    <div className="flex items-center space-x-4 flex-1">
-                      <div className={`p-2 rounded-lg ${getStatusColor(activity.status)} text-white`}>
-                        {activity.type === "sale" && <ShoppingCart className="w-4 h-4" />}
-                        {activity.type === "purchase" && <Truck className="w-4 h-4" />}
-                        {activity.type === "inventory" && <Package className="w-4 h-4" />}
-                        {activity.type === "payment" && <CreditCard className="w-4 h-4" />}
-                        {activity.type === "user" && <UserPlus className="w-4 h-4" />}
-                        {activity.type === "ledger" && <FileText className="w-4 h-4" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800">{activity.description}</p>
-                        <p className="text-xs text-gray-600">{activity.time} • By {activity.user}</p>
-                      </div>
-                    </div>
-                    <p className="text-sm font-medium text-gray-700 ml-2">{activity.amount}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

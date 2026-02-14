@@ -32,9 +32,11 @@ import {
   Trash2,
   Eye,
   Wallet,
+  Download,
 } from "lucide-react";
 import Select from "react-select";
 import axiosInstance from "../../../axios/axios";
+import { exportChartOfAccountsExcel } from "../../../utils/excelExport";
 
 const FormInput = ({ label, icon: Icon, error, readOnly, hint, ...props }) => (
   <div className="group relative">
@@ -724,14 +726,13 @@ const ChartOfAccountsManagement = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2
-            size={48}
-            className="text-purple-600 animate-spin mx-auto mb-4"
-          />
-          <p className="text-gray-600 text-lg font-medium">Loading data...</p>
+      <div className="p-6 min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3"><div className="animate-pulse bg-gray-200 rounded-full w-10 h-10" /><div><div className="animate-pulse bg-gray-200 rounded w-48 h-6 mb-2" /><div className="animate-pulse bg-gray-200 rounded w-64 h-3" /></div></div>
+          <div className="animate-pulse bg-gray-200 rounded-lg w-36 h-10" />
         </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">{Array.from({length:4}).map((_,i)=>(<div key={i} className="bg-white rounded-xl shadow-sm border p-5"><div className="flex items-center justify-between mb-3"><div className="animate-pulse bg-gray-200 rounded w-24 h-3" /><div className="animate-pulse bg-gray-200 rounded-full w-8 h-8" /></div><div className="animate-pulse bg-gray-200 rounded w-16 h-7 mb-2" /><div className="animate-pulse bg-gray-200 rounded w-32 h-3" /></div>))}</div>
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden"><div className="bg-gray-50 border-b px-6 py-4"><div className="flex gap-4">{Array.from({length:5}).map((_,i)=>(<div key={i} className="animate-pulse bg-gray-200 rounded w-24 h-3" />))}</div></div>{Array.from({length:8}).map((_,i)=>(<div key={i} className={`px-6 py-4 flex gap-4 ${i%2===1?'bg-gray-50/50':''} border-b border-gray-100`}>{Array.from({length:5}).map((_,j)=>(<div key={j} className="animate-pulse bg-gray-200 rounded w-24 h-4" />))}</div>))}</div>
       </div>
     );
   }
@@ -875,6 +876,14 @@ const ChartOfAccountsManagement = () => {
                 Manage chart of accounts, vendors, and customers
               </p>
             </div>
+            <button
+              onClick={() => exportChartOfAccountsExcel(filteredList, { accountType: selectedType?.value, search: searchTerm })}
+              disabled={filteredList.length === 0}
+              className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Export to Excel"
+            >
+              <Download size={18} /> Export
+            </button>
           </div>
           <div className="mt-6 space-y-4">
             <div className="relative">

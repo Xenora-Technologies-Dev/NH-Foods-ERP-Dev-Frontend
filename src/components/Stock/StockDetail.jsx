@@ -151,11 +151,17 @@ const StockDetail = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="flex items-center space-x-3 text-gray-600">
-          <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-lg font-medium">Loading...</span>
+      <div className="p-6 min-h-screen bg-gray-50">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="animate-pulse bg-gray-200 rounded w-8 h-8" />
+          <div className="animate-pulse bg-gray-200 rounded w-48 h-6" />
         </div>
+        <div className="bg-white rounded-xl shadow-sm border p-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {Array.from({length:8}).map((_,i)=>(<div key={i}><div className="animate-pulse bg-gray-200 rounded w-24 h-3 mb-2" /><div className="animate-pulse bg-gray-200 rounded h-5" /></div>))}
+          </div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden"><div className="bg-gray-50 border-b px-6 py-4"><div className="flex gap-4">{Array.from({length:4}).map((_,i)=>(<div key={i} className="animate-pulse bg-gray-200 rounded w-24 h-3" />))}</div></div>{Array.from({length:5}).map((_,i)=>(<div key={i} className="px-6 py-4 flex gap-4 border-b border-gray-100">{Array.from({length:4}).map((_,j)=>(<div key={j} className="animate-pulse bg-gray-200 rounded w-24 h-4" />))}</div>))}</div>
       </div>
     );
   }

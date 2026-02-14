@@ -22,6 +22,7 @@ const SaleInvoiceView = ({
    updateSalesOrderStatus,    // NEW
 }) => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
   const [profileData, setProfileData] = useState({
     companyName: "NAJM ALHUDA FOODSTUFF TRADING LLC S.O.C.C.",
     companyNameArabic: "نجم الهدى لتجارة المواد الغذائية ذ.م.م ش.ش.و",
@@ -122,12 +123,10 @@ const SaleInvoiceView = ({
       ...m,
       invoiceNo: deriveInvoiceNo(so) || m.invoiceNo,
       soNo: so.orderNumber || so.transactionNo || m.soNo || '',
-      lpoOrRef: (so.refNo ?? so.lpono ?? m.lpoOrRef ?? '-') ,
-      docNo: (so.docNo ?? so.docno ?? m.docNo ?? '-') ,
+      lpoOrRef: (so.refNo ?? so.lpono ?? m.lpoOrRef ?? '-') || '-',
+      docNo: (so.docNo ?? so.docno ?? m.docNo ?? '-') || '-',
       paymentTerms: customer.paymentTerms || m.paymentTerms || 'COD',
     }));
-    console.log("Invoice Meta Updated:", invoiceMeta);
-    console.log(so);  
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [so, customer, isApproved]);
 
@@ -220,6 +219,8 @@ const SaleInvoiceView = ({
 // Convert current Sales Order to Invoice by approving it
 // Convert current Sales Order to Invoice by approving it
 const handleConvertToInvoice = async () => {
+  if (isConverting) return;
+  setIsConverting(true);
   try {
     const id = so.id || so._id;
     if (!id) {
@@ -247,6 +248,8 @@ const handleConvertToInvoice = async () => {
     if (addNotification) {
       addNotification(`Failed to convert to invoice: ${message}`, "error");
     }
+  } finally {
+    setIsConverting(false);
   }
 };
   // layout JSX
@@ -267,9 +270,11 @@ const handleConvertToInvoice = async () => {
             {so.status !== "APPROVED" && (
   <button
     onClick={handleConvertToInvoice}
-    className="flex items-center gap-2 px-5 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+    disabled={isConverting}
+    className="flex items-center gap-2 px-4 sm:px-5 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 min-h-[44px] text-sm"
   >
-    Convert to Invoice
+    {isConverting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+    {isConverting ? "Converting..." : "Convert to Invoice"}
   </button>
 )}
           </div>
@@ -288,6 +293,9 @@ const handleConvertToInvoice = async () => {
             boxSizing: "border-box",
           }}
         >
+          {/* Color coded top bar - Orange for Sales */}
+          <div style={{ height: 6, background: "linear-gradient(90deg, #c2410c, #f97316)", marginBottom: 12, borderRadius: 3 }} />
+
           <div style={{ textAlign: "right", fontWeight: "bold", marginBottom: 9 }}>
             {isApproved && <span id="copy-label">Customer Copy</span>}
           </div>
@@ -338,7 +346,7 @@ const handleConvertToInvoice = async () => {
                 <strong>VAT Reg. No:</strong> {profileData.vatNumber}
               </div>
 
-              <div style={{ fontWeight: 700, textDecoration: "underline", marginTop: 6, fontSize: 13 }}>
+              <div style={{ fontWeight: 700, textDecoration: "underline", marginTop: 6, fontSize: 13, color: "#c2410c" }}>
                 {isApproved ? "TAX INVOICE" : "SALES ORDER"}
               </div>
             </div>
@@ -354,32 +362,38 @@ const handleConvertToInvoice = async () => {
               <div style={{ fontWeight: 700 }}>BILL TO:</div>
               <div style={{ marginTop: 6 }}>{customer.customerId || ""}</div>
               <div style={{ fontWeight: 700, marginTop: 6 }}>{customer.customerName || ""}</div>
-              <div style={{ marginTop: 4 }}>{customer.billingAddress || profileData.addressLine1}</div>
-              <div style={{ marginTop: 4 }}>Email: {customer.email || profileData.email}</div>
+              <div style={{ marginTop: 4 }}>{customer.billingAddress || ""}</div>
+              <div style={{ marginTop: 4 }}>Email: {customer.email || ""}</div>
               <div style={{ marginTop: 4 }}>VAT Reg. No: {customer.trnNumber || ""}</div>
             </div>
 
-            {/* metadata block aligned with BILL TO top (parallel) */}
-            <div style={{ width: "38%", textAlign: "right", fontSize: 11 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div style={{ textAlign: "left", minWidth: 100 }}>
-                  {isApproved && <div style={{ fontWeight: 700 }}>Invoice:</div>}
-                  <div style={{ fontWeight: 700, marginTop: 6 }}>Date:</div>
-                  <div style={{ fontWeight: 700, marginTop: 6 }}>SO No</div>
-                  <div style={{ fontWeight: 700, marginTop: 6 }}>LPO</div>
-                  <div style={{ fontWeight: 700, marginTop: 6 }}>DOC No</div>
-                  <div style={{ fontWeight: 700, marginTop: 6 }}>Payment Terms</div>
+            {/* metadata block aligned with BILL TO top (parallel) - each row is a paired flex row */}
+            <div style={{ width: "38%", fontSize: 11 }}>
+              {isApproved && (
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                  <div style={{ fontWeight: 700 }}>Invoice:</div>
+                  <div style={{ fontWeight: 700 }}>{invoiceMeta.invoiceNo}</div>
                 </div>
-                <div style={{ textAlign: "right", minWidth: 110 }}>
-                  {isApproved && (
-                    <div style={{ marginBottom: 2, fontWeight: 700 }}>{invoiceMeta.invoiceNo}</div>
-                  )}
-                  <div style={{ marginTop: 6 }}>{formatDateGB(so.date)}</div>
-                  <div style={{ marginTop: 6 }}>{invoiceMeta.soNo}</div>
-                  <div style={{ marginTop: 6 }}>{invoiceMeta.lpoOrRef}</div>
-                  <div style={{ marginTop: 6 }}>{invoiceMeta.docNo}</div>
-                  <div style={{ marginTop: 6 }}>{invoiceMeta.paymentTerms}</div>
-                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                <div style={{ fontWeight: 700 }}>Date:</div>
+                <div>{formatDateGB(so.date)}</div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                <div style={{ fontWeight: 700 }}>SO No</div>
+                <div>{invoiceMeta.soNo}</div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                <div style={{ fontWeight: 700 }}>LPO</div>
+                <div>{invoiceMeta.lpoOrRef || '-'}</div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                <div style={{ fontWeight: 700 }}>DOC No</div>
+                <div>{invoiceMeta.docNo || '-'}</div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                <div style={{ fontWeight: 700 }}>Payment Terms</div>
+                <div>{invoiceMeta.paymentTerms}</div>
               </div>
             </div>
           </div>
@@ -390,7 +404,7 @@ const handleConvertToInvoice = async () => {
           {/* Items table */}
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, marginBottom: 10 }}>
             <thead>
-              <tr style={{ background: "#fffacd" }}>
+              <tr style={{ background: "#ffedd5" }}>
                 <th style={{ width: 30, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>Line</th>
                 <th style={{ width: 64, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>CODE</th>
                 <th style={{ textAlign: "left", padding: "8px 10px 8px 22px", borderBottom: "1px solid #777" }}>Item Description</th>

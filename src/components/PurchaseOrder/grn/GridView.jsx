@@ -73,10 +73,23 @@ const GridView = ({ grns, onView, onConvert, onCancel }) => {
           {/* PO Reference */}
           <div className="flex items-center gap-2 mb-3 text-sm">
             <FileText className="w-4 h-4 text-gray-400" />
-            <span className="text-gray-600">PO:</span>
-            <span className="font-medium">
-              {grn.poNumber || grn.purchaseOrderId?.transactionNo || "-"}
-            </span>
+            {grn.entryMode === "direct" ? (
+              <>
+                <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-medium">
+                  Direct GRN
+                </span>
+                {grn.referenceNumber && (
+                  <span className="text-gray-500 text-xs">Ref: {grn.referenceNumber}</span>
+                )}
+              </>
+            ) : (
+              <>
+                <span className="text-gray-600">PO:</span>
+                <span className="font-medium">
+                  {grn.poNumber || grn.purchaseOrderId?.transactionNo || "-"}
+                </span>
+              </>
+            )}
           </div>
 
           {/* Vendor */}

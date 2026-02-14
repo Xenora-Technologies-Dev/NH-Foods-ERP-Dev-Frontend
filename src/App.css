@@ -6,6 +6,341 @@
   text-align: left;
 }
 
+/* ============================================================
+   GLOBAL ERP UI/UX IMPROVEMENTS
+   Mobile-first responsive design for Apple, Windows, Android
+   ============================================================ */
+
+/* ---------- Touch & Mobile Optimizations ---------- */
+/* Minimum touch target size (48px) per WCAG 2.5.5 for all interactive elements */
+@media (pointer: coarse) {
+  button,
+  a,
+  [role="button"],
+  input[type="checkbox"],
+  input[type="radio"],
+  select {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Make select dropdowns easier to tap */
+  select {
+    padding: 12px 16px;
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+
+  /* Enlarge table action buttons */
+  .table-action-btn {
+    padding: 10px;
+  }
+}
+
+/* Prevent iOS zoom on input focus (font-size >= 16px) */
+@media screen and (max-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* ---------- Safe Area for Notched Devices ---------- */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .min-h-screen {
+    min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* ---------- Global Button Styles ---------- */
+/* Consistent button press feedback across all platforms */
+button,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+button:active:not(:disabled),
+[role="button"]:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Primary action button style */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: 0.75rem;
+  color: white;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+  min-height: 44px;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.97) translateY(0);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Secondary action button */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: 0.75rem;
+  color: #374151;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+/* Danger button */
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: 0.75rem;
+  color: white;
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+  min-height: 44px;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: linear-gradient(135deg, #b91c1c, #dc2626);
+}
+
+/* Success button */
+.btn-success {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: 0.75rem;
+  color: white;
+  background: linear-gradient(135deg, #059669, #10b981);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+  min-height: 44px;
+}
+
+.btn-success:hover:not(:disabled) {
+  background: linear-gradient(135deg, #047857, #059669);
+}
+
+/* ---------- Smooth Scrolling ---------- */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Better scrollbar styling (Windows/Chrome) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
+}
+
+/* ---------- Focus Visible Styles for Keyboard Navigation ---------- */
+:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Remove default outline on click */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ---------- Input Improvements ---------- */
+input,
+textarea,
+select {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type="date"] {
+  position: relative;
+}
+
+/* ---------- Responsive Table Improvements ---------- */
+@media screen and (max-width: 768px) {
+  .responsive-table-container {
+    overflow-x: auto;
+    margin: 0 -1rem;
+    padding: 0 1rem;
+  }
+
+  .responsive-table-container table {
+    min-width: 640px;
+  }
+}
+
+/* ---------- Modal Improvements for Mobile ---------- */
+@media screen and (max-width: 640px) {
+  .fixed.inset-0 {
+    padding: 0.5rem;
+  }
+}
+
+/* ---------- Slide-in Animation for Toasts ---------- */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
+
+/* ---------- Skeleton Loading ---------- */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 37%, #f0f0f0 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ---------- Print Styles ---------- */
+@media print {
+  .no-print,
+  nav,
+  .sidebar { display: none !important; }
+  
+  body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
+
+/* ---------- Sidebar Scrollbar ---------- */
+/* stylelint-disable-next-line property-no-unknown */
+.sidebar-scrollbar {
+  scrollbar-width: thin; /* Firefox 64+, Chrome 121+ */
+  scrollbar-color: #e5e7eb transparent; /* Firefox 64+, Chrome 121+ */
+}
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  border-radius: 9999px;
+}
+.sidebar-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: #9ca3af;
+}
+
+/* ---------- ERP Sidebar ---------- */
+.erp-sidebar {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---------- Card Hover Effects ---------- */
+.card-hover {
+  transition: all 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* ---------- Badge Styles ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.badge-success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+.badge-danger { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.badge-warning { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+.badge-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+.badge-purple { background: #f5f3ff; color: #5b21b6; border: 1px solid #ddd6fe; }
+.badge-orange { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+
 .logo {
   height: 3em;
   padding: 0.75em;

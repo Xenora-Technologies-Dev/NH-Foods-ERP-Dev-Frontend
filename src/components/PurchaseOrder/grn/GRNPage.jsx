@@ -26,13 +26,19 @@ import {
   FileDown,
   ClipboardCheck,
   ArrowRightCircle,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
+import Select from "react-select";
 import axiosInstance from "../../../axios/axios";
 import GRNForm from "./GRNForm";
+import DirectGRNForm from "./DirectGRNForm";
 import TableView from "./TableView";
 import GridView from "./GridView";
 import GRNView from "./GRNView";
 import PaginationControl from "../../Pagination/PaginationControl";
+import { useVendorList, useStockList } from "../../../hooks/useDataFetching";
+import { PageListSkeleton, RefetchIndicator } from "../../ui/Skeletons";
 
 const GRNManagement = () => {
   const [activeView, setActiveView] = useState("dashboard");
@@ -44,17 +50,27 @@ const GRNManagement = () => {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [dateFilter, setDateFilter] = useState("ALL");
   const [vendorFilter, setVendorFilter] = useState("ALL");
+  const [entryModeFilter, setEntryModeFilter] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [notifications, setNotifications] = useState([]);
-  const [vendors, setVendors] = useState([]);
-  const [stockItems, setStockItems] = useState([]);
+  // Toggle for direct GRN mode (without PO)
+  const [directMode, setDirectMode] = useState(false);
+  // Active tab for dashboard: "to_convert" | "converted" | "cancelled"
+  const [activeTab, setActiveTab] = useState("to_convert");
+  // Vendor-first PO selection flow
+  const [selectedVendorForPO, setSelectedVendorForPO] = useState(null);
+  // ── Cached data via React Query (shared across all pages) ──
+  const { data: vendorData, isLoading: vendorsLoading, isFetching: vendorsFetching } = useVendorList();
+  const { data: stockData, isLoading: stockLoading, isFetching: stockFetching } = useStockList();
+  const vendors = useMemo(() => vendorData?.items || [], [vendorData]);
+  const stockItems = useMemo(() => stockData?.items || [], [stockData]);
+
   const [grns, setGRNs] = useState([]);
   const [pendingPOs, setPendingPOs] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [createdGRN, setCreatedGRN] = useState(null);
   const [poSearchTerm, setPoSearchTerm] = useState("");
-  const [poVendorFilter, setPoVendorFilter] = useState("ALL");
   const [poDateFilter, setPoDateFilter] = useState("ALL");
   const [stats, setStats] = useState({
     draft: 0,
@@ -64,19 +80,12 @@ const GRNManagement = () => {
     totalAmount: 0,
   });
 
-  // Initial load - fetch base data in parallel
+  // Initial load - fetch stats and GRNs (vendors & stock from React Query cache)
   useEffect(() => {
     const initializeData = async () => {
       setIsLoading(true);
       try {
-        const [vendorsRes, stockRes, statsRes] = await Promise.all([
-          axiosInstance.get("/vendors/vendors"),
-          axiosInstance.get("/stock/stock"),
-          axiosInstance.get("/grn/stats"),
-        ]);
-        
-        setVendors(vendorsRes.data?.data || []);
-        setStockItems(stockRes.data?.data?.stocks || stockRes.data?.data || []);
+        const statsRes = await axiosInstance.get("/grn/stats");
         setStats(statsRes.data?.data || {});
       } catch (e) {
         addNotification(`Data load error: ${e.response?.data?.message || e.message}`, "error");
@@ -100,26 +109,9 @@ const GRNManagement = () => {
   // Refresh list when filters change
   useEffect(() => {
     fetchGRNs();
-  }, [debouncedSearchTerm, statusFilter, vendorFilter, dateFilter]);
+  }, [debouncedSearchTerm, statusFilter, vendorFilter, dateFilter, entryModeFilter]);
 
-  const fetchVendors = async () => {
-    try {
-      const { data } = await axiosInstance.get("/vendors/vendors");
-      setVendors(data.data || []);
-    } catch (e) {
-      addNotification(`Vendors load error: ${e.response?.data?.message || e.message}`, "error");
-    }
-  };
-
-  const fetchStockItems = async () => {
-    try {
-      const { data } = await axiosInstance.get("/stock/stock");
-      const stocks = data.data?.stocks || data.data || [];
-      setStockItems(stocks);
-    } catch (e) {
-      addNotification(`Stock load error: ${e.response?.data?.message || e.message}`, "error");
-    }
-  };
+  // Vendors and stock items are now provided by React Query hooks above
 
   const fetchGRNs = async () => {
     setIsLoading(true);
@@ -129,6 +121,7 @@ const GRNManagement = () => {
         status: statusFilter !== "ALL" ? statusFilter : undefined,
         vendorId: vendorFilter !== "ALL" ? vendorFilter : undefined,
         dateFilter: dateFilter !== "ALL" ? dateFilter : undefined,
+        entryMode: entryModeFilter !== "ALL" ? entryModeFilter : undefined,
         limit: 1000,
       };
       const { data } = await axiosInstance.get("/grn", { params });
@@ -149,10 +142,12 @@ const GRNManagement = () => {
     }
   };
 
-  const fetchPendingPOs = async () => {
+  const fetchPendingPOs = async (vendorId) => {
     setIsLoading(true);
     try {
-      const { data } = await axiosInstance.get("/grn/pending-pos");
+      const params = {};
+      if (vendorId) params.vendorId = vendorId;
+      const { data } = await axiosInstance.get("/grn/pending-pos", { params });
       setPendingPOs(data.data || []);
     } catch (e) {
       addNotification(`Pending POs load error: ${e.response?.data?.message || e.message}`, "error");
@@ -201,6 +196,7 @@ const GRNManagement = () => {
   };
 
   const handleConvertToPurchase = async (grnId) => {
+    if (isLoading) return; // Prevent double-click
     setIsLoading(true);
     try {
       const { data } = await axiosInstance.patch(`/grn/${grnId}/convert`);
@@ -211,6 +207,44 @@ const GRNManagement = () => {
       fetchStats();
     } catch (e) {
       addNotification(`Convert error: ${e.response?.data?.message || e.message}`, "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateDirectGRN = async (grnData) => {
+    setIsLoading(true);
+    try {
+      const { data } = await axiosInstance.post("/grn/direct", grnData);
+      addNotification("Direct GRN created successfully!", "success");
+      setCreatedGRN(data.data);
+      setActiveView("view");
+      fetchGRNs();
+      fetchStats();
+      return data.data;
+    } catch (e) {
+      addNotification(`Create Direct GRN error: ${e.response?.data?.message || e.message}`, "error");
+      throw e;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConvertGRNToPO = async (grnId) => {
+    if (isLoading) return;
+    setIsLoading(true);
+    try {
+      const { data } = await axiosInstance.patch(`/grn/${grnId}/convert-to-po`);
+      addNotification(
+        `Direct GRN converted to PO ${data.data?.purchaseOrder?.transactionNo || ""} successfully!`,
+        "success"
+      );
+      setSelectedGRN(data.data?.grn || data.data);
+      setCreatedGRN(data.data?.grn || data.data);
+      fetchGRNs();
+      fetchStats();
+    } catch (e) {
+      addNotification(`Convert to PO error: ${e.response?.data?.message || e.message}`, "error");
     } finally {
       setIsLoading(false);
     }
@@ -249,22 +283,23 @@ const GRNManagement = () => {
     }
   };
 
-  // Filter and paginate GRNs
+  // Filter and paginate GRNs based on active tab
   const filteredGRNs = useMemo(() => {
-    return grns;
-  }, [grns]);
+    const tabStatusMap = {
+      to_convert: "RECEIVED",
+      converted: "CONVERTED",
+      cancelled: "CANCELLED",
+    };
+    const tabStatus = tabStatusMap[activeTab];
+    return grns.filter((grn) => grn.status === tabStatus);
+  }, [grns, activeTab]);
 
-  // Filter pending POs for selection
+  // Filter pending POs for selection (vendor already filtered via API call)
   const filteredPendingPOs = useMemo(() => {
     return pendingPOs.filter((po) => {
       // Search filter - search by PO number
       const matchesSearch = !poSearchTerm || 
-        (po.transactionNo || po.orderNumber || "").toLowerCase().includes(poSearchTerm.toLowerCase()) ||
-        (po.vendorName || po.partyId?.vendorName || "").toLowerCase().includes(poSearchTerm.toLowerCase());
-
-      // Vendor filter
-      const matchesVendor = poVendorFilter === "ALL" || 
-        (po.partyId?._id || po.partyId) === poVendorFilter;
+        (po.transactionNo || po.orderNumber || "").toLowerCase().includes(poSearchTerm.toLowerCase());
 
       // Date filter
       let matchesDate = true;
@@ -284,9 +319,9 @@ const GRNManagement = () => {
         }
       }
 
-      return matchesSearch && matchesVendor && matchesDate;
+      return matchesSearch && matchesDate;
     });
-  }, [pendingPOs, poSearchTerm, poVendorFilter, poDateFilter]);
+  }, [pendingPOs, poSearchTerm, poDateFilter]);
 
   const paginatedGRNs = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -368,19 +403,31 @@ const GRNManagement = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Goods Received Notes</h1>
           <p className="text-gray-500 mt-1">
-            Manage goods received against purchase orders
+            Manage goods received against purchase orders or directly from vendors
           </p>
         </div>
         <div className="flex gap-3">
           <button
             onClick={() => {
-              fetchPendingPOs();
+              setDirectMode(false);
+              setSelectedVendorForPO(null);
+              setPendingPOs([]);
               setActiveView("select-po");
             }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
           >
             <Plus className="w-5 h-5" />
-            Create GRN
+            GRN from PO
+          </button>
+          <button
+            onClick={() => {
+              setDirectMode(true);
+              setActiveView("create-direct");
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition"
+          >
+            <Package className="w-5 h-5" />
+            Direct GRN
           </button>
         </div>
       </div>
@@ -401,6 +448,60 @@ const GRNManagement = () => {
         ))}
       </div>
 
+      {/* Tabs */}
+      <div className="bg-white rounded-xl shadow-sm border">
+        <div className="flex border-b">
+          <button
+            onClick={() => { setActiveTab("to_convert"); setCurrentPage(1); }}
+            className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "to_convert"
+                ? "border-blue-600 text-blue-600 bg-blue-50/50"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <ClipboardCheck className="w-4 h-4" />
+            To Be Converted
+            <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
+              activeTab === "to_convert" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"
+            }`}>
+              {stats.received || 0}
+            </span>
+          </button>
+          <button
+            onClick={() => { setActiveTab("converted"); setCurrentPage(1); }}
+            className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "converted"
+                ? "border-green-600 text-green-600 bg-green-50/50"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <CheckCircle className="w-4 h-4" />
+            Converted
+            <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
+              activeTab === "converted" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+            }`}>
+              {stats.converted || 0}
+            </span>
+          </button>
+          <button
+            onClick={() => { setActiveTab("cancelled"); setCurrentPage(1); }}
+            className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "cancelled"
+                ? "border-red-600 text-red-600 bg-red-50/50"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <XCircle className="w-4 h-4" />
+            Cancelled
+            <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
+              activeTab === "cancelled" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"
+            }`}>
+              {stats.cancelled || 0}
+            </span>
+          </button>
+        </div>
+      </div>
+
       {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border p-4">
         <div className="flex flex-col md:flex-row gap-4">
@@ -414,16 +515,6 @@ const GRNManagement = () => {
               className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="ALL">All Status</option>
-            <option value="RECEIVED">Received</option>
-            <option value="CONVERTED">Converted</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
           <select
             value={vendorFilter}
             onChange={(e) => setVendorFilter(e.target.value)}
@@ -445,6 +536,15 @@ const GRNManagement = () => {
             <option value="TODAY">Today</option>
             <option value="WEEK">This Week</option>
             <option value="MONTH">This Month</option>
+          </select>
+          <select
+            value={entryModeFilter}
+            onChange={(e) => setEntryModeFilter(e.target.value)}
+            className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="ALL">All Modes</option>
+            <option value="with_po">With PO</option>
+            <option value="direct">Direct (No PO)</option>
           </select>
           <div className="flex gap-2">
             <button
@@ -478,23 +578,36 @@ const GRNManagement = () => {
 
       {/* GRN List */}
       <div className="bg-white rounded-xl shadow-sm border">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          </div>
+        {(vendorsFetching || stockFetching) && <RefetchIndicator />}
+        {(vendorsLoading || stockLoading || isLoading) ? (
+          <PageListSkeleton rows={5} />
         ) : filteredGRNs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-gray-500">
             <Package className="w-12 h-12 mb-3 opacity-50" />
-            <p>No GRNs found</p>
-            <button
-              onClick={() => {
-                fetchPendingPOs();
-                setActiveView("select-po");
-              }}
-              className="mt-3 text-blue-600 hover:underline"
-            >
-              Create your first GRN
-            </button>
+            <p>No GRNs found in this tab</p>
+            <div className="flex gap-3 mt-3">
+              <button
+                onClick={() => {
+                  setDirectMode(false);
+                  setSelectedVendorForPO(null);
+                  setPendingPOs([]);
+                  setActiveView("select-po");
+                }}
+                className="text-blue-600 hover:underline"
+              >
+                Create GRN from PO
+              </button>
+              <span className="text-gray-300">|</span>
+              <button
+                onClick={() => {
+                  setDirectMode(true);
+                  setActiveView("create-direct");
+                }}
+                className="text-orange-600 hover:underline"
+              >
+                Create Direct GRN
+              </button>
+            </div>
           </div>
         ) : viewMode === "table" ? (
           <TableView
@@ -536,168 +649,248 @@ const GRNManagement = () => {
     </div>
   );
 
-  // Render PO selection for GRN
-  const renderPOSelection = () => (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => setActiveView("dashboard")}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Select Purchase Order</h1>
-          <p className="text-gray-500">Select a PO to create GRN ({filteredPendingPOs.length} pending)</p>
-        </div>
-      </div>
+  // Render PO selection for GRN — Vendor-first flow
+  const renderPOSelection = () => {
+    const vendorOptions = vendors.map((v) => ({
+      value: v._id,
+      label: v.vendorName,
+    }));
 
-      {/* Filters for PO selection */}
-      <div className="bg-white rounded-xl shadow-sm border p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Search by PO number or vendor..."
-              value={poSearchTerm}
-              onChange={(e) => setPoSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <select
-            value={poVendorFilter}
-            onChange={(e) => setPoVendorFilter(e.target.value)}
-            className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="ALL">All Vendors</option>
-            {vendors.map((v) => (
-              <option key={v._id} value={v._id}>
-                {v.vendorName}
-              </option>
-            ))}
-          </select>
-          <select
-            value={poDateFilter}
-            onChange={(e) => setPoDateFilter(e.target.value)}
-            className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="ALL">All Time</option>
-            <option value="TODAY">Today</option>
-            <option value="WEEK">This Week</option>
-            <option value="MONTH">This Month</option>
-          </select>
+    const handleVendorSelect = (option) => {
+      setSelectedVendorForPO(option);
+      setPoSearchTerm("");
+      setPoDateFilter("ALL");
+      if (option) {
+        fetchPendingPOs(option.value);
+      } else {
+        setPendingPOs([]);
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
           <button
             onClick={() => {
-              setPoSearchTerm("");
-              setPoVendorFilter("ALL");
-              setPoDateFilter("ALL");
+              setSelectedVendorForPO(null);
+              setPendingPOs([]);
+              setActiveView("dashboard");
             }}
-            className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center gap-2"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
           >
-            <X className="w-4 h-4" />
-            Clear
+            <ArrowLeft className="w-5 h-5" />
+            Back
           </button>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-gray-900">GRN from Purchase Order</h1>
+            <p className="text-gray-500">
+              {selectedVendorForPO
+                ? `Showing POs for ${selectedVendorForPO.label}`
+                : "Select a vendor to view their pending Purchase Orders"}
+            </p>
+          </div>
+          {/* Direct GRN Toggle Switch */}
+          <div className="flex items-center gap-3 bg-white rounded-xl shadow-sm border px-4 py-3">
+            <span className={`text-sm font-medium ${!directMode ? "text-blue-600" : "text-gray-400"}`}>
+              With PO
+            </span>
+            <button
+              onClick={() => {
+                setDirectMode(true);
+                setSelectedVendorForPO(null);
+                setPendingPOs([]);
+                setActiveView("create-direct");
+              }}
+              className="relative inline-flex h-7 w-14 items-center rounded-full transition-colors bg-gray-300 hover:bg-orange-300"
+              title="Switch to Direct GRN (without PO)"
+            >
+              <span className="inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform translate-x-1" />
+            </button>
+            <span className="text-sm font-medium text-gray-400">
+              Direct
+            </span>
+          </div>
         </div>
-      </div>
 
-      <div className="bg-white rounded-xl shadow-sm border">
-        {isLoading ? (
-          <div className="p-6 space-y-4">
-            {/* Skeleton loader for better UX */}
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center gap-4 animate-pulse">
-                <div className="h-4 w-24 bg-gray-200 rounded"></div>
-                <div className="h-4 w-32 bg-gray-200 rounded"></div>
-                <div className="h-4 w-20 bg-gray-200 rounded"></div>
-                <div className="h-4 w-16 bg-gray-200 rounded"></div>
-                <div className="h-4 w-20 bg-gray-200 rounded"></div>
-                <div className="h-4 w-24 bg-gray-200 rounded"></div>
-                <div className="h-8 w-24 bg-gray-200 rounded-lg ml-auto"></div>
+        {/* Step 1: Vendor Selection */}
+        <div className="bg-white rounded-xl shadow-sm border p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">1</div>
+            <h2 className="text-lg font-semibold text-gray-900">Choose Vendor</h2>
+          </div>
+          <Select
+            value={selectedVendorForPO}
+            onChange={handleVendorSelect}
+            options={vendorOptions}
+            placeholder="Search and select a vendor..."
+            isClearable
+            isSearchable
+            className="max-w-lg"
+            styles={{
+              control: (base) => ({
+                ...base,
+                borderColor: "#d1d5db",
+                "&:hover": { borderColor: "#3b82f6" },
+                boxShadow: "none",
+              }),
+              option: (base, state) => ({
+                ...base,
+                backgroundColor: state.isSelected ? "#3b82f6" : state.isFocused ? "#eff6ff" : "white",
+              }),
+            }}
+          />
+        </div>
+
+        {/* Step 2: PO List (shown only after vendor selection) */}
+        {selectedVendorForPO && (
+          <>
+            <div className="bg-white rounded-xl shadow-sm border p-4">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">2</div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Select Purchase Order
+                  <span className="ml-2 text-sm font-normal text-gray-500">
+                    ({filteredPendingPOs.length} pending)
+                  </span>
+                </h2>
               </div>
-            ))}
-          </div>
-        ) : filteredPendingPOs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-            <FileText className="w-12 h-12 mb-3 opacity-50" />
-            <p>No pending Purchase Orders found</p>
-            <p className="text-sm mt-1">{pendingPOs.length > 0 ? "Try adjusting your filters" : "All POs have been fully received"}</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    PO Number
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Vendor
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Total Items
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Pending Qty
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredPendingPOs.map((po) => (
-                  <tr key={po._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="font-medium text-blue-600">
-                        {po.transactionNo || po.orderNumber}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <Building className="w-4 h-4 text-gray-400" />
-                        {po.vendorName || po.partyId?.vendorName || "Unknown"}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {new Date(po.date).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {po.items?.length || 0} items
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm">
-                        {po.totalPending || po.items?.reduce((sum, i) => sum + (i.pendingQty || 0), 0)} pending
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap font-medium">
-                      AED {(po.totalAmount || 0).toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <button
-                        onClick={() => fetchPOForGRN(po._id)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mx-auto"
-                      >
-                        <ArrowRightCircle className="w-4 h-4" />
-                        Create GRN
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    placeholder="Search by PO number..."
+                    value={poSearchTerm}
+                    onChange={(e) => setPoSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <select
+                  value={poDateFilter}
+                  onChange={(e) => setPoDateFilter(e.target.value)}
+                  className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="ALL">All Time</option>
+                  <option value="TODAY">Today</option>
+                  <option value="WEEK">This Week</option>
+                  <option value="MONTH">This Month</option>
+                </select>
+                <button
+                  onClick={() => {
+                    setPoSearchTerm("");
+                    setPoDateFilter("ALL");
+                  }}
+                  className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center gap-2"
+                >
+                  <X className="w-4 h-4" />
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border">
+              {isLoading ? (
+                <div className="p-6 space-y-4">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="flex items-center gap-4 animate-pulse">
+                      <div className="h-4 w-24 bg-gray-200 rounded"></div>
+                      <div className="h-4 w-32 bg-gray-200 rounded"></div>
+                      <div className="h-4 w-20 bg-gray-200 rounded"></div>
+                      <div className="h-4 w-16 bg-gray-200 rounded"></div>
+                      <div className="h-4 w-20 bg-gray-200 rounded"></div>
+                      <div className="h-4 w-24 bg-gray-200 rounded"></div>
+                      <div className="h-8 w-24 bg-gray-200 rounded-lg ml-auto"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : filteredPendingPOs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                  <FileText className="w-12 h-12 mb-3 opacity-50" />
+                  <p>No pending Purchase Orders for this vendor</p>
+                  <p className="text-sm mt-1">
+                    {pendingPOs.length > 0
+                      ? "Try adjusting your search filters"
+                      : "All POs for this vendor have been fully received"}
+                  </p>
+                  <button
+                    onClick={() => {
+                      setSelectedVendorForPO(null);
+                      setPendingPOs([]);
+                    }}
+                    className="mt-4 text-blue-600 hover:underline flex items-center gap-1"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Choose a different vendor
+                  </button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          PO Number
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Date
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Total Items
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Pending Qty
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Amount
+                        </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredPendingPOs.map((po) => (
+                        <tr key={po._id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="font-medium text-blue-600">
+                              {po.transactionNo || po.orderNumber}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {new Date(po.date).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {po.items?.length || 0} items
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm">
+                              {po.totalPending || po.items?.reduce((sum, i) => sum + (i.pendingQty || 0), 0)} pending
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap font-medium">
+                            AED {(po.totalAmount || 0).toFixed(2)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <button
+                              onClick={() => fetchPOForGRN(po._id)}
+                              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mx-auto"
+                            >
+                              <ArrowRightCircle className="w-4 h-4" />
+                              Create GRN
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
-    </div>
-  );
+    );
+  };
 
   // Main render
   return (
@@ -716,6 +909,18 @@ const GRNManagement = () => {
           onBack={() => {
             setSelectedPO(null);
             setActiveView("select-po");
+          }}
+          addNotification={addNotification}
+        />
+      )}
+      {activeView === "create-direct" && (
+        <DirectGRNForm
+          vendors={vendors}
+          stockItems={stockItems}
+          onSubmit={handleCreateDirectGRN}
+          onBack={() => {
+            setDirectMode(false);
+            setActiveView("dashboard");
           }}
           addNotification={addNotification}
         />

@@ -26,7 +26,7 @@ export const FormInput = ({
       {...props}
       type={type}
       disabled={disabled}
-      className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-100 disabled:cursor-not-allowed ${
+      className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-100 disabled:cursor-not-allowed text-base sm:text-sm min-h-[44px] ${
         error ? "border-red-300 bg-red-50" : "border-gray-300"
       }`}
     />

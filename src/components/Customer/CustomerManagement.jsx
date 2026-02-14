@@ -33,6 +33,8 @@ import {
 } from "lucide-react";
 import axiosInstance from "../../axios/axios";
 import DirhamIcon from "../../assets/dirham.svg";
+import { useCustomerList, useInvalidateQueries } from "../../hooks/useDataFetching";
+import { PageListSkeleton, RefetchIndicator } from "../ui/Skeletons";
 
 // Utility to apply color filter based on class
 const getColorFilter = (colorClass) => {
@@ -52,7 +54,7 @@ const getColorFilter = (colorClass) => {
 const SessionManager = {
   storage: {},
 
-  get: (key) => {
+  get(key) {
     try {
       return this.storage[`customer_session_${key}`] || null;
     } catch {
@@ -60,7 +62,7 @@ const SessionManager = {
     }
   },
 
-  set: (key, value) => {
+  set(key, value) {
     try {
       this.storage[`customer_session_${key}`] = value;
     } catch (error) {
@@ -68,7 +70,7 @@ const SessionManager = {
     }
   },
 
-  remove: (key) => {
+  remove(key) {
     try {
       delete this.storage[`customer_session_${key}`];
     } catch (error) {
@@ -76,7 +78,7 @@ const SessionManager = {
     }
   },
 
-  clear: () => {
+  clear() {
     Object.keys(this.storage).forEach((key) => {
       if (key.startsWith("customer_session_")) {
         delete this.storage[key];
@@ -86,7 +88,11 @@ const SessionManager = {
 };
 
 const CustomerManagement = () => {
-  const [customers, setCustomers] = useState([]);
+  // React Query for data fetching with caching
+  const { data: customerData, isLoading, isFetching, refetch } = useCustomerList();
+  const { invalidateCustomers } = useInvalidateQueries();
+  const customers = customerData?.items || [];
+
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [editCustomerId, setEditCustomerId] = useState(null);
@@ -105,7 +111,6 @@ const CustomerManagement = () => {
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [showToast, setShowToast] = useState({
     visible: false,
     message: "",
@@ -121,11 +126,11 @@ const CustomerManagement = () => {
   });
 
   // New UX enhancement states
-  const [isDraftSaved, setIsDraftSaved] = useState(false);
-  const [lastSaveTime, setLastSaveTime] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [isDraftSaved, setIsDraftSaved] = useState(false);
+  const [lastSaveTime, setLastSaveTime] = useState(null);
 
   // Refs for enhanced UX
   const formRef = useRef(null);
@@ -207,36 +212,6 @@ const CustomerManagement = () => {
     });
   }, [filterStatus, filterPaymentTerms]);
 
-  const fetchCustomers = useCallback(async (showRefreshIndicator = false) => {
-    try {
-      if (showRefreshIndicator) {
-        setIsRefreshing(true);
-      } else {
-        setIsLoading(true);
-      }
-
-      const response = await axiosInstance.get("/customers/customers");
-      setCustomers(response.data.data || []);
-
-      if (showRefreshIndicator) {
-        showToastMessage("Data refreshed successfully!", "success");
-      }
-    } catch (error) {
-      console.error("Failed to fetch customers:", error);
-      showToastMessage(
-        error.response?.data?.message || "Failed to fetch customers.",
-        "error"
-      );
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchCustomers();
-  }, [fetchCustomers]);
-
   const showToastMessage = useCallback((message, type = "success") => {
     setShowToast({ visible: true, message, type });
     setTimeout(
@@ -244,6 +219,18 @@ const CustomerManagement = () => {
       3000
     );
   }, []);
+
+  // Refresh handler using React Query
+  const fetchCustomers = useCallback(async (showRefreshIndicator = false) => {
+    if (showRefreshIndicator) {
+      setIsRefreshing(true);
+      await refetch();
+      showToastMessage("Data refreshed successfully!", "success");
+      setIsRefreshing(false);
+    }
+  }, [refetch, showToastMessage]);
+
+  // No useEffect needed — React Query handles initial fetch automatically
 
   const handleChange = useCallback(
     (e) => {
@@ -311,21 +298,11 @@ const CustomerManagement = () => {
         const response = await axiosInstance.put(`/customers/customers/${editCustomerId}`, payload);
         showToastMessage("Customer updated successfully!", "success");
 
-        // Optimistically update local state without an extra fetch
-        if (response?.data?.data) {
-          const updated = response.data.data;
-          setCustomers((prev) => prev.map((c) => (c._id === updated._id ? updated : c)));
-        } else {
-          // Fallback: refresh list if response shape is unexpected
-          await fetchCustomers();
-        }
+        // Invalidate cache to refresh data
+        await invalidateCustomers();
       } else {
         const response = await axiosInstance.post("/customers/customers", payload);
-        if (response?.data?.data) {
-          setCustomers((prev) => [response.data.data, ...prev]);
-        } else {
-          await fetchCustomers();
-        }
+        await invalidateCustomers();
         showToastMessage("Customer created successfully!", "success");
       }
 
@@ -357,7 +334,7 @@ const CustomerManagement = () => {
   }, [
     editCustomerId,
     formData,
-    fetchCustomers,
+    invalidateCustomers,
     validateForm,
     showToastMessage,
   ]);
@@ -408,14 +385,9 @@ const CustomerManagement = () => {
 
     try {
       await axiosInstance.delete(`/customers/customers/${deleteConfirmation.customerId}`);
-      setCustomers((prev) =>
-        prev.filter(
-          (customer) => customer._id !== deleteConfirmation.customerId
-        )
-      );
+      await invalidateCustomers();
       showToastMessage("Customer deleted successfully!", "success");
       hideDeleteConfirmation();
-      await fetchCustomers();
     } catch (error) {
       showToastMessage(
         error.response?.data?.message || "Failed to delete customer.",
@@ -425,7 +397,7 @@ const CustomerManagement = () => {
     }
   }, [
     deleteConfirmation.customerId,
-    fetchCustomers,
+    invalidateCustomers,
     showToastMessage,
     hideDeleteConfirmation,
   ]);
@@ -610,15 +582,10 @@ const CustomerManagement = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2
-            size={48}
-            className="text-purple-600 animate-spin mx-auto mb-4"
-          />
-          <p className="text-gray-600 text-lg">Loading customers...</p>
-        </div>
-      </div>
+      <>
+        <RefetchIndicator show={isFetching} />
+        <PageListSkeleton statCards={4} tableRows={8} tableColumns={6} />
+      </>
     );
   }
 

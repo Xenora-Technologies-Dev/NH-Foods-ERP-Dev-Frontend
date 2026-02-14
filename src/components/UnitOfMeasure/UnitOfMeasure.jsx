@@ -15,6 +15,8 @@
     AlertTriangle,
   } from "lucide-react";
   import axiosInstance from "../../axios/axios";
+  import { useUOMList, useUOMConversions, useInvalidateQueries } from "../../hooks/useDataFetching";
+  import { TableSkeleton, RefetchIndicator } from "../ui/Skeletons";
 
   const UnitMeasureConversion = () => {
     const [activeTab, setActiveTab] = useState("units");
@@ -23,9 +25,12 @@
     const [searchTerm, setSearchTerm] = useState("");
     const [editId, setEditId] = useState(null);
 
-    // Initialize units and conversions as arrays to avoid undefined errors
-    const [units, setUnits] = useState([]);
-    const [conversions, setConversions] = useState([]);
+    // Initialize units and conversions via React Query
+    const { data: uomData, isLoading: unitsLoading, isFetching: unitsFetching } = useUOMList();
+    const { data: conversionsData, isLoading: conversionsLoading } = useUOMConversions();
+    const { invalidateUOM } = useInvalidateQueries();
+    const units = uomData?.items || [];
+    const conversions = conversionsData || [];
 
     // Form data
     const [unitForm, setUnitForm] = useState({
@@ -70,36 +75,15 @@
       "Area",
     ];
     const unitTypes = ["Base", "Derived"];
+    // Fetch handlers using React Query (for refresh after mutations)
     const fetchUnits = async () => {
-      try {
-        const response = await axiosInstance.get("/uom/units");
-        // Ensure response.data is an array
-        console.log(response.data.data);
-        setUnits(Array.isArray(response.data.data) ? response.data.data : []);
-      } catch (error) {
-        showToastMessage("Failed to fetch units", "error");
-        setUnits([]); // Fallback to empty array on error
-      }
+      await invalidateUOM();
     };
 
     const fetchConversions = async () => {
-      try {
-        const response = await axiosInstance.get("/uom/conversions");
-        console.log((response.data.data));
-        // Ensure response.data is an array
-        setConversions(
-          Array.isArray(response.data.data) ? response.data.data : []
-        );
-      } catch (error) {
-        showToastMessage("Failed to fetch conversions", "error");
-        setConversions([]); // Fallback to empty array on error
-      }
+      await invalidateUOM();
     };
-    // Fetch data from backend
-    useEffect(() => {
-      fetchUnits();
-      fetchConversions();
-    }, []);
+    // No useEffect needed — React Query handles initial fetch
 
     // Memoize filtered units and conversions to prevent unnecessary re-computation
     const filteredUnits = useMemo(() => {
@@ -180,15 +164,9 @@
               `/uom/units/${editId}`,
               unitForm
             );
-            const savedUnit = response.data.data || response.data;
-            setUnits((prev) =>
-              prev.map((unit) => (unit._id === editId ? savedUnit : unit))
-            );
             showToastMessage("Unit updated successfully!", "success");
           } else {
             const response = await axiosInstance.post("/uom/units", unitForm);
-            const newUnit = response.data.data || response.data;
-            setUnits((prev) => [...prev, newUnit]);
             showToastMessage("Unit created successfully!", "success");
           }
         } else {
@@ -208,26 +186,17 @@
               `/uom/conversions/${editId}`,
               payload
             );
-            const savedConversion = response.data.data || response.data;
-            setConversions((prev) =>
-              prev.map((conversion) =>
-                conversion._id === editId ? savedConversion : conversion
-              )
-            );
             showToastMessage("Conversion updated successfully!", "success");
           } else {
             const response = await axiosInstance.post(
               "/uom/conversions",
               payload
             );
-            const newConversion = response.data.data || response.data;
-            setConversions((prev) => [...prev, newConversion]);
             showToastMessage("Conversion created successfully!", "success");
           }
         }
         resetForm();
-        fetchUnits();
-        fetchConversions();
+        await invalidateUOM();
       } catch (error) {
         showToastMessage(
           error.response?.data?.message ||
@@ -287,18 +256,13 @@
         const { itemId, type } = deleteConfirmation;
         if (type === "unit") {
           await axiosInstance.delete(`/uom/units/${itemId}`);
-          setUnits((prev) => prev.filter((unit) => unit.id !== itemId));
           showToastMessage("Unit deleted successfully!", "success");
         } else {
           await axiosInstance.delete(`/uom/conversions/${itemId}`);
-          setConversions((prev) =>
-            prev.filter((conversion) => conversion.id !== itemId)
-          );
           showToastMessage("Conversion deleted successfully!", "success");
         }
         hideDeleteConfirmation();
-        fetchUnits();
-        fetchConversions();
+        await invalidateUOM();
       } catch (error) {
         showToastMessage(
           error.response?.data?.message ||

@@ -277,11 +277,13 @@ const ContraVoucherView = ({
             color: "#000",
           }}
         >
+          {/* Color coded top bar - Cyan for Contra Voucher */}
+          <div style={{ height: 6, background: "linear-gradient(90deg, #0891b2, #22d3ee)", marginBottom: 12, borderRadius: 3 }} />
           <div
             style={{
               textAlign: "center",
               marginBottom: "20px",
-              borderBottom: "2px solid #8B5CF6",
+              borderBottom: "2px solid #0891b2",
               paddingBottom: "15px",
             }}
           >
@@ -307,7 +309,7 @@ const ContraVoucherView = ({
             </h2>
             <div
               style={{
-                backgroundColor: "#c8a2c8",
+                backgroundColor: "#0891b2",
                 color: "white",
                 padding: "8px",
                 margin: "0 -20mm 20px -20mm",
@@ -372,7 +374,7 @@ const ContraVoucherView = ({
           </div>
           <div
             style={{
-              backgroundColor: "#e6d7e6",
+              backgroundColor: "#cffafe",
               padding: "10px",
               marginBottom: "20px",
             }}
@@ -414,7 +416,7 @@ const ContraVoucherView = ({
             }}
           >
             <thead>
-              <tr style={{ backgroundColor: "#e6d7e6" }}>
+              <tr style={{ backgroundColor: "#cffafe" }}>
                 <th
                   style={{
                     border: "1px solid #000",

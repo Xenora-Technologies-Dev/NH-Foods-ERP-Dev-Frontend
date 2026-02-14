@@ -1,9 +1,9 @@
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 
-export const downloadReceiptPDF = async (selectedReceipt, showToastMessage) => {
+export const downloadReceiptPDF = async (selectedReceipt, showToastMessage, setIsGeneratingPDF) => {
   try {
-    setIsGeneratingPDF(true);
+    if (setIsGeneratingPDF) setIsGeneratingPDF(true);
     const input = document.getElementById("receipt-content");
     if (!input) {
       showToastMessage("Receipt content not found!", "error");
@@ -65,7 +65,7 @@ export const downloadReceiptPDF = async (selectedReceipt, showToastMessage) => {
       "error"
     );
   } finally {
-    setIsGeneratingPDF(false);
+    if (setIsGeneratingPDF) setIsGeneratingPDF(false);
   }
 };
 

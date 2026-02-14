@@ -350,11 +350,33 @@ const PaymentInvoiceView = ({
             color: "#000",
           }}
         >
+          {/* Color coded top bar - dynamic per voucher type */}
+          {(() => {
+            const colorMap = {
+              payment: "linear-gradient(90deg, #7c3aed, #a78bfa)",
+              receipt: "linear-gradient(90deg, #4f46e5, #818cf8)",
+              expense: "linear-gradient(90deg, #d97706, #fbbf24)",
+              journal: "linear-gradient(90deg, #475569, #94a3b8)",
+              contra: "linear-gradient(90deg, #0891b2, #22d3ee)",
+            };
+            return (
+              <div style={{ height: 6, background: colorMap[voucherType] || colorMap.payment, marginBottom: 12, borderRadius: 3 }} />
+            );
+          })()}
           <div
             style={{
               textAlign: "center",
               marginBottom: "20px",
-              borderBottom: "2px solid #8B5CF6",
+              borderBottom: (() => {
+                  const colorMap = {
+                    payment: "2px solid #7c3aed",
+                    receipt: "2px solid #4f46e5",
+                    expense: "2px solid #d97706",
+                    journal: "2px solid #475569",
+                    contra: "2px solid #0891b2",
+                  };
+                  return colorMap[voucherType] || "2px solid #7c3aed";
+                })(),
               paddingBottom: "15px",
             }}
           >
@@ -380,7 +402,16 @@ const PaymentInvoiceView = ({
             </h2>
             <div
               style={{
-                backgroundColor: "#c8a2c8",
+                backgroundColor: (() => {
+                  const colorMap = {
+                    payment: "#7c3aed",
+                    receipt: "#4f46e5",
+                    expense: "#d97706",
+                    journal: "#475569",
+                    contra: "#0891b2",
+                  };
+                  return colorMap[voucherType] || "#7c3aed";
+                })(),
                 color: "white",
                 padding: "8px",
                 margin: "0 -20mm 20px -20mm",
@@ -451,7 +482,16 @@ const PaymentInvoiceView = ({
           </div>
           <div
             style={{
-              backgroundColor: "#e6d7e6",
+              backgroundColor: (() => {
+                const bgMap = {
+                  payment: "#ede9fe",
+                  receipt: "#e0e7ff",
+                  expense: "#fef3c7",
+                  journal: "#e2e8f0",
+                  contra: "#cffafe",
+                };
+                return bgMap[voucherType] || "#ede9fe";
+              })(),
               padding: "10px",
               marginBottom: "20px",
             }}

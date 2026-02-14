@@ -1,16 +1,8 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useMemo } from "react";
 import {
   ArrowLeft,
   Download,
   Printer,
-  Building,
-  FileText,
-  Calendar,
-  Hash,
-  Phone,
-  Mail,
-  MapPin,
-  CheckCircle,
   Loader2,
 } from "lucide-react";
 import axiosInstance from "../../../axios/axios";
@@ -134,65 +126,70 @@ const DebitNoteView = ({ returnData, vendor, onBack }) => {
     printWindow.document.close();
   };
 
-  // Calculate totals from return items
-  const calculateTotals = () => {
-    if (!returnData?.items) return { subtotal: 0, vat: 0, total: 0 };
+  const formatDate = (date) => {
+    if (!date) return "-";
+    return new Date(date).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
 
+  const formatNumber = (num) => {
+    return (num || 0).toLocaleString("en-AE", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  // Calculate totals from return items
+  const returnItems = useMemo(
+    () => returnData?.items?.filter((item) => item.selectedForReturn && item.returnQty > 0) || [],
+    [returnData?.items]
+  );
+
+  const totals = useMemo(() => {
     let subtotal = 0;
     let vat = 0;
-
-    returnData.items.forEach((item) => {
-      if (item.selectedForReturn && item.returnQty > 0) {
-        const unitPrice = item.currentPurchasePrice || item.price || (item.rate / (item.originalQty || item.qty || 1));
-        const lineTotal = item.returnQty * unitPrice;
-        const vatAmount = (lineTotal * (item.vatPercent || 0)) / 100;
-        subtotal += lineTotal;
-        vat += vatAmount;
-      }
+    returnItems.forEach((item) => {
+      const unitPrice = item.currentPurchasePrice || item.price || (item.rate / (item.originalQty || item.qty || 1));
+      const lineTotal = item.returnQty * unitPrice;
+      const vatAmount = (lineTotal * (item.vatPercent || 0)) / 100;
+      subtotal += lineTotal;
+      vat += vatAmount;
     });
-
     return {
       subtotal: +subtotal.toFixed(2),
       vat: +vat.toFixed(2),
       total: +(subtotal + vat).toFixed(2),
     };
-  };
-
-  const totals = calculateTotals();
-  const returnItems = returnData?.items?.filter((item) => item.selectedForReturn && item.returnQty > 0) || [];
+  }, [returnItems]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-100 p-6">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gray-50 py-4 sm:py-8">
+      <div className="max-w-4xl mx-auto px-2 sm:px-4">
         {/* Action Bar */}
-        <div className="flex items-center justify-between mb-6 print:hidden">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 mb-4">
           <button
             onClick={onBack}
-            className="flex items-center space-x-2 px-4 py-2 bg-white rounded-xl shadow hover:shadow-md transition-all"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 active:scale-95 min-h-[44px]"
           >
-            <ArrowLeft className="w-5 h-5 text-slate-600" />
-            <span className="text-slate-700 font-medium">Back to List</span>
+            <ArrowLeft className="w-4 h-4" /> Back to List
           </button>
-
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             <button
               onClick={handleDownloadPDF}
               disabled={isGeneratingPDF}
-              className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 sm:px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 active:scale-95 min-h-[44px] text-sm"
             >
-              {isGeneratingPDF ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Download className="w-5 h-5" />
-              )}
-              <span>{isGeneratingPDF ? "Generating..." : "Download PDF"}</span>
+              {isGeneratingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {isGeneratingPDF ? "Generating..." : "Download PDF"}
             </button>
             <button
               onClick={handlePrint}
-              className="flex items-center space-x-2 px-4 py-2 bg-slate-600 text-white rounded-xl hover:bg-slate-700 transition-colors"
+              className="flex items-center gap-2 px-4 sm:px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 active:scale-95 min-h-[44px] text-sm"
             >
-              <Printer className="w-5 h-5" />
-              <span>Print</span>
+              <Printer className="w-4 h-4" /> Print
             </button>
           </div>
         </div>
@@ -200,263 +197,201 @@ const DebitNoteView = ({ returnData, vendor, onBack }) => {
         {/* Debit Note Document */}
         <div
           ref={debitNoteRef}
-          className="bg-white rounded-2xl shadow-xl p-8 print:shadow-none print:rounded-none"
+          style={{
+            width: "210mm",
+            minHeight: "297mm",
+            padding: "10mm",
+            background: "#fff",
+            fontFamily: "Arial, Helvetica, sans-serif",
+            fontSize: 11,
+            color: "#000",
+            boxSizing: "border-box",
+          }}
         >
-          {/* Header with Company Logo and Title */}
-          <div className="flex justify-between items-start border-b-2 border-orange-500 pb-6 mb-6">
-            <div className="flex items-start space-x-4">
-              {companyInfo?.logo ? (
-                <img
-                  src={companyInfo.logo}
-                  alt="Company Logo"
-                  className="w-24 h-24 object-contain"
-                />
+          {/* Color coded top bar - Orange for Debit Note */}
+          <div style={{ height: 6, background: "linear-gradient(90deg, #c2410c, #f97316)", marginBottom: 12, borderRadius: 3 }} />
+
+          <div style={{ textAlign: "right", fontWeight: "bold", marginBottom: 9 }}>
+            <span>Debit Note</span>
+          </div>
+
+          {/* Header block */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+            <div style={{ width: "18%", textAlign: "left" }}>
+              {companyInfo?.companyLogo?.url ? (
+                <img src={companyInfo.companyLogo.url} alt="logo" style={{ width: 110 }} />
+              ) : companyInfo?.logo ? (
+                <img src={companyInfo.logo} alt="logo" style={{ width: 110 }} />
               ) : (
-                <div className="w-24 h-24 bg-orange-100 rounded-xl flex items-center justify-center">
-                  <Building className="w-12 h-12 text-orange-500" />
+                <div style={{ width: 100, height: 100 }} />
+              )}
+            </div>
+
+            <div style={{ width: "52%", textAlign: "center", paddingLeft: 8, paddingRight: 8 }}>
+              {companyInfo?.companyNameArabic && (
+                <div style={{ fontWeight: "700", direction: "rtl", fontSize: 13 }}>{companyInfo.companyNameArabic}</div>
+              )}
+              <div style={{ fontWeight: 800, fontSize: 15, marginTop: 4, whiteSpace: "nowrap" }}>
+                {companyInfo?.companyName || "Company Name"}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 11, lineHeight: 1.4 }}>
+                <div>
+                  {companyInfo?.addressLine1 || companyInfo?.address || ""}
+                  {companyInfo?.phoneNumber && (
+                    <>
+                      <span style={{ display: "inline-block", margin: "0 8px" }}>|</span>
+                      <span>Tel: {companyInfo.phoneNumber}</span>
+                    </>
+                  )}
+                </div>
+                <div>
+                  {companyInfo?.emailAddress && <>Email: {companyInfo.emailAddress}</>}
+                  {companyInfo?.website && (
+                    <>
+                      <span style={{ display: "inline-block", margin: "0 8px" }}>|</span>
+                      Web: {companyInfo.website}
+                    </>
+                  )}
+                </div>
+              </div>
+              {(companyInfo?.vatNumber || companyInfo?.trnNumber) && (
+                <div style={{ marginTop: 6, fontSize: 11 }}>
+                  <strong>VAT Reg. No:</strong> {companyInfo.vatNumber || companyInfo.trnNumber}
                 </div>
               )}
-              <div>
-                <h1 className="text-2xl font-bold text-slate-800">
-                  {companyInfo?.companyName || "Company Name"}
-                </h1>
-                <p className="text-slate-600 text-sm mt-1">
-                  {companyInfo?.address || "Company Address"}
-                </p>
-                <p className="text-slate-600 text-sm">
-                  {companyInfo?.city}, {companyInfo?.country}
-                </p>
-                <div className="flex items-center space-x-4 text-sm text-slate-500 mt-2">
-                  {companyInfo?.phone && (
-                    <span className="flex items-center">
-                      <Phone className="w-3 h-3 mr-1" />
-                      {companyInfo.phone}
-                    </span>
-                  )}
-                  {companyInfo?.email && (
-                    <span className="flex items-center">
-                      <Mail className="w-3 h-3 mr-1" />
-                      {companyInfo.email}
-                    </span>
-                  )}
-                </div>
-                {companyInfo?.trnNumber && (
-                  <p className="text-sm text-slate-600 mt-1">
-                    TRN: {companyInfo.trnNumber}
-                  </p>
-                )}
+              <div style={{ fontWeight: 700, textDecoration: "underline", marginTop: 6, fontSize: 13, color: "#c2410c" }}>
+                DEBIT NOTE
               </div>
             </div>
 
-            <div className="text-right">
-              <div className="bg-orange-500 text-white px-6 py-3 rounded-xl">
-                <h2 className="text-2xl font-bold">DEBIT NOTE</h2>
-              </div>
-              <div className="mt-4 text-sm">
-                <p className="text-slate-500">Debit Note No</p>
-                <p className="text-xl font-bold text-orange-600">
-                  {returnData?.debitNoteNo || "DN-XXXX"}
-                </p>
+            <div style={{ width: "28%", textAlign: "right", fontSize: 11 }} />
+          </div>
+
+          {/* Vendor + Meta */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <div style={{ width: "58%", fontSize: 11 }}>
+              <div style={{ fontWeight: 700 }}>VENDOR:</div>
+              <div style={{ marginTop: 6 }}>{fullVendor?.vendorId || ""}</div>
+              <div style={{ fontWeight: 700, marginTop: 6 }}>{fullVendor?.vendorName || returnData?.partyName || "Vendor"}</div>
+              {fullVendor?.address && <div style={{ marginTop: 4 }}>{fullVendor.address}</div>}
+              {fullVendor?.phone && <div style={{ marginTop: 4 }}>TEL: {fullVendor.phone}</div>}
+              {fullVendor?.email && <div style={{ marginTop: 4 }}>Email: {fullVendor.email}</div>}
+              {fullVendor?.trnNumber && <div style={{ marginTop: 4 }}>VAT Reg. No: {fullVendor.trnNumber}</div>}
+            </div>
+
+            <div style={{ width: "38%", textAlign: "right", fontSize: 11 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ textAlign: "left", minWidth: 120 }}>
+                  <div style={{ fontWeight: 700 }}>Debit Note No:</div>
+                  <div style={{ fontWeight: 700, marginTop: 6 }}>Return No:</div>
+                  <div style={{ fontWeight: 700, marginTop: 6 }}>Date:</div>
+                  <div style={{ fontWeight: 700, marginTop: 6 }}>Orig. Invoice:</div>
+                  {returnData?.originalInvoiceDate && <div style={{ fontWeight: 700, marginTop: 6 }}>Invoice Date:</div>}
+                </div>
+                <div style={{ textAlign: "right", minWidth: 140 }}>
+                  <div style={{ fontWeight: 700, color: "#c2410c" }}>{returnData?.debitNoteNo || "DN-XXXX"}</div>
+                  <div style={{ marginTop: 6 }}>{returnData?.transactionNo}</div>
+                  <div style={{ marginTop: 6 }}>{formatDate(returnData?.date)}</div>
+                  <div style={{ marginTop: 6 }}>{returnData?.originalInvoiceNo}</div>
+                  {returnData?.originalInvoiceDate && (
+                    <div style={{ marginTop: 6 }}>{formatDate(returnData.originalInvoiceDate)}</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Document Info Section */}
-          <div className="grid grid-cols-2 gap-8 mb-8">
-            {/* Vendor Details */}
-            <div className="bg-slate-50 rounded-xl p-5">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-                ISSUED TO (VENDOR)
-              </h3>
-              <div className="space-y-1">
-                <p className="text-lg font-bold text-slate-800">
-                  {fullVendor?.vendorName || returnData?.partyName || "Vendor Name"}
-                </p>
-                <p className="text-sm text-slate-600">
-                  {fullVendor?.vendorId || ""}
-                </p>
-                {fullVendor?.address && (
-                  <p className="text-sm text-slate-600 flex items-start">
-                    <MapPin className="w-4 h-4 mr-1 mt-0.5 text-slate-400" />
-                    {fullVendor.address}
-                  </p>
-                )}
-                {fullVendor?.phone && (
-                  <p className="text-sm text-slate-600 flex items-center">
-                    <Phone className="w-4 h-4 mr-1 text-slate-400" />
-                    {fullVendor.phone}
-                  </p>
-                )}
-                {fullVendor?.email && (
-                  <p className="text-sm text-slate-600 flex items-center">
-                    <Mail className="w-4 h-4 mr-1 text-slate-400" />
-                    {fullVendor.email}
-                  </p>
-                )}
-                {fullVendor?.trnNumber && (
-                  <p className="text-sm text-slate-600 mt-2">
-                    <span className="font-medium">TRN:</span> {fullVendor.trnNumber}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Debit Note Details */}
-            <div className="bg-orange-50 rounded-xl p-5">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-                DEBIT NOTE DETAILS
-              </h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-slate-500">Return No</p>
-                  <p className="font-semibold text-slate-800">{returnData?.transactionNo}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Returned Date</p>
-                  <p className="font-semibold text-slate-800">
-                    {new Date(returnData?.date).toLocaleDateString("en-GB")}
-                  </p>
-                </div>
-                {returnData?.reference && (
-                  <div className="col-span-2">
-                    <p className="text-xs text-slate-500">Reference</p>
-                    <p className="font-semibold text-slate-800">{returnData.reference}</p>
-                  </div>
-                )}
-              </div>
-              
-              {/* Original Invoice Section */}
-              <div className="mt-4 pt-4 border-t border-orange-200">
-                <p className="text-xs font-semibold text-orange-600 uppercase tracking-wider mb-2">
-                  ORIGINAL INVOICE DETAILS
-                </p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-slate-500">Invoice No</p>
-                    <p className="font-semibold text-orange-700">{returnData?.originalInvoiceNo}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Invoice Date</p>
-                    <p className="font-semibold text-slate-800">
-                      {returnData?.originalInvoiceDate 
-                        ? new Date(returnData.originalInvoiceDate).toLocaleDateString("en-GB")
-                        : "-"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <div style={{ height: 1, background: "#000", marginBottom: 8 }} />
 
           {/* Items Table */}
-          <div className="mb-8">
-            <h3 className="text-sm font-semibold text-slate-800 mb-3 flex items-center">
-              <FileText className="w-4 h-4 mr-2 text-orange-500" />
-              RETURNED ITEMS
-            </h3>
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-100">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">#</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Description</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Return Qty</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Unit Price</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">VAT %</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">VAT Amount</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {returnItems.map((item, index) => {
-                  const unitPrice = item.currentPurchasePrice || item.price || (item.rate / (item.originalQty || item.qty || 1));
-                  const lineTotal = item.returnQty * unitPrice;
-                  const vatAmount = (lineTotal * (item.vatPercent || 0)) / 100;
-                  const total = lineTotal + vatAmount;
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, marginBottom: 10 }}>
+            <thead>
+              <tr style={{ background: "#ffedd5" }}>
+                <th style={{ width: 30, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>Line</th>
+                <th style={{ width: 64, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>CODE</th>
+                <th style={{ textAlign: "left", padding: "8px 10px 8px 22px", borderBottom: "1px solid #777" }}>Item Description</th>
+                <th style={{ width: 60, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>Return Qty</th>
+                <th style={{ width: 72, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>Unit Price</th>
+                <th style={{ width: 84, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>Value</th>
+                <th style={{ width: 54, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>VAT %</th>
+                <th style={{ width: 84, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>VAT Amount</th>
+                <th style={{ width: 120, padding: "8px 6px", borderBottom: "1px solid #777", textAlign: "center" }}>TOTAL AED</th>
+              </tr>
+            </thead>
+            <tbody>
+              {returnItems.map((item, idx) => {
+                const unitPrice = item.currentPurchasePrice || item.price || (item.rate / (item.originalQty || item.qty || 1));
+                const lineTotal = item.returnQty * unitPrice;
+                const vatAmount = (lineTotal * (item.vatPercent || 0)) / 100;
+                const total = lineTotal + vatAmount;
+                return (
+                  <tr key={idx}>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{idx + 1}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{item.itemCode || "-"}</td>
+                    <td style={{ padding: "8px 10px 8px 22px", verticalAlign: "top" }}>{item.description}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{item.returnQty}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{formatNumber(unitPrice)}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{formatNumber(lineTotal)}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{item.vatPercent || 0}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{formatNumber(vatAmount)}</td>
+                    <td style={{ textAlign: "center", padding: "8px 6px", verticalAlign: "top" }}>{formatNumber(total)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
 
-                  return (
-                    <tr key={index} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-slate-600">{index + 1}</td>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-slate-800">{item.description}</p>
-                        <p className="text-xs text-slate-500">{item.itemCode}</p>
-                      </td>
-                      <td className="px-4 py-3 text-right text-slate-800">{item.returnQty}</td>
-                      <td className="px-4 py-3 text-right text-slate-600">{unitPrice.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right text-slate-600">{item.vatPercent || 0}%</td>
-                      <td className="px-4 py-3 text-right text-slate-600">{vatAmount.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-slate-800">{total.toFixed(2)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <div style={{ minHeight: 40 }} />
 
-          {/* Totals Section */}
-          <div className="flex justify-end">
-            <div className="w-80">
-              <div className="bg-slate-50 rounded-xl p-5 space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">Subtotal</span>
-                  <span className="font-medium text-slate-800">
-                    AED {(returnData?.subtotalAmount || totals.subtotal).toFixed(2)}
-                  </span>
+          {/* Totals */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+            <div style={{ width: "38%", fontSize: 11 }}>
+              <div style={{ border: "1px solid #000", padding: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <div>SUBTOTAL</div>
+                  <div style={{ minWidth: 100, textAlign: "right" }}>{formatNumber(returnData?.subtotalAmount || totals.subtotal)}</div>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">VAT</span>
-                  <span className="font-medium text-slate-800">
-                    AED {(returnData?.vatAmount || totals.vat).toFixed(2)}
-                  </span>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <div>VAT</div>
+                  <div style={{ minWidth: 100, textAlign: "right" }}>{formatNumber(returnData?.vatAmount || totals.vat)}</div>
                 </div>
-                <div className="border-t border-slate-200 pt-3">
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-slate-800">Total Debit Note Value</span>
-                    <span className="text-xl font-bold text-orange-600">
-                      AED {(returnData?.totalAmount || totals.total).toFixed(2)}
-                    </span>
-                  </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, paddingTop: 6, borderTop: "1px solid #000", fontWeight: 800 }}>
+                  <div>TOTAL DEBIT</div>
+                  <div style={{ minWidth: 100, textAlign: "right" }}>{formatNumber(returnData?.totalAmount || totals.total)}</div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Notes Section */}
+          {/* Notes */}
           {returnData?.notes && (
-            <div className="mt-8 p-4 bg-amber-50 rounded-xl border border-amber-200">
-              <h4 className="font-semibold text-amber-800 mb-2">Notes</h4>
-              <p className="text-amber-700 text-sm">{returnData.notes}</p>
+            <div style={{ marginTop: 12, fontSize: 10 }}>
+              <div style={{ fontWeight: 700 }}>Notes:</div>
+              <div style={{ marginTop: 4 }}>{returnData.notes}</div>
             </div>
           )}
 
-          {/* Footer Section */}
-          <div className="mt-10 pt-6 border-t border-slate-200">
-            <div className="grid grid-cols-2 gap-8">
-              <div>
-                <p className="text-sm font-semibold text-slate-600 mb-6">Authorized Signature</p>
-                <div className="border-t border-slate-300 w-48"></div>
-                <p className="text-xs text-slate-500 mt-2">Company Representative</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-semibold text-slate-600 mb-6">Received By</p>
-                <div className="border-t border-slate-300 w-48 ml-auto"></div>
-                <p className="text-xs text-slate-500 mt-2">Vendor Representative</p>
+          {/* Signatures */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24, alignItems: "flex-start" }}>
+            <div style={{ width: "45%", textAlign: "center" }}>
+              <div style={{ borderTop: "1px solid #000", paddingTop: 6, marginTop: 40 }}>
+                <div style={{ fontWeight: 600, fontSize: 10 }}>Authorized Signature</div>
               </div>
             </div>
-
-            {/* Status Badge */}
-            <div className="flex justify-center mt-8">
-              <div className="flex items-center space-x-2 px-6 py-3 bg-green-100 rounded-xl">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-                <span className="font-semibold text-green-700">DEBIT NOTE ISSUED</span>
+            <div style={{ width: "45%", textAlign: "center" }}>
+              <div style={{ borderTop: "1px solid #000", paddingTop: 6, marginTop: 40 }}>
+                <div style={{ fontWeight: 600, fontSize: 10 }}>Received By</div>
               </div>
-            </div>
-
-            {/* Generated Info */}
-            <div className="text-center mt-4 text-xs text-slate-400">
-              <p>Generated on {new Date().toLocaleString("en-GB")}</p>
-              <p>{companyInfo?.companyName} - All Rights Reserved</p>
             </div>
           </div>
+
+          {/* Footer */}
+          <div style={{ marginTop: 18, fontSize: 10 }}>
+            <div>This is a computer-generated document. No signature required.</div>
+            <div style={{ marginTop: 6 }}>For {companyInfo?.companyName || "Company"}</div>
+          </div>
+
+          <div style={{ textAlign: "center", marginTop: 18, fontSize: 10 }}>Page 1 of 1</div>
         </div>
       </div>
     </div>

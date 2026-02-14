@@ -7,6 +7,8 @@ import InvoiceView from "./InvoiceView";
 import Modal from "../../Modal";
 import PaginationControl from "../../Pagination/PaginationControl";
 import { exportPurchaseInvoicesToExcel } from "../../../utils/excelExport";
+import { useVendorList } from "../../../hooks/useDataFetching";
+import { PageListSkeleton, RefetchIndicator } from "../../ui/Skeletons";
 
 const ApprovedPurchase = () => {
   const [viewMode, setViewMode] = useState("table");
@@ -19,7 +21,10 @@ const ApprovedPurchase = () => {
   const [sortOrder, setSortOrder] = useState("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [vendors, setVendors] = useState([]);
+  // ── Cached vendor data via React Query ──
+  const { data: vendorData, isLoading: vendorsLoading, isFetching: vendorsFetching } = useVendorList();
+  const vendors = useMemo(() => vendorData?.items || [], [vendorData]);
+
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState(null);
@@ -32,15 +37,9 @@ const ApprovedPurchase = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  useEffect(() => { fetchVendors(); }, []);
   useEffect(() => { fetchTransactions(); }, [debouncedSearchTerm, vendorFilter, dateFilter]);
 
-  const fetchVendors = async () => {
-    try {
-      const { data } = await axiosInstance.get("/vendors/vendors");
-      setVendors(data.data || []);
-    } catch (e) {}
-  };
+  // Vendors are now provided by React Query hook above
 
   const fetchAllForExport = async () => {
     try {
@@ -115,7 +114,7 @@ const ApprovedPurchase = () => {
         axiosInstance.get("/transactions/transactions", {
           params: {
             type: "purchase_order",
-            status: "APPROVED",
+            status: "APPROVED,PAID,PARTIAL",
             search: debouncedSearchTerm,
             partyId: vendorFilter !== "ALL" ? vendorFilter : undefined,
             dateFilter: dateFilter !== "ALL" ? dateFilter : undefined,
@@ -319,10 +318,9 @@ const ApprovedPurchase = () => {
       )}
 
       <div className="p-8">
-        {isLoading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-          </div>
+        {vendorsFetching && <RefetchIndicator />}
+        {(vendorsLoading || isLoading) ? (
+          <PageListSkeleton rows={6} />
         ) : (
           <>
             {viewMode === "table" ? (

@@ -29,8 +29,10 @@ import {
   CheckCircle,
   XCircle,
   Info,
+  Download,
 } from "lucide-react";
 import Select from "react-select";
+import { exportAccountVouchersExcel } from "../../../utils/excelExport";
 
 // Toast Component
 const Toast = ({ show, message, type }) =>
@@ -422,8 +424,8 @@ const CreditAccountsManagement = () => {
       </div>
 
       {/* Search */}
-      <div className="max-w-md mb-6">
-        <div className="relative">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
+        <div className="relative flex-1 max-w-md">
           <Search
             size={18}
             className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
@@ -436,6 +438,14 @@ const CreditAccountsManagement = () => {
             className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-300 transition-all"
           />
         </div>
+        <button
+          onClick={() => exportAccountVouchersExcel(filteredCustomers, 'sale', { partyName: searchTerm })}
+          disabled={filteredCustomers.length === 0}
+          className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Export to Excel"
+        >
+          <Download size={18} /> Export
+        </button>
       </div>
 
       {/* Table */}

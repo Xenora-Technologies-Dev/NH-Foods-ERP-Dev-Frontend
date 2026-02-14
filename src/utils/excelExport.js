@@ -6,6 +6,18 @@ const DEFAULT_COMPANY_ADDRESS = 'Dubai, United Arab Emirates';
 const CURRENCY = 'AED';
 
 /**
+ * Generate a Date_Time(HH:MM) stamp for filenames
+ * Format: YYYY-MM-DD_HH-MM
+ */
+const getFileNameDateTimeStamp = () => {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10); // YYYY-MM-DD
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  return `${date}_${hh}-${mm}`;
+};
+
+/**
  * Format date and time for display
  */
 const formatDateTime = (date = new Date()) => {
@@ -21,7 +33,7 @@ const formatDateTime = (date = new Date()) => {
 };
 
 /**
- * Format number with 2 decimal places
+ * Format number with 4 decimal places
  */
 const formatNumber = (num) => {
   return (num || 0).toFixed(2);
@@ -129,8 +141,9 @@ export const exportTrialBalanceExcel = (report) => {
   // Add to workbook
   XLSX.utils.book_append_sheet(wb, ws, 'Trial Balance');
   
-  // Generate filename with date
-  const filename = `${companyName.replace(/\s+/g, '_')}_Trial_Balance_${report.year}${report.month ? `_${String(report.month).padStart(2, '0')}` : ''}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  // Generate filename with date-time
+  const stamp = getFileNameDateTimeStamp();
+  const filename = `${companyName.replace(/\s+/g, '_')}_Trial_Balance_${report.year}${report.month ? `_${String(report.month).padStart(2, '0')}` : ''}_${stamp}.xlsx`;
   
   // Save file
   XLSX.writeFile(wb, filename);
@@ -227,7 +240,8 @@ export const exportProfitLossExcel = (report) => {
   XLSX.utils.book_append_sheet(wb, ws, 'Profit & Loss');
   
   // Generate filename
-  const filename = `${companyName.replace(/\s+/g, '_')}_Profit_Loss_${report.year}${report.month ? `_${String(report.month).padStart(2, '0')}` : ''}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const stamp = getFileNameDateTimeStamp();
+  const filename = `${companyName.replace(/\s+/g, '_')}_Profit_Loss_${report.year}${report.month ? `_${String(report.month).padStart(2, '0')}` : ''}_${stamp}.xlsx`;
   
   XLSX.writeFile(wb, filename);
 };
@@ -329,7 +343,8 @@ export const exportBalanceSheetExcel = (report) => {
   XLSX.utils.book_append_sheet(wb, ws, 'Balance Sheet');
   
   // Generate filename
-  const filename = `${companyName.replace(/\s+/g, '_')}_Balance_Sheet_${report.year}${report.month ? `_${String(report.month).padStart(2, '0')}` : ''}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const stamp = getFileNameDateTimeStamp();
+  const filename = `${companyName.replace(/\s+/g, '_')}_Balance_Sheet_${report.year}${report.month ? `_${String(report.month).padStart(2, '0')}` : ''}_${stamp}.xlsx`;
   
   XLSX.writeFile(wb, filename);
 };
@@ -359,53 +374,16 @@ export const exportSalesOrdersToExcel = (salesOrders, fileName = 'Sales_Orders')
     'Notes': so.notes || '-',
     'Created By': so.createdBy || '-',
   }));
-  
-  // Detailed sheet with all items
-  const detailedData = [];
-  salesOrders.forEach((so) => {
-    if (Array.isArray(so.items) && so.items.length > 0) {
-      so.items.forEach((item, idx) => {
-        detailedData.push({
-          'SO Number': idx === 0 ? (so.orderNumber || so.transactionNo || '-') : '',
-          'Customer': idx === 0 ? (so.customerName || so.partyName || '-') : '',
-          'Date': idx === 0 ? (so.date ? new Date(so.date).toLocaleDateString() : '-') : '',
-          'Status': idx === 0 ? (so.status || '-') : '',
-          'Item Name': item.description || item.itemName || item.name || '-',
-          'Item Qty': item.quantity ? String(item.quantity) : '0',
-          'Unit Price': item.price ? String(item.price) : '0',
-          'Item Total': item.total ? String(item.total) : String((item.quantity || 0) * (item.price || 0)),
-          'UOM': item.uom || item.unit || '-',
-          'Item Description': item.notes || item.remarks || '-',
-        });
-      });
-    } else {
-      detailedData.push({
-        'SO Number': so.orderNumber || so.transactionNo || '-',
-        'Customer': so.customerName || so.partyName || '-',
-        'Date': so.date ? new Date(so.date).toLocaleDateString() : '-',
-        'Status': so.status || '-',
-        'Item Name': 'No items',
-        'Item Qty': '0',
-        'Unit Price': '0',
-        'Item Total': '0',
-        'UOM': '-',
-        'Item Description': '-',
-      });
-    }
-  });
 
   const summaryWs = XLSX.utils.json_to_sheet(summaryData);
-  const detailedWs = XLSX.utils.json_to_sheet(detailedData);
   XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
-  XLSX.utils.book_append_sheet(wb, detailedWs, 'Items Detail');
 
-  const timestamp = new Date().toISOString().split('T')[0];
-  const fullFileName = `${fileName}_${timestamp}.xlsx`;
+  const fullFileName = `${fileName}_${getFileNameDateTimeStamp()}.xlsx`;
   XLSX.writeFile(wb, fullFileName);
 };
 
 /**
- * Export Sales Invoice data to Excel with complete item details
+ * Export Sales Invoice data to Excel
  */
 export const exportSalesInvoicesToExcel = (salesInvoices, fileName = 'Sales_Invoices') => {
   if (!salesInvoices || salesInvoices.length === 0) {
@@ -422,6 +400,7 @@ export const exportSalesInvoicesToExcel = (salesInvoices, fileName = 'Sales_Invo
     'Customer': invoice.customerName || invoice.partyName || '-',
     'Invoice Date': invoice.date ? new Date(invoice.date).toLocaleDateString() : '-',
     'Status': invoice.status || '-',
+    'Payment Status': ['PAID', 'PARTIAL'].includes(invoice.status) ? invoice.status : (Number(invoice.paidAmount || 0) > 0 ? (Number(invoice.outstandingAmount || 0) <= 0 ? 'PAID' : 'PARTIAL') : 'UNPAID'),
     'Total Amount': invoice.totalAmount ? String(invoice.totalAmount) : '-',
     'Paid Amount': invoice.paidAmount ? String(invoice.paidAmount) : '0',
     'Outstanding': invoice.outstandingAmount ? String(invoice.outstandingAmount) : String((invoice.totalAmount || 0) - (invoice.paidAmount || 0)),
@@ -429,53 +408,16 @@ export const exportSalesInvoicesToExcel = (salesInvoices, fileName = 'Sales_Invo
     'Terms': invoice.terms || '-',
     'Created By': invoice.createdBy || '-',
   }));
-  
-  // Detailed sheet with all items
-  const detailedData = [];
-  salesInvoices.forEach((invoice) => {
-    if (Array.isArray(invoice.items) && invoice.items.length > 0) {
-      invoice.items.forEach((item, idx) => {
-        detailedData.push({
-          'Invoice Number': idx === 0 ? (invoice.transactionNo || '-') : '',
-          'Customer': idx === 0 ? (invoice.customerName || invoice.partyName || '-') : '',
-          'Invoice Date': idx === 0 ? (invoice.date ? new Date(invoice.date).toLocaleDateString() : '-') : '',
-          'Status': idx === 0 ? (invoice.status || '-') : '',
-          'Item Name': item.description || item.itemName || item.name || '-',
-          'Item Qty': item.quantity ? String(item.quantity) : '0',
-          'Unit Price': item.price ? String(item.price) : '0',
-          'Item Total': item.total ? String(item.total) : String((item.quantity || 0) * (item.price || 0)),
-          'UOM': item.uom || item.unit || '-',
-          'Item Description': item.notes || item.remarks || '-',
-        });
-      });
-    } else {
-      detailedData.push({
-        'Invoice Number': invoice.transactionNo || '-',
-        'Customer': invoice.customerName || invoice.partyName || '-',
-        'Invoice Date': invoice.date ? new Date(invoice.date).toLocaleDateString() : '-',
-        'Status': invoice.status || '-',
-        'Item Name': 'No items',
-        'Item Qty': '0',
-        'Unit Price': '0',
-        'Item Total': '0',
-        'UOM': '-',
-        'Item Description': '-',
-      });
-    }
-  });
 
   const summaryWs = XLSX.utils.json_to_sheet(summaryData);
-  const detailedWs = XLSX.utils.json_to_sheet(detailedData);
   XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
-  XLSX.utils.book_append_sheet(wb, detailedWs, 'Items Detail');
 
-  const timestamp = new Date().toISOString().split('T')[0];
-  const fullFileName = `${fileName}_${timestamp}.xlsx`;
+  const fullFileName = `${fileName}_${getFileNameDateTimeStamp()}.xlsx`;
   XLSX.writeFile(wb, fullFileName);
 };
 
 /**
- * Export Purchase Order data to Excel with complete item details
+ * Export Purchase Order data to Excel
  */
 export const exportPurchaseOrdersToExcel = (purchaseOrders, fileName = 'Purchase_Orders') => {
   if (!purchaseOrders || purchaseOrders.length === 0) {
@@ -499,53 +441,16 @@ export const exportPurchaseOrdersToExcel = (purchaseOrders, fileName = 'Purchase
     'Notes': po.notes || '-',
     'Created By': po.createdBy || '-',
   }));
-  
-  // Detailed sheet with all items
-  const detailedData = [];
-  purchaseOrders.forEach((po) => {
-    if (Array.isArray(po.items) && po.items.length > 0) {
-      po.items.forEach((item, idx) => {
-        detailedData.push({
-          'PO Number': idx === 0 ? (po.orderNumber || po.transactionNo || '-') : '',
-          'Vendor': idx === 0 ? (po.vendorName || po.partyName || '-') : '',
-          'Date': idx === 0 ? (po.date ? new Date(po.date).toLocaleDateString() : '-') : '',
-          'Status': idx === 0 ? (po.status || '-') : '',
-          'Item Name': item.description || item.itemName || item.name || '-',
-          'Item Qty': item.quantity ? String(item.quantity) : '0',
-          'Unit Price': item.price ? String(item.price) : '0',
-          'Item Total': item.total ? String(item.total) : String((item.quantity || 0) * (item.price || 0)),
-          'UOM': item.uom || item.unit || '-',
-          'Item Description': item.notes || item.remarks || '-',
-        });
-      });
-    } else {
-      detailedData.push({
-        'PO Number': po.orderNumber || po.transactionNo || '-',
-        'Vendor': po.vendorName || po.partyName || '-',
-        'Date': po.date ? new Date(po.date).toLocaleDateString() : '-',
-        'Status': po.status || '-',
-        'Item Name': 'No items',
-        'Item Qty': '0',
-        'Unit Price': '0',
-        'Item Total': '0',
-        'UOM': '-',
-        'Item Description': '-',
-      });
-    }
-  });
 
   const summaryWs = XLSX.utils.json_to_sheet(summaryData);
-  const detailedWs = XLSX.utils.json_to_sheet(detailedData);
   XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
-  XLSX.utils.book_append_sheet(wb, detailedWs, 'Items Detail');
 
-  const timestamp = new Date().toISOString().split('T')[0];
-  const fullFileName = `${fileName}_${timestamp}.xlsx`;
+  const fullFileName = `${fileName}_${getFileNameDateTimeStamp()}.xlsx`;
   XLSX.writeFile(wb, fullFileName);
 };
 
 /**
- * Export Purchase Entry (Invoices) data to Excel with complete item details
+ * Export Purchase Entry (Invoices) data to Excel
  */
 export const exportPurchaseInvoicesToExcel = (purchaseInvoices, fileName = 'Purchase_Invoices') => {
   if (!purchaseInvoices || purchaseInvoices.length === 0) {
@@ -562,6 +467,7 @@ export const exportPurchaseInvoicesToExcel = (purchaseInvoices, fileName = 'Purc
     'Vendor': invoice.vendorName || invoice.partyName || '-',
     'Invoice Date': invoice.date ? new Date(invoice.date).toLocaleDateString() : '-',
     'Status': invoice.status || '-',
+    'Payment Status': ['PAID', 'PARTIAL'].includes(invoice.status) ? invoice.status : (Number(invoice.paidAmount || 0) > 0 ? (Number(invoice.outstandingAmount || 0) <= 0 ? 'PAID' : 'PARTIAL') : 'UNPAID'),
     'Total Amount': invoice.totalAmount ? String(invoice.totalAmount) : '-',
     'Paid Amount': invoice.paidAmount ? String(invoice.paidAmount) : '0',
     'Outstanding': invoice.outstandingAmount ? String(invoice.outstandingAmount) : String((invoice.totalAmount || 0) - (invoice.paidAmount || 0)),
@@ -569,47 +475,525 @@ export const exportPurchaseInvoicesToExcel = (purchaseInvoices, fileName = 'Purc
     'Terms': invoice.terms || '-',
     'Created By': invoice.createdBy || '-',
   }));
-  
-  // Detailed sheet with all items
-  const detailedData = [];
-  purchaseInvoices.forEach((invoice) => {
-    if (Array.isArray(invoice.items) && invoice.items.length > 0) {
-      invoice.items.forEach((item, idx) => {
-        detailedData.push({
-          'Invoice Number': idx === 0 ? (invoice.transactionNo || '-') : '',
-          'Vendor': idx === 0 ? (invoice.vendorName || invoice.partyName || '-') : '',
-          'Invoice Date': idx === 0 ? (invoice.date ? new Date(invoice.date).toLocaleDateString() : '-') : '',
-          'Status': idx === 0 ? (invoice.status || '-') : '',
-          'Item Name': item.description || item.itemName || item.name || '-',
-          'Item Qty': item.quantity ? String(item.quantity) : '0',
-          'Unit Price': item.price ? String(item.price) : '0',
-          'Item Total': item.total ? String(item.total) : String((item.quantity || 0) * (item.price || 0)),
-          'UOM': item.uom || item.unit || '-',
-          'Item Description': item.notes || item.remarks || '-',
-        });
-      });
-    } else {
-      detailedData.push({
-        'Invoice Number': invoice.transactionNo || '-',
-        'Vendor': invoice.vendorName || invoice.partyName || '-',
-        'Invoice Date': invoice.date ? new Date(invoice.date).toLocaleDateString() : '-',
-        'Status': invoice.status || '-',
-        'Item Name': 'No items',
-        'Item Qty': '0',
-        'Unit Price': '0',
-        'Item Total': '0',
-        'UOM': '-',
-        'Item Description': '-',
-      });
-    }
-  });
 
   const summaryWs = XLSX.utils.json_to_sheet(summaryData);
-  const detailedWs = XLSX.utils.json_to_sheet(detailedData);
   XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
-  XLSX.utils.book_append_sheet(wb, detailedWs, 'Items Detail');
 
-  const timestamp = new Date().toISOString().split('T')[0];
-  const fullFileName = `${fileName}_${timestamp}.xlsx`;
+  const fullFileName = `${fileName}_${getFileNameDateTimeStamp()}.xlsx`;
   XLSX.writeFile(wb, fullFileName);
+};
+
+/**
+ * Export Item Profitability Report to Excel
+ */
+export const exportItemProfitabilityExcel = (report) => {
+  const wb = XLSX.utils.book_new();
+
+  // Build header rows
+  const headerRows = [
+    [DEFAULT_COMPANY_NAME],
+    [DEFAULT_COMPANY_ADDRESS],
+    [],
+    ['ITEM PROFITABILITY ANALYSIS REPORT'],
+    [`Period: ${report.dateRange?.label || 'All Time'}`],
+    [`Generated: ${formatDateTime(new Date())}`],
+    [],
+  ];
+
+  // Summary section
+  const summary = report.summary || {};
+  headerRows.push(['REPORT SUMMARY']);
+  headerRows.push(['Total Items', summary.totalItems || 0]);
+  headerRows.push(['Profitable Items', summary.profitableItems || 0]);
+  headerRows.push(['Loss Items', summary.lossItems || 0]);
+  headerRows.push([`Total Purchase Value (${CURRENCY})`, formatNumber(summary.totalPurchaseValue)]);
+  headerRows.push([`Total Sales Value (${CURRENCY})`, formatNumber(summary.totalSalesValue)]);
+  headerRows.push([`Net Profit/Loss (${CURRENCY})`, formatNumber(summary.totalProfit)]);
+  headerRows.push(['Overall Profit %', `${(summary.overallProfitPercentage || 0).toFixed(2)}%`]);
+  headerRows.push([]);
+
+  // Table headers
+  headerRows.push([
+    'Item Code',
+    'Item Name',
+    'Category',
+    'UOM',
+    'Purchase Qty',
+    'Sales Qty',
+    `Avg Purchase Price (${CURRENCY})`,
+    `Avg Sales Price (${CURRENCY})`,
+    `Total Purchase Value (${CURRENCY})`,
+    `Total Sales Value (${CURRENCY})`,
+    `Profit/Loss (${CURRENCY})`,
+    'Margin %',
+    'Status',
+  ]);
+
+  // Data rows
+  const items = report.items || [];
+  items.forEach((item) => {
+    headerRows.push([
+      item.itemCode || '-',
+      item.itemName || '-',
+      item.category || '-',
+      item.uom || '-',
+      item.purchaseQty || 0,
+      item.salesQty || 0,
+      formatNumber(item.avgPurchasePrice),
+      formatNumber(item.avgSalesPrice),
+      formatNumber(item.totalPurchaseValue),
+      formatNumber(item.totalSalesValue),
+      formatNumber(item.profitLoss),
+      `${(item.profitPercentage || 0).toFixed(2)}%`,
+      item.isProfitable ? 'PROFIT' : 'LOSS',
+    ]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(headerRows);
+
+  // Set column widths
+  ws['!cols'] = [
+    { wch: 14 }, // Item Code
+    { wch: 30 }, // Item Name
+    { wch: 16 }, // Category
+    { wch: 8 },  // UOM
+    { wch: 14 }, // Purchase Qty
+    { wch: 12 }, // Sales Qty
+    { wch: 18 }, // Avg Purchase Price
+    { wch: 16 }, // Avg Sales Price
+    { wch: 22 }, // Total Purchase Value
+    { wch: 20 }, // Total Sales Value
+    { wch: 18 }, // Profit/Loss
+    { wch: 12 }, // Margin %
+    { wch: 10 }, // Status
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Item Profitability');
+
+  // Generate filename with date-time stamp
+  XLSX.writeFile(wb, `Item_Profitability_Report_${getFileNameDateTimeStamp()}.xlsx`);
+};
+
+// ──────────────────────────────────────────────────────────────
+// Accounts Module Export Functions
+// ──────────────────────────────────────────────────────────────
+
+/**
+ * Export Vouchers (Receipt/Payment/Journal/Contra/Expense) to Excel
+ * Supports filtering based on current view
+ */
+export const exportVouchersToExcel = (vouchers, voucherType = 'All', filters = {}) => {
+  if (!vouchers || vouchers.length === 0) {
+    console.warn('No vouchers to export');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+  const typeLabel = voucherType.charAt(0).toUpperCase() + voucherType.slice(1);
+
+  // Header rows
+  const data = createHeaderRows(
+    `${typeLabel.toUpperCase()} VOUCHER REPORT`,
+    filters.dateRange || 'All Periods',
+    new Date()
+  );
+
+  // Add filter info if available
+  if (filters.status) data.push([`Status Filter: ${filters.status}`]);
+  if (filters.party) data.push([`Party Filter: ${filters.party}`]);
+  if (filters.dateFrom || filters.dateTo) {
+    data.push([`Date Range: ${filters.dateFrom || 'Start'} to ${filters.dateTo || 'End'}`]);
+  }
+  data.push(['']);
+
+  // Table headers based on voucher type
+  if (voucherType === 'receipt' || voucherType === 'payment') {
+    data.push([
+      'Voucher No', 'Date', 'Party Name', `Amount (${CURRENCY})`,
+      'Payment Mode', 'Status', 'Linked Invoices', 'Narration'
+    ]);
+
+    vouchers.forEach(v => {
+      const linkedInvCount = v.linkedInvoices?.length || 0;
+      data.push([
+        v.voucherNo || '-',
+        v.date ? new Date(v.date).toLocaleDateString('en-GB') : '-',
+        v.partyName || '-',
+        formatNumber(v.totalAmount),
+        v.paymentMode || '-',
+        v.status || '-',
+        linkedInvCount > 0 ? `${linkedInvCount} invoice(s)` : 'On Account',
+        v.narration || v.notes || '-',
+      ]);
+    });
+  } else if (voucherType === 'journal') {
+    data.push([
+      'Voucher No', 'Date', 'Debit Account', 'Credit Account',
+      `Amount (${CURRENCY})`, 'Status', 'Narration'
+    ]);
+
+    vouchers.forEach(v => {
+      const debitEntry = v.entries?.find(e => e.debitAmount > 0);
+      const creditEntry = v.entries?.find(e => e.creditAmount > 0);
+      data.push([
+        v.voucherNo || '-',
+        v.date ? new Date(v.date).toLocaleDateString('en-GB') : '-',
+        debitEntry?.accountName || '-',
+        creditEntry?.accountName || '-',
+        formatNumber(v.totalAmount),
+        v.status || '-',
+        v.narration || '-',
+      ]);
+    });
+  } else if (voucherType === 'contra') {
+    data.push([
+      'Voucher No', 'Date', 'From Account', 'To Account',
+      `Amount (${CURRENCY})`, 'Status', 'Narration'
+    ]);
+
+    vouchers.forEach(v => {
+      const creditEntry = v.entries?.find(e => e.creditAmount > 0);
+      const debitEntry = v.entries?.find(e => e.debitAmount > 0);
+      data.push([
+        v.voucherNo || '-',
+        v.date ? new Date(v.date).toLocaleDateString('en-GB') : '-',
+        creditEntry?.accountName || '-',
+        debitEntry?.accountName || '-',
+        formatNumber(v.totalAmount),
+        v.status || '-',
+        v.narration || '-',
+      ]);
+    });
+  } else if (voucherType === 'expense') {
+    data.push([
+      'Voucher No', 'Date', 'Expense Account', 'Payment Source',
+      `Net Amount (${CURRENCY})`, `VAT (${CURRENCY})`, `Total (${CURRENCY})`,
+      'Status', 'Narration'
+    ]);
+
+    vouchers.forEach(v => {
+      data.push([
+        v.voucherNo || '-',
+        v.date ? new Date(v.date).toLocaleDateString('en-GB') : '-',
+        v.expenseAccountName || v.expenseTypeName || '-',
+        v.transactorName || '-',
+        formatNumber(v.netAmount || v.totalAmount),
+        formatNumber(v.vatAmount || 0),
+        formatNumber(v.totalAmount),
+        v.status || '-',
+        v.narration || v.description || '-',
+      ]);
+    });
+  } else {
+    // Generic voucher export
+    data.push([
+      'Voucher No', 'Type', 'Date', 'Party Name',
+      `Amount (${CURRENCY})`, 'Status', 'Narration'
+    ]);
+
+    vouchers.forEach(v => {
+      data.push([
+        v.voucherNo || '-',
+        v.voucherType || '-',
+        v.date ? new Date(v.date).toLocaleDateString('en-GB') : '-',
+        v.partyName || '-',
+        formatNumber(v.totalAmount),
+        v.status || '-',
+        v.narration || '-',
+      ]);
+    });
+  }
+
+  // Add summary
+  data.push(['']);
+  const totalAmount = vouchers.reduce((sum, v) => sum + (v.totalAmount || 0), 0);
+  data.push(['TOTAL', '', '', '', formatNumber(totalAmount)]);
+  data.push([`Total Records: ${vouchers.length}`]);
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  applyStyles(ws, [18, 12, 25, 25, 18, 18, 18, 30]);
+  XLSX.utils.book_append_sheet(wb, ws, `${typeLabel} Vouchers`);
+
+  const stamp = getFileNameDateTimeStamp();
+  XLSX.writeFile(wb, `${typeLabel}_Vouchers_${stamp}.xlsx`);
+};
+
+/**
+ * Export Chart of Accounts to Excel
+ */
+export const exportChartOfAccountsExcel = (accounts, filters = {}) => {
+  if (!accounts || accounts.length === 0) {
+    console.warn('No accounts to export');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  const data = createHeaderRows(
+    'CHART OF ACCOUNTS',
+    'Current',
+    new Date()
+  );
+
+  if (filters.accountType) data.push([`Account Type: ${filters.accountType}`]);
+  if (filters.search) data.push([`Search: ${filters.search}`]);
+  data.push(['']);
+
+  // Group by type
+  const typeOrder = ['asset', 'liability', 'equity', 'revenue', 'expense'];
+  const typeLabels = {
+    asset: 'ASSETS',
+    liability: 'LIABILITIES',
+    equity: 'EQUITY',
+    revenue: 'REVENUE',
+    expense: 'EXPENSES',
+  };
+
+  data.push(['Account Code', 'Account Name', 'Type', 'Sub-Type', 'Normal Balance', `Current Balance (${CURRENCY})`, 'Active', 'System']);
+
+  for (const type of typeOrder) {
+    const typeAccounts = accounts.filter(a => a.accountType === type);
+    if (typeAccounts.length === 0) continue;
+
+    data.push(['']);
+    data.push([typeLabels[type] || type.toUpperCase()]);
+
+    typeAccounts
+      .sort((a, b) => (a.accountCode || '').localeCompare(b.accountCode || ''))
+      .forEach(acc => {
+        data.push([
+          acc.accountCode || '-',
+          acc.accountName || '-',
+          acc.accountType || '-',
+          acc.accountSubType || acc.subType || '-',
+          acc.normalBalance || (["asset", "expense"].includes(acc.accountType) ? 'Debit' : 'Credit'),
+          formatNumber(acc.currentBalance || acc.openingBalance),
+          acc.isActive !== false ? 'Yes' : 'No',
+          acc.isSystemAccount ? 'Yes' : 'No',
+        ]);
+      });
+  }
+
+  data.push(['']);
+  data.push([`Total Accounts: ${accounts.length}`]);
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  applyStyles(ws, [15, 35, 12, 20, 15, 18, 8, 8]);
+  XLSX.utils.book_append_sheet(wb, ws, 'Chart of Accounts');
+
+  const stamp = getFileNameDateTimeStamp();
+  XLSX.writeFile(wb, `Chart_of_Accounts_${stamp}.xlsx`);
+};
+
+/**
+ * Export Account Vouchers (Purchase/Sale accounts) to Excel
+ */
+export const exportAccountVouchersExcel = (vouchers, accountType = 'All', filters = {}) => {
+  if (!vouchers || vouchers.length === 0) {
+    console.warn('No account vouchers to export');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+  const typeLabel = accountType === 'purchase' ? 'Purchase (Debit)' : accountType === 'sale' ? 'Sale (Credit)' : 'Account';
+
+  const data = createHeaderRows(
+    `${typeLabel.toUpperCase()} ACCOUNTS REPORT`,
+    filters.dateRange || 'All Periods',
+    new Date()
+  );
+
+  if (filters.partyName) data.push([`Party: ${filters.partyName}`]);
+  if (filters.status) data.push([`Status: ${filters.status}`]);
+  data.push(['']);
+
+  data.push([
+    'Voucher No', 'Date', 'Party', 'Type',
+    `Total Amount (${CURRENCY})`, 'Invoices', 'Status', 'Reference', 'Narration'
+  ]);
+
+  vouchers.forEach(v => {
+    data.push([
+      v.voucherNo || '-',
+      v.date ? new Date(v.date).toLocaleDateString('en-GB') : '-',
+      v.partyName || '-',
+      v.voucherType || '-',
+      formatNumber(v.totalAmount),
+      v.linkedInvoices?.length || 0,
+      v.status || '-',
+      v.referenceNo || '-',
+      v.narration || '-',
+    ]);
+  });
+
+  data.push(['']);
+  const totalAmount = vouchers.reduce((sum, v) => sum + (v.totalAmount || 0), 0);
+  data.push(['TOTAL', '', '', '', formatNumber(totalAmount)]);
+  data.push([`Total Records: ${vouchers.length}`]);
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  applyStyles(ws, [18, 12, 25, 12, 18, 10, 12, 15, 30]);
+  XLSX.utils.book_append_sheet(wb, ws, `${typeLabel} Accounts`);
+
+  const stamp = getFileNameDateTimeStamp();
+  const fileType = accountType === 'purchase' ? 'Debit' : accountType === 'sale' ? 'Credit' : 'Account';
+  XLSX.writeFile(wb, `${fileType}_Accounts_Report_${stamp}.xlsx`);
+};
+
+/**
+ * Export Transactions list to Excel
+ */
+export const exportTransactionsExcel = (transactions, filters = {}) => {
+  if (!transactions || transactions.length === 0) {
+    console.warn('No transactions to export');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  const data = createHeaderRows(
+    'TRANSACTIONS REPORT',
+    filters.dateRange || 'All Periods',
+    new Date()
+  );
+
+  if (filters.transactorName) data.push([`Account: ${filters.transactorName}`]);
+  if (filters.type) data.push([`Type: ${filters.type}`]);
+  data.push(['']);
+
+  data.push([
+    'Account Code', 'Account Name', 'Type', 'Category',
+    `Current Balance (${CURRENCY})`, 'Allow Posting', 'Active', 'Last Updated'
+  ]);
+
+  transactions.forEach(t => {
+    data.push([
+      t.accountCode || '-',
+      t.accountName || '-',
+      t.accountType || '-',
+      t.transactorCategory || '-',
+      formatNumber(t.currentBalance),
+      t.allowDirectPosting !== false ? 'Yes' : 'No',
+      t.isActive !== false ? 'Yes' : 'No',
+      t.updatedAt ? new Date(t.updatedAt).toLocaleDateString('en-GB') : '-',
+    ]);
+  });
+
+  data.push(['']);
+  const totalBalance = transactions.reduce((sum, t) => sum + (t.currentBalance || 0), 0);
+  data.push(['TOTAL BALANCE', '', '', '', formatNumber(totalBalance)]);
+  data.push([`Total Accounts: ${transactions.length}`]);
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  applyStyles(ws, [15, 30, 12, 15, 18, 12, 8, 15]);
+  XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
+
+  const stamp = getFileNameDateTimeStamp();
+  XLSX.writeFile(wb, `Transactions_Report_${stamp}.xlsx`);
+};
+
+/**
+ * Export Expense Accounts to Excel
+ */
+export const exportExpenseAccountsExcel = (accounts, filters = {}) => {
+  if (!accounts || accounts.length === 0) {
+    console.warn('No expense accounts to export');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  const data = createHeaderRows(
+    'EXPENSE ACCOUNTS REPORT',
+    'Current',
+    new Date()
+  );
+
+  if (filters.search) data.push([`Search: ${filters.search}`]);
+  data.push(['']);
+
+  data.push([
+    'Account Code', 'Account Name', `Total Spent (${CURRENCY})`,
+    'Expense Types', 'Active', 'Created Date'
+  ]);
+
+  accounts.forEach(acc => {
+    data.push([
+      acc.accountCode || '-',
+      acc.accountName || '-',
+      formatNumber(acc.totalSpent || 0),
+      acc.expenseTypes?.length || acc.typeCount || 0,
+      acc.isActive !== false ? 'Yes' : 'No',
+      acc.createdAt ? new Date(acc.createdAt).toLocaleDateString('en-GB') : '-',
+    ]);
+  });
+
+  data.push(['']);
+  const totalSpent = accounts.reduce((sum, a) => sum + (a.totalSpent || 0), 0);
+  data.push(['TOTAL SPENT', '', formatNumber(totalSpent)]);
+  data.push([`Total Accounts: ${accounts.length}`]);
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  applyStyles(ws, [15, 30, 18, 14, 8, 15]);
+  XLSX.utils.book_append_sheet(wb, ws, 'Expense Accounts');
+
+  const stamp = getFileNameDateTimeStamp();
+  XLSX.writeFile(wb, `Expense_Accounts_${stamp}.xlsx`);
+};
+
+/**
+ * Export General Ledger entries to Excel
+ */
+export const exportLedgerEntriesExcel = (entries, accountInfo = {}, filters = {}) => {
+  if (!entries || entries.length === 0) {
+    console.warn('No ledger entries to export');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  const data = createHeaderRows(
+    'GENERAL LEDGER',
+    filters.dateRange || 'All Periods',
+    new Date()
+  );
+
+  if (accountInfo.accountName) {
+    data.push([`Account: ${accountInfo.accountCode || ''} - ${accountInfo.accountName}`]);
+    data.push([`Account Type: ${accountInfo.accountType || '-'}`]);
+    data.push([`Normal Balance: ${accountInfo.normalBalance || '-'}`]);
+  }
+  data.push(['']);
+
+  data.push([
+    'Date', 'Journal/Voucher No', 'Type', 'Narration',
+    `Debit (${CURRENCY})`, `Credit (${CURRENCY})`, `Balance (${CURRENCY})`, 'Party'
+  ]);
+
+  entries.forEach(e => {
+    data.push([
+      e.date ? new Date(e.date).toLocaleDateString('en-GB') : '-',
+      e.journalNo || e.voucherNo || '-',
+      e.journalType || e.voucherType || '-',
+      e.narration || e.description || '-',
+      formatNumber(e.debit || e.debitAmount),
+      formatNumber(e.credit || e.creditAmount),
+      formatNumber(e.balance || e.runningBalance),
+      e.partyName || '-',
+    ]);
+  });
+
+  data.push(['']);
+  const totalDebit = entries.reduce((sum, e) => sum + (e.debit || e.debitAmount || 0), 0);
+  const totalCredit = entries.reduce((sum, e) => sum + (e.credit || e.creditAmount || 0), 0);
+  data.push(['TOTALS', '', '', '', formatNumber(totalDebit), formatNumber(totalCredit)]);
+  data.push([`Total Entries: ${entries.length}`]);
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  applyStyles(ws, [12, 18, 12, 35, 18, 18, 18, 20]);
+  XLSX.utils.book_append_sheet(wb, ws, 'Ledger');
+
+  const acctName = (accountInfo.accountName || 'General').replace(/[^a-zA-Z0-9]/g, '_');
+  const stamp = getFileNameDateTimeStamp();
+  XLSX.writeFile(wb, `Ledger_${acctName}_${stamp}.xlsx`);
 };

@@ -31,6 +31,7 @@ const SalesReturnForm = React.memo(
     setFormErrors,
   }) => {
     const isEditing = activeView === "edit";
+    const [saveLoading, setSaveLoading] = useState(false);
 
     // Log renders for debugging
     useEffect(() => {
@@ -101,6 +102,7 @@ const SalesReturnForm = React.memo(
           const item = stockItems.find((i) => i._id === value);
           if (item) {
             newItems[index].description = item.itemName;
+            newItems[index].itemCode = item.itemId || ""; // FIX: Always sync itemCode from stock on selection
             newItems[index].salesPrice = item.salesPrice.toString();
             newItems[index].category = item.category || "";
             newItems[index].rate = newItems[index].qty
@@ -114,6 +116,9 @@ const SalesReturnForm = React.memo(
                 "warning"
               );
             }
+          } else {
+            newItems[index].description = "";
+            newItems[index].itemCode = ""; // FIX: Clear itemCode when item is deselected
           }
         } else if (field === "qty") {
           const qty = parseFloat(value) || 0;
@@ -168,11 +173,13 @@ const SalesReturnForm = React.memo(
 
     // Save or update the sales return order
     const saveSO = useCallback(async () => {
+      if (saveLoading) return;
       if (!validateForm()) {
         addNotification("Please fix form errors before saving", "error");
         return;
       }
 
+      setSaveLoading(true);
       try {
         const totals = calculateTotals(formData.items);
         const transactionData = {
@@ -257,6 +264,8 @@ const SalesReturnForm = React.memo(
             (error.response?.data?.message || error.message),
           "error"
         );
+      } finally {
+        setSaveLoading(false);
       }
     }, [
       validateForm,
@@ -304,11 +313,12 @@ const SalesReturnForm = React.memo(
               <div className="flex items-center space-x-3">
                 <button
                   onClick={saveSO}
-                  className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 shadow-lg"
+                  disabled={saveLoading}
+                  className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <Save className="w-5 h-5" />
+                  {saveLoading ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save className="w-5 h-5" />}
                   <span>
-                    {isEditing ? "Update Return Order" : "Save Return Order"}
+                    {saveLoading ? "Saving..." : isEditing ? "Update Return Order" : "Save Return Order"}
                   </span>
                 </button>
               </div>

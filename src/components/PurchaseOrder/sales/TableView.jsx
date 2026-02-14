@@ -166,11 +166,11 @@ const TableView = ({
                       <p className="font-medium text-slate-900">
                         {(() => {
                           // For DRAFT SOs, display orderNumber, fallback to a display-friendly transaction number
-                          if (so.status !== "APPROVED") {
+                          if (so.status === "DRAFT") {
                             return so.orderNumber || so.displayTransactionNo || "";
                           }
 
-                          // For APPROVED SOs, show order number and invoice number
+                          // For APPROVED/PAID/PARTIAL SOs, show order number and invoice number
                           const orderNum = so.orderNumber || "";
                           const invoiceNum = so.invoiceNumber || so.transactionNumber || so.displayTransactionNo || "";
                           
