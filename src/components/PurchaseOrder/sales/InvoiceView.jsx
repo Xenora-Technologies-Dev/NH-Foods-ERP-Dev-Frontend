@@ -85,7 +85,7 @@ const SaleInvoiceView = ({
   if (!so) return null;
 
   const customer = customers.find((c) => c._id === so.customerId) || {};
-  const isApproved = so.status === "APPROVED";
+  const isApproved = ["APPROVED", "PAID", "PARTIAL"].includes(so.status);
 
   const deriveInvoiceNo = (soObj) => {
     try {

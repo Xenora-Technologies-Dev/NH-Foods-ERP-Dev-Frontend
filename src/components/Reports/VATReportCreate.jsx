@@ -88,10 +88,11 @@ const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Se
 // Generate Report Modal - Supports Monthly & Custom 3-Month
 // ─────────────────────────────────────────────────────────────
 const GenerateReportModal = ({ isOpen, onClose, onGenerate, isLoading }) => {
-  const [periodType, setPeriodType] = useState("monthly"); // "monthly" or "custom"
+  const [periodType, setPeriodType] = useState("custom"); // "custom" is now first/default
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth() + 1);
-  const [selectedMonths, setSelectedMonths] = useState([]); // For custom 3-month selection
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [validationError, setValidationError] = useState("");
 
   const currentYear = new Date().getFullYear();
@@ -105,127 +106,36 @@ const GenerateReportModal = ({ isOpen, onClose, onGenerate, isLoading }) => {
     label: name,
   }));
 
-  // Generate available months for multi-select (last 24 months)
-  const availableMonths = [];
-  for (let y = currentYear + 1; y >= currentYear - 1; y--) {
-    for (let m = 12; m >= 1; m--) {
-      availableMonths.push({
-        value: `${y}-${m}`,
-        label: `${MONTH_SHORT[m - 1]} ${y}`,
-        year: y,
-        month: m,
-      });
-    }
-  }
-
-  /**
-   * Validate that selected months are consecutive
-   * Supports cross-year (e.g., Nov 2025, Dec 2025, Jan 2026)
-   */
-  const validateConsecutiveMonths = (months) => {
-    if (months.length < 2) return true;
-    
-    const sorted = [...months].sort((a, b) => {
-      if (a.year !== b.year) return a.year - b.year;
-      return a.month - b.month;
-    });
-
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = sorted[i - 1];
-      const curr = sorted[i];
-      
-      let expectedYear = prev.year;
-      let expectedMonth = prev.month + 1;
-      
-      if (expectedMonth > 12) {
-        expectedMonth = 1;
-        expectedYear += 1;
-      }
-      
-      if (curr.year !== expectedYear || curr.month !== expectedMonth) {
-        return false;
-      }
-    }
-    return true;
-  };
-
-  // Handle month selection for custom period
-  const handleMonthToggle = (monthData) => {
-    setValidationError("");
-    
-    const exists = selectedMonths.find(
-      m => m.year === monthData.year && m.month === monthData.month
-    );
-
-    let newSelection;
-    if (exists) {
-      // Remove month
-      newSelection = selectedMonths.filter(
-        m => !(m.year === monthData.year && m.month === monthData.month)
-      );
-    } else {
-      // Add month (max 3)
-      if (selectedMonths.length >= 3) {
-        setValidationError("Maximum 3 months can be selected");
-        return;
-      }
-      newSelection = [...selectedMonths, { year: monthData.year, month: monthData.month }];
-    }
-
-    // Validate consecutive
-    if (newSelection.length > 1 && !validateConsecutiveMonths(newSelection)) {
-      setValidationError("Months must be consecutive (e.g., Nov, Dec, Jan)");
-      return;
-    }
-
-    setSelectedMonths(newSelection);
-  };
-
-  // Check if month is selected
-  const isMonthSelected = (monthData) => {
-    return selectedMonths.some(
-      m => m.year === monthData.year && m.month === monthData.month
-    );
-  };
-
   // Handle form submission
   const handleSubmit = () => {
     setValidationError("");
 
-    if (periodType === "monthly") {
+    if (periodType === "custom") {
+      if (!customFrom || !customTo) {
+        setValidationError("Please select both From and To dates");
+        return;
+      }
+      if (new Date(customFrom) > new Date(customTo)) {
+        setValidationError("From date must be before To date");
+        return;
+      }
+      onGenerate({
+        periodType: "custom",
+        customFrom,
+        customTo,
+      });
+    } else {
+      // Monthly
       onGenerate({
         periodType: "monthly",
         year,
         month,
       });
-    } else {
-      // Custom 3-month period
-      if (selectedMonths.length === 0) {
-        setValidationError("Please select at least one month");
-        return;
-      }
-      if (selectedMonths.length > 3) {
-        setValidationError("Maximum 3 months allowed");
-        return;
-      }
-      if (!validateConsecutiveMonths(selectedMonths)) {
-        setValidationError("Months must be consecutive");
-        return;
-      }
-
-      onGenerate({
-        periodType: "custom",
-        selectedMonths: selectedMonths.sort((a, b) => {
-          if (a.year !== b.year) return a.year - b.year;
-          return a.month - b.month;
-        }),
-      });
     }
   };
 
-  // Reset selection when switching period type
+  // Reset validation when switching period type
   useEffect(() => {
-    setSelectedMonths([]);
     setValidationError("");
   }, [periodType]);
 
@@ -247,10 +157,21 @@ const GenerateReportModal = ({ isOpen, onClose, onGenerate, isLoading }) => {
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Period Type Selection */}
+          {/* Period Type Selection - Custom Range is first */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Report Type</label>
             <div className="flex gap-3">
+              <button
+                onClick={() => setPeriodType("custom")}
+                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
+                  periodType === "custom"
+                    ? "bg-purple-100 text-purple-700 ring-2 ring-purple-500"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                <Calendar size={18} className="inline mr-2" />
+                Custom Range
+              </button>
               <button
                 onClick={() => setPeriodType("monthly")}
                 className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
@@ -262,19 +183,32 @@ const GenerateReportModal = ({ isOpen, onClose, onGenerate, isLoading }) => {
                 <Calendar size={18} className="inline mr-2" />
                 Monthly
               </button>
-              <button
-                onClick={() => setPeriodType("custom")}
-                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
-                  periodType === "custom"
-                    ? "bg-purple-100 text-purple-700 ring-2 ring-purple-500"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                <Calendar size={18} className="inline mr-2" />
-                3-Month Custom
-              </button>
             </div>
           </div>
+
+          {/* Custom Range Selection */}
+          {periodType === "custom" && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">From Date</label>
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className="w-full px-4 py-3 bg-white rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">To Date</label>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className="w-full px-4 py-3 bg-white rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Monthly Selection */}
           {periodType === "monthly" && (
@@ -300,59 +234,6 @@ const GenerateReportModal = ({ isOpen, onClose, onGenerate, isLoading }) => {
             </>
           )}
 
-          {/* Custom 3-Month Selection */}
-          {periodType === "custom" && (
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Select up to 3 consecutive months
-              </label>
-              <p className="text-xs text-gray-500 mb-3">
-                Cross-year selection supported (e.g., Nov 2025 – Jan 2026)
-              </p>
-              
-              {/* Selected months display */}
-              {selectedMonths.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {selectedMonths
-                    .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
-                    .map((m) => (
-                      <span
-                        key={`${m.year}-${m.month}`}
-                        className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium flex items-center gap-1"
-                      >
-                        {MONTH_SHORT[m.month - 1]} {m.year}
-                        <button
-                          onClick={() => handleMonthToggle(m)}
-                          className="hover:bg-purple-200 rounded-full p-0.5"
-                        >
-                          <X size={14} />
-                        </button>
-                      </span>
-                    ))}
-                </div>
-              )}
-
-              {/* Month grid */}
-              <div className="max-h-48 overflow-y-auto border rounded-xl p-2">
-                <div className="grid grid-cols-4 gap-2">
-                  {availableMonths.slice(0, 36).map((monthData) => (
-                    <button
-                      key={monthData.value}
-                      onClick={() => handleMonthToggle(monthData)}
-                      className={`p-2 text-xs rounded-lg transition-all ${
-                        isMonthSelected(monthData)
-                          ? "bg-purple-600 text-white"
-                          : "bg-gray-50 text-gray-700 hover:bg-gray-100"
-                      }`}
-                    >
-                      {monthData.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Validation Error */}
           {validationError && (
             <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-3 rounded-xl">
@@ -371,7 +252,7 @@ const GenerateReportModal = ({ isOpen, onClose, onGenerate, isLoading }) => {
             </button>
             <button
               onClick={handleSubmit}
-              disabled={isLoading || (periodType === "custom" && selectedMonths.length === 0)}
+              disabled={isLoading || (periodType === "custom" && (!customFrom || !customTo))}
               className="flex-1 py-3 px-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-medium hover:from-purple-700 hover:to-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
@@ -420,7 +301,7 @@ const ReportDetailModal = ({ report, onClose, onFinalize, onSubmit, onExport, is
               <div className="flex items-center gap-3 mt-2">
                 <StatusBadge status={report.status} />
                 <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
-                  {report.periodType === "custom" ? "Custom Period" : report.periodType === "monthly" ? "Monthly" : "Quarterly"}
+                  {report.periodType === "custom" ? "Custom Range" : report.periodType === "monthly" ? "Monthly" : "Quarterly"}
                 </span>
               </div>
             </div>
@@ -781,11 +662,18 @@ const VATReportsManagement = () => {
   const handleGenerate = async (data) => {
     setIsActionLoading(true);
     try {
-      await axiosInstance.post("/reports/vat/generate", data);
+      const res = await axiosInstance.post("/reports/vat/generate", data);
       showToast("VAT report generated successfully!", "success");
       setShowGenerateModal(false);
-      fetchVATSummary();
-      fetchReports();
+      // Auto-navigate to reports list and focus on newly generated report
+      setViewMode("list");
+      await fetchVATSummary();
+      await fetchReports();
+      // Auto-open the newly generated report if available
+      const newReportId = res.data?.data?._id;
+      if (newReportId) {
+        viewReport(newReportId);
+      }
     } catch (err) {
       showToast(err.response?.data?.message || "Failed to generate report", "error");
     } finally {
@@ -1029,25 +917,40 @@ const VATReportsManagement = () => {
             ))}
           </div>
 
-          {/* Custom Reports */}
+          {/* Custom & Monthly Reports */}
           {vatSummary.customReports && vatSummary.customReports.length > 0 && (
             <>
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Custom Period Reports</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Custom & Monthly Reports</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                 {vatSummary.customReports.map((report) => (
                   <div key={report.reportId} className="bg-white rounded-xl shadow-md p-4 border border-purple-100">
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <p className="font-semibold text-gray-900">{report.periodLabel}</p>
-                        <p className="text-xs text-gray-500">{report.reportNo}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-xs text-gray-500">{report.reportNo}</p>
+                          <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                            report.periodType === "custom" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
+                          }`}>
+                            {report.periodType === "custom" ? "Custom Range" : "Monthly"}
+                          </span>
+                        </div>
                       </div>
                       <StatusBadge status={report.status} />
                     </div>
                     <div className="text-sm space-y-1">
                       <div className="flex justify-between">
-                        <span>Net VAT:</span>
+                        <span className="text-gray-600">Output VAT:</span>
+                        <span className="font-semibold text-emerald-700">AED {(report.outputVAT || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Input VAT:</span>
+                        <span className="font-semibold text-amber-700">AED {(report.inputVAT || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between pt-1 border-t">
+                        <span className="font-medium">Net VAT:</span>
                         <span className={`font-semibold ${report.netVAT >= 0 ? "text-red-600" : "text-blue-600"}`}>
-                          AED {Math.abs(report.netVAT).toLocaleString()}
+                          AED {Math.abs(report.netVAT || 0).toLocaleString()}
                         </span>
                       </div>
                     </div>
@@ -1100,7 +1003,7 @@ const VATReportsManagement = () => {
                           r.periodType === "monthly" ? "bg-blue-100 text-blue-700" :
                           "bg-gray-100 text-gray-700"
                         }`}>
-                          {r.periodType === "custom" ? "Custom" : r.periodType === "monthly" ? "Monthly" : "Quarterly"}
+                          {r.periodType === "custom" ? "Custom Range" : r.periodType === "monthly" ? "Monthly" : "Quarterly"}
                         </span>
                       </td>
                       <td className="px-6 py-4"><StatusBadge status={r.status} /></td>

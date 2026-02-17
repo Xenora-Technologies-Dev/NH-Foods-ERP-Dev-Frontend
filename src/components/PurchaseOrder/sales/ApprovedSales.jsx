@@ -14,7 +14,8 @@ const ApprovedSales = () => {
   const [viewMode, setViewMode] = useState("table");
   const [selectedSO, setSelectedSO] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [dateFilter, setDateFilter] = useState("ALL");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [customerFilter, setCustomerFilter] = useState("ALL");
   const [sortBy, setSortBy] = useState("date");
   const [sortOrder, setSortOrder] = useState("desc");
@@ -30,7 +31,7 @@ const ApprovedSales = () => {
 
   useEffect(() => {
     fetchTransactions();
-  }, [searchTerm, customerFilter, dateFilter]);
+  }, [searchTerm, customerFilter, dateFrom, dateTo]);
 
   // Customers are now provided by React Query hook above
 
@@ -110,7 +111,8 @@ const ApprovedSales = () => {
           // Fetch approved invoices — also include PAID/PARTIAL for backward compat with legacy data
           status: "APPROVED,PAID,PARTIAL",
           partyId: customerFilter !== "ALL" ? customerFilter : undefined,
-          dateFilter: dateFilter !== "ALL" ? dateFilter : undefined,
+          dateFrom: dateFrom || undefined,
+          dateTo: dateTo || undefined,
           limit: 1000, // Fetch up to 1000 records for display
         },
       });
@@ -174,19 +176,18 @@ const ApprovedSales = () => {
           customerFilter === "ALL" || so.customerId === customerFilter;
 
         let matchesDate = true;
-        if (dateFilter !== "ALL") {
+        if (dateFrom || dateTo) {
           const soDate = new Date(so.date);
-          const today = new Date();
-          switch (dateFilter) {
-            case "TODAY":
-              matchesDate = soDate.toDateString() === today.toDateString();
-              break;
-            case "WEEK":
-              matchesDate = soDate >= new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-              break;
-            case "MONTH":
-              matchesDate = soDate >= new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
-              break;
+          soDate.setHours(0, 0, 0, 0);
+          if (dateFrom) {
+            const from = new Date(dateFrom);
+            from.setHours(0, 0, 0, 0);
+            if (soDate < from) matchesDate = false;
+          }
+          if (dateTo) {
+            const to = new Date(dateTo);
+            to.setHours(23, 59, 59, 999);
+            if (soDate > to) matchesDate = false;
           }
         }
         return matchesSearch && matchesCustomer && matchesDate;
@@ -216,7 +217,7 @@ const ApprovedSales = () => {
 
       return filtered;
     },
-    [salesOrders, searchTerm, customerFilter, dateFilter, sortBy, sortOrder]
+    [salesOrders, searchTerm, customerFilter, dateFrom, dateTo, sortBy, sortOrder]
   );
 
   const filteredSOs = filteredAndSortedSOs();
@@ -289,19 +290,37 @@ const ApprovedSales = () => {
                   <option key={c._id} value={c._id}>{c.customerName}</option>
                 ))}
               </select>
-              <select
-                value={dateFilter}
-                onChange={(e) => {
-                  setDateFilter(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="px-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="ALL">All Dates</option>
-                <option value="TODAY">Today</option>
-                <option value="WEEK">This Week</option>
-                <option value="MONTH">This Month</option>
-              </select>
+              <div className="flex items-center space-x-2">
+                <label className="text-sm text-slate-500 whitespace-nowrap">From</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="px-3 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+                <label className="text-sm text-slate-500 whitespace-nowrap">To</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="px-3 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+                {(dateFrom || dateTo) && (
+                  <button
+                    onClick={() => { setDateFrom(""); setDateTo(""); setCurrentPage(1); }}
+                    className="px-2 py-1 text-xs bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300"
+                    title="Clear date filter"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
             <div className="flex items-center space-x-3">
               <button onClick={() => setViewMode("table")} className={`p-3 rounded-xl ${viewMode === "table" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
@@ -311,12 +330,26 @@ const ApprovedSales = () => {
                 <Grid className="w-5 h-5" />
               </button>
               <button
-                onClick={handleExportAll}
+                onClick={() => {
+                  if (dateFrom || dateTo) {
+                    const filtered = filteredAndSortedSOs();
+                    if (filtered.length === 0) {
+                      setNotification({ message: "No data to export", type: "error" });
+                      setTimeout(() => setNotification(null), 3000);
+                      return;
+                    }
+                    exportSalesInvoicesToExcel(filtered, `Sales_Invoices_${dateFrom || "start"}_to_${dateTo || "end"}`);
+                    setNotification({ message: "Filtered sales invoices exported to Excel", type: "success" });
+                    setTimeout(() => setNotification(null), 3000);
+                  } else {
+                    handleExportAll();
+                  }
+                }}
                 className="flex items-center space-x-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
-                title="Export all sales invoices from database"
+                title={(dateFrom || dateTo) ? "Export filtered sales invoices" : "Export all sales invoices from database"}
               >
                 <FileDown className="w-4 h-4" />
-                <span>Export All</span>
+                <span>{(dateFrom || dateTo) ? "Export Filtered" : "Export All"}</span>
               </button>
             </div>
           </div>

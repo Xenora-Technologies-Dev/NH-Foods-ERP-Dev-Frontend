@@ -347,6 +347,7 @@ const GRNView = ({
                   <div style={{ fontWeight: 700, marginTop: 6 }}>Date:</div>
                   <div style={{ fontWeight: 700, marginTop: 6 }}>Received:</div>
                   {!isDirectGRN && <div style={{ fontWeight: 700, marginTop: 6 }}>PO No:</div>}
+                  <div style={{ fontWeight: 700, marginTop: 6 }}>Inv No:</div>
                   {grn.deliveryNoteNo && <div style={{ fontWeight: 700, marginTop: 6 }}>Delivery Note:</div>}
                 </div>
                 <div style={{ textAlign: "right", minWidth: 140 }}>
@@ -354,6 +355,7 @@ const GRNView = ({
                   <div style={{ marginTop: 6 }}>{formatDateGB(grn.grnDate)}</div>
                   <div style={{ marginTop: 6 }}>{formatDateGB(grn.receivedDate)}</div>
                   {!isDirectGRN && <div style={{ marginTop: 6 }}>{grn.poNumber}</div>}
+                  <div style={{ marginTop: 6 }}>{grn.vendorReference || grn.referenceNumber || '-'}</div>
                   {grn.deliveryNoteNo && <div style={{ marginTop: 6 }}>{grn.deliveryNoteNo}</div>}
                 </div>
               </div>

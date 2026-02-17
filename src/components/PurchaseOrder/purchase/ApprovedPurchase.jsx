@@ -15,7 +15,8 @@ const ApprovedPurchase = () => {
   const [selectedPO, setSelectedPO] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [dateFilter, setDateFilter] = useState("ALL");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [vendorFilter, setVendorFilter] = useState("ALL");
   const [sortBy, setSortBy] = useState("date");
   const [sortOrder, setSortOrder] = useState("desc");
@@ -37,7 +38,7 @@ const ApprovedPurchase = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  useEffect(() => { fetchTransactions(); }, [debouncedSearchTerm, vendorFilter, dateFilter]);
+  useEffect(() => { fetchTransactions(); }, [debouncedSearchTerm, vendorFilter, dateFrom, dateTo]);
 
   // Vendors are now provided by React Query hook above
 
@@ -106,7 +107,8 @@ const ApprovedPurchase = () => {
           params: {
             search: debouncedSearchTerm,
             vendorId: vendorFilter !== "ALL" ? vendorFilter : undefined,
-            dateFilter: dateFilter !== "ALL" ? dateFilter : undefined,
+            dateFrom: dateFrom || undefined,
+            dateTo: dateTo || undefined,
             limit: 1000,
           },
         }),
@@ -117,7 +119,8 @@ const ApprovedPurchase = () => {
             status: "APPROVED,PAID,PARTIAL",
             search: debouncedSearchTerm,
             partyId: vendorFilter !== "ALL" ? vendorFilter : undefined,
-            dateFilter: dateFilter !== "ALL" ? dateFilter : undefined,
+            dateFrom: dateFrom || undefined,
+            dateTo: dateTo || undefined,
             limit: 1000,
           },
         }),
@@ -208,13 +211,18 @@ const ApprovedPurchase = () => {
         po.vendorReference?.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
       const matchesVendor = vendorFilter === "ALL" || po.vendorId === vendorFilter;
       let matchesDate = true;
-      if (dateFilter !== "ALL") {
+      if (dateFrom || dateTo) {
         const poDate = new Date(po.date);
-        const today = new Date();
-        switch (dateFilter) {
-          case "TODAY": matchesDate = poDate.toDateString() === today.toDateString(); break;
-          case "WEEK": matchesDate = poDate >= new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000); break;
-          case "MONTH": matchesDate = poDate >= new Date(today.getFullYear(), today.getMonth() - 1, today.getDate()); break;
+        poDate.setHours(0, 0, 0, 0);
+        if (dateFrom) {
+          const from = new Date(dateFrom);
+          from.setHours(0, 0, 0, 0);
+          if (poDate < from) matchesDate = false;
+        }
+        if (dateTo) {
+          const to = new Date(dateTo);
+          to.setHours(23, 59, 59, 999);
+          if (poDate > to) matchesDate = false;
         }
       }
       return matchesSearch && matchesVendor && matchesDate;
@@ -230,7 +238,7 @@ const ApprovedPurchase = () => {
       return sortOrder === "asc" ? (aVal < bVal ? -1 : 1) : aVal > bVal ? -1 : 1;
     });
     return filtered;
-  }, [purchaseOrders, debouncedSearchTerm, vendorFilter, dateFilter, sortBy, sortOrder]);
+  }, [purchaseOrders, debouncedSearchTerm, vendorFilter, dateFrom, dateTo, sortBy, sortOrder]);
 
   const totalPages = Math.ceil(filteredAndSortedPOs.length / itemsPerPage);
   const paginatedPOs = filteredAndSortedPOs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -278,16 +286,31 @@ const ApprovedPurchase = () => {
                 <option value="ALL">All Vendors</option>
                 {vendors.map((v) => (<option key={v._id} value={v._id}>{v.vendorName}</option>))}
               </select>
-              <select
-                value={dateFilter}
-                onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
-                className="px-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="ALL">All Dates</option>
-                <option value="TODAY">Today</option>
-                <option value="WEEK">This Week</option>
-                <option value="MONTH">This Month</option>
-              </select>
+              <div className="flex items-center space-x-2">
+                <label className="text-sm text-slate-500 whitespace-nowrap">From</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                  className="px-3 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+                <label className="text-sm text-slate-500 whitespace-nowrap">To</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+                  className="px-3 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+                {(dateFrom || dateTo) && (
+                  <button
+                    onClick={() => { setDateFrom(""); setDateTo(""); setCurrentPage(1); }}
+                    className="px-2 py-1 text-xs bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300"
+                    title="Clear date filter"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
             <div className="flex items-center space-x-3">
               <button onClick={() => setViewMode("table")} className={`p-3 rounded-xl ${viewMode === "table" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
@@ -297,12 +320,25 @@ const ApprovedPurchase = () => {
                 <Grid className="w-5 h-5" />
               </button>
               <button
-                onClick={handleExportAll}
+                onClick={() => {
+                  if (dateFrom || dateTo) {
+                    if (filteredAndSortedPOs.length === 0) {
+                      setNotification({ message: "No data to export", type: "error" });
+                      setTimeout(() => setNotification(null), 3000);
+                      return;
+                    }
+                    exportPurchaseInvoicesToExcel(filteredAndSortedPOs, `Purchase_Entries_${dateFrom || "start"}_to_${dateTo || "end"}`);
+                    setNotification({ message: "Filtered purchase entries exported to Excel", type: "success" });
+                    setTimeout(() => setNotification(null), 3000);
+                  } else {
+                    handleExportAll();
+                  }
+                }}
                 className="flex items-center space-x-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
-                title="Export all purchase invoices from database"
+                title={(dateFrom || dateTo) ? "Export filtered purchase entries" : "Export all purchase entries from database"}
               >
                 <FileDown className="w-4 h-4" />
-                <span>Export All</span>
+                <span>{(dateFrom || dateTo) ? "Export Filtered" : "Export All"}</span>
               </button>
             </div>
           </div>

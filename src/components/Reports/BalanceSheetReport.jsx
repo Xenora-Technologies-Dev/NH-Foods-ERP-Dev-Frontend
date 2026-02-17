@@ -59,9 +59,11 @@ const formatCurrency = (amount, showZero = false) => {
 
 // Period selector modal
 const PeriodSelectorModal = ({ isOpen, onClose, onGenerate, isLoading }) => {
-  const [periodType, setPeriodType] = useState("yearly");
+  const [periodType, setPeriodType] = useState("custom");
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth() + 1);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
   const currentYear = new Date().getFullYear();
   const yearOptions = Array.from({ length: 5 }, (_, i) => ({
@@ -85,11 +87,20 @@ const PeriodSelectorModal = ({ isOpen, onClose, onGenerate, isLoading }) => {
   ];
 
   const handleSubmit = () => {
-    onGenerate({
-      periodType,
-      year,
-      month: periodType === "monthly" ? month : null,
-    });
+    if (periodType === "custom") {
+      if (!customFrom || !customTo) return;
+      onGenerate({
+        periodType: "custom",
+        fromDate: customFrom,
+        toDate: customTo,
+      });
+    } else {
+      onGenerate({
+        periodType,
+        year,
+        month: periodType === "monthly" ? month : null,
+      });
+    }
   };
 
   if (!isOpen) return null;
@@ -110,7 +121,7 @@ const PeriodSelectorModal = ({ isOpen, onClose, onGenerate, isLoading }) => {
               Period Type
             </label>
             <div className="flex gap-3">
-              {["yearly", "monthly"].map((type) => (
+              {["custom", "yearly", "monthly"].map((type) => (
                 <button
                   key={type}
                   onClick={() => setPeriodType(type)}
@@ -120,29 +131,54 @@ const PeriodSelectorModal = ({ isOpen, onClose, onGenerate, isLoading }) => {
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
                 >
-                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                  {type === "custom" ? "Custom Range" : type.charAt(0).toUpperCase() + type.slice(1)}
                 </button>
               ))}
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Financial Year
-            </label>
-            <Select
-              options={yearOptions}
-              value={yearOptions.find((o) => o.value === year)}
-              onChange={(option) => setYear(option.value)}
-              isSearchable={false}
-              classNamePrefix="react-select"
-              styles={{
-                menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-                menu: (base) => ({ ...base, zIndex: 9999 }),
-              }}
-              menuPortalTarget={document.body}
-            />
-          </div>
+          {periodType === "custom" && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">From Date</label>
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className="w-full px-4 py-3 bg-white rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">To Date</label>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className="w-full px-4 py-3 bg-white rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                />
+              </div>
+            </div>
+          )}
+
+          {(periodType === "yearly" || periodType === "monthly") && (
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Financial Year
+              </label>
+              <Select
+                options={yearOptions}
+                value={yearOptions.find((o) => o.value === year)}
+                onChange={(option) => setYear(option.value)}
+                isSearchable={false}
+                classNamePrefix="react-select"
+                styles={{
+                  menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                  menu: (base) => ({ ...base, zIndex: 9999 }),
+                }}
+                menuPortalTarget={document.body}
+              />
+            </div>
+          )}
 
           {periodType === "monthly" && (
             <div>
@@ -167,7 +203,7 @@ const PeriodSelectorModal = ({ isOpen, onClose, onGenerate, isLoading }) => {
           <div className="pt-4 space-y-2">
             <button
               onClick={handleSubmit}
-              disabled={isLoading}
+              disabled={isLoading || (periodType === "custom" && (!customFrom || !customTo))}
               className="w-full py-3 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-xl font-semibold hover:from-green-700 hover:to-teal-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Scale size={20} />}
