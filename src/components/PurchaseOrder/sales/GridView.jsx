@@ -29,7 +29,11 @@ const GridView = ({
 }) => {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-      {paginatedSOs.map((so) => (
+      {paginatedSOs.map((so) => {
+        const normalizedStatus = String(so.status || "").toLowerCase();
+        const isDraft = normalizedStatus === "draft";
+
+        return (
         <div key={so.id} className="bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group hover:scale-105">
           {/* Card Header */}
           <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-4 border-b border-slate-200">
@@ -55,7 +59,7 @@ const GridView = ({
               <div className="flex flex-col items-end space-y-1">
                 <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(so.status)}`}>
                   {getStatusIcon(so.status)}
-                  <span className="ml-1">{so.status}</span>
+                  <span className="ml-1">{String(so.status || "").replace("_", " ").toUpperCase()}</span>
                 </div>
               </div>
             </div>
@@ -133,7 +137,7 @@ const GridView = ({
                   <FileText className="w-4 h-4" />
                   <span className="text-sm">Duplicate</span>
                 </button>
-                {so.status === "DRAFT" && (
+                {isDraft && (
                   <button
                     onClick={() => editSO(so)}
                     className="flex items-center space-x-1 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
@@ -145,7 +149,7 @@ const GridView = ({
               </div>
 
               <div className="flex space-x-2">
-                {so.status === "DRAFT" && (
+                {isDraft && (
                   <button
                     onClick={() => confirmSO(so.id)}
                     className="flex items-center space-x-1 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
@@ -154,7 +158,7 @@ const GridView = ({
                     <span className="text-sm">Confirm</span>
                   </button>
                 )}
-                {so.status === "DRAFT" && (
+                {isDraft && (
                   <button
                     onClick={() => deleteSO(so.id)}
                     className="flex items-center space-x-1 px-3 py-2 bg-rose-100 text-rose-700 rounded-lg hover:bg-rose-200 transition-colors"
@@ -167,7 +171,7 @@ const GridView = ({
             </div>
           </div>
         </div>
-      ))}
+      );})}
     </div>
   );
 };

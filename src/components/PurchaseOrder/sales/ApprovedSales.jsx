@@ -225,12 +225,13 @@ const ApprovedSales = () => {
   const paginatedSOs = filteredSOs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case "APPROVED":
+    const normalizedStatus = String(status || "").toLowerCase();
+    switch (normalizedStatus) {
+      case "approved":
         return "bg-blue-100 text-blue-700 border-blue-200";
-      case "PAID":
+      case "paid":
         return "bg-emerald-100 text-emerald-700 border-emerald-200";
-      case "PARTIAL":
+      case "partial":
         return "bg-orange-100 text-orange-700 border-orange-200";
       default:
         return "bg-blue-100 text-blue-700 border-blue-200";

@@ -355,8 +355,9 @@ const PaymentVoucherManagement = () => {
         const params = new URLSearchParams();
         params.append("partyId", vendorId);
         params.append("partyType", "Vendor");
-        params.append("type", "purchase_order"); // or "purchase_invoice" if you use that
-        // Remove status=APPROVED if not needed — better to get all and filter outstanding
+        params.append("type", "purchase_order");
+        // Only approved/partial Purchase Entries (GRN-converted) are payable
+        params.append("status", "APPROVED,PARTIAL");
 
         const response = await axiosInstance.get(
           `/transactions/transactions?${params.toString()}`
@@ -364,11 +365,14 @@ const PaymentVoucherManagement = () => {
 
         let invoices = takeArray(response);
 
-        // Filter only invoices with outstanding balance > 0
+        // Filter only Purchase Entries (GRN-converted) with outstanding balance > 0
+        // Raw Purchase Orders (not converted via GRN) must NOT appear for payment
         const outstandingInvoices = invoices
           .filter((inv) => {
             const outstanding = Number(inv.outstandingAmount || 0);
-            return outstanding > 0;
+            // Must have outstanding balance AND be a Purchase Entry (GRN-converted)
+            const isPurchaseEntry = inv.sourceGrnId || inv.sourceGrnNumber || inv.grnGenerated;
+            return outstanding > 0 && isPurchaseEntry;
           })
           .map((inv) => ({
             _id: inv._id,
@@ -378,6 +382,7 @@ const PaymentVoucherManagement = () => {
             paidAmount: Number(inv.paidAmount || 0),
             outstandingAmount: Number(inv.outstandingAmount || 0),
             status: inv.status,
+            sourceGrnNumber: inv.sourceGrnNumber || null,
           }));
 
         setAvailableInvoices(outstandingInvoices);

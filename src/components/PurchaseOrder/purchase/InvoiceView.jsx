@@ -84,10 +84,11 @@ const PurchaseInvoiceView = ({
 
   const vendor = vendors.find((v) => v._id === po.vendorId) || {};
   const vendorTRN = vendor.trnNO || vendor.vatNumber || po.vendorTRN || "";
-  const isApproved = po.status === "APPROVED";
+  const normalizedStatus = String(po.status || "").toLowerCase();
+  const isApproved = ["approved", "paid", "partial"].includes(normalizedStatus);
   
   // Determine if this is a GRN-based entry
-  const isGRNEntry = po.entryType === "GRN" || po.sourceGrnId || po.grnNumber;
+  const isGRNEntry = po.entryType === "GRN" || po.sourceGrnId || po.grnNumber || po.sourceGrnNumber;
   const grnNumber = po.grnNumber || po.sourceGrnNumber || null;
   const poNumber = po.poNumber || po.orderNumber || po.transactionNo;
 
@@ -102,7 +103,7 @@ const PurchaseInvoiceView = ({
   });
 
   useEffect(() => {
-    const isGRN = po.entryType === "GRN" || po.sourceGrnId || po.grnNumber;
+    const isGRN = po.entryType === "GRN" || po.sourceGrnId || po.grnNumber || po.sourceGrnNumber;
     const grn = po.grnNumber || po.sourceGrnNumber || null;
     const poNum = po.poNumber || po.orderNumber || po.transactionNo;
     
@@ -229,7 +230,7 @@ const handleConvertToInvoice = async () => {
             </button>
             {/* <button onClick={() => alert("Sent")} className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"><Send className="w-4 h-4" /> Send</button> */}
             {/* Note: Convert to Purchase Entry now happens through GRN (Goods Received Note) */}
-            {po.status !== "APPROVED" && (
+            {!isApproved && (
               <div className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded text-sm">
                 To create Purchase Entry, use GRN (Goods Received Note)
               </div>
@@ -254,7 +255,7 @@ const handleConvertToInvoice = async () => {
           <div style={{ height: 6, background: "linear-gradient(90deg, #166534, #22c55e)", marginBottom: 12, borderRadius: 3 }} />
 
           <div style={{ textAlign: "right", fontWeight: "bold", marginBottom: 9 }}>
-            <span id="copy-label">Purchase Order</span>
+            <span id="copy-label">{isApproved ? "Purchase Entry" : "Purchase Order"}</span>
           </div>
 
           {/* Header block: Arabic, English, contact, title */}

@@ -1,4 +1,4 @@
-import { AlertCircle, Link as LinkIcon, DollarSign } from "lucide-react";
+import { AlertCircle, Link as LinkIcon } from "lucide-react";
 import { formatCurrency } from "./utils";
 
 const InvoiceSelection = ({

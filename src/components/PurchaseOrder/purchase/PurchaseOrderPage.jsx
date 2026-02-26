@@ -49,6 +49,13 @@ import { exportPurchaseOrdersToExcel } from "../../../utils/excelExport";
 import PaginationControl from "../../Pagination/PaginationControl";
 import { useVendorList, useStockList } from "../../../hooks/useDataFetching";
 import { PageListSkeleton, RefetchIndicator } from "../../ui/Skeletons";
+import {
+  normalizeTransactionStatus,
+  getDisplayStatus,
+  isInvoiceStatus as checkInvoiceStatus,
+  TRANSACTION_STATUS,
+  getTransactionStatusColor,
+} from "../../../utils/statusNormalizer";
 
 const PurchaseOrderManagement = () => {
   const [activeView, setActiveView] = useState("dashboard");
@@ -134,7 +141,6 @@ const PurchaseOrderManagement = () => {
     try {
       // When showing "ALL" statuses, exclude APPROVED/PAID/PARTIAL from purchase orders
       // because those belong in the Approved Purchases / Purchase Invoice view
-      const isInvoiceStatus = (s) => ["APPROVED", "PAID", "PARTIAL"].includes(s);
       const { data } = await axiosInstance.get("/transactions/transactions", {
         params: {
           type: "purchase_order",
@@ -149,8 +155,9 @@ const PurchaseOrderManagement = () => {
       });
       const rawTxs = data.data || [];
       // Double-check client-side: exclude APPROVED/PAID/PARTIAL from Purchase Order list
+      // Using normalizer for case-insensitive matching (handles legacy mixed-case data)
       const txs = statusFilter === "ALL"
-        ? rawTxs.filter((t) => !isInvoiceStatus(t.status))
+        ? rawTxs.filter((t) => !checkInvoiceStatus(t.status))
         : rawTxs;
 
       const enrichedPOs = txs.map((t) => {
@@ -366,20 +373,24 @@ const PurchaseOrderManagement = () => {
     setTimeout(resetForm, 0);
   };
 
-  // Statistics calculations
+  // Statistics calculations — use normalizeTransactionStatus for case-insensitive matching
   const getStatistics = useMemo(
     () => () => {
       const total = purchaseOrders.length;
       const pending = purchaseOrders.filter(
-        (po) => po.status === "PENDING"
+        (po) => normalizeTransactionStatus(po.status) === TRANSACTION_STATUS.DRAFT
       ).length;
-      const paid = purchaseOrders.filter((po) => po.status === "paid").length;
+      const paid = purchaseOrders.filter(
+        (po) => normalizeTransactionStatus(po.status) === TRANSACTION_STATUS.PAID
+      ).length;
       const approved = purchaseOrders.filter(
-        (po) => po.status === "APPROVED"
+        (po) => normalizeTransactionStatus(po.status) === TRANSACTION_STATUS.APPROVED
       ).length;
-      const draft = purchaseOrders.filter((po) => po.status === "DRAFT").length;
+      const draft = purchaseOrders.filter(
+        (po) => normalizeTransactionStatus(po.status) === TRANSACTION_STATUS.DRAFT
+      ).length;
       const rejected = purchaseOrders.filter(
-        (po) => po.status === "REJECTED"
+        (po) => normalizeTransactionStatus(po.status) === TRANSACTION_STATUS.REJECTED
       ).length;
 
       const totalValue = purchaseOrders.reduce(
@@ -387,7 +398,7 @@ const PurchaseOrderManagement = () => {
         0
       );
       const approvedValue = purchaseOrders
-        .filter((po) => po.status === "APPROVED")
+        .filter((po) => normalizeTransactionStatus(po.status) === TRANSACTION_STATUS.APPROVED)
         .reduce((sum, po) => sum + parseFloat(po.totalAmount), 0);
 
       const thisMonth = new Date().getMonth();
@@ -518,37 +529,23 @@ const PurchaseOrderManagement = () => {
   );
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case "DRAFT":
-        return "bg-slate-100 text-slate-700 border-slate-200";
-      case "PENDING":
-        return "bg-amber-100 text-amber-700 border-amber-200";
-      case "APPROVED":
-        return "bg-emerald-100 text-emerald-700 border-emerald-200";
-      case "PAID":
-        return "bg-emerald-100 text-emerald-800 border-emerald-300";
-      case "PARTIAL":
-        return "bg-orange-100 text-orange-700 border-orange-200";
-      case "REJECTED":
-        return "bg-rose-100 text-rose-700 border-rose-200";
-      default:
-        return "bg-slate-100 text-slate-700 border-slate-200";
-    }
+    return getTransactionStatusColor(status);
   };
 
   const getStatusIcon = (status) => {
-    switch (status) {
-      case "DRAFT":
+    const normalized = normalizeTransactionStatus(status);
+    switch (normalized) {
+      case TRANSACTION_STATUS.DRAFT:
         return <Edit3 className="w-3 h-3" />;
-      case "PENDING":
-        return <Clock className="w-3 h-3" />;
-      case "APPROVED":
+      case TRANSACTION_STATUS.APPROVED:
         return <CheckCircle className="w-3 h-3" />;
-      case "PAID":
+      case TRANSACTION_STATUS.PAID:
         return <DollarSign className="w-3 h-3" />;
-      case "PARTIAL":
+      case TRANSACTION_STATUS.PARTIAL:
         return <DollarSign className="w-3 h-3" />;
-      case "REJECTED":
+      case TRANSACTION_STATUS.REJECTED:
+        return <XCircle className="w-3 h-3" />;
+      case TRANSACTION_STATUS.CANCELLED:
         return <XCircle className="w-3 h-3" />;
       default:
         return <FileText className="w-3 h-3" />;
@@ -943,8 +940,8 @@ const PurchaseOrderManagement = () => {
 // Update a single PO in local list state (used when approving from invoice view)
 const updatePurchaseOrderStatus = (id, newStatus) => {
   setPurchaseOrders((prev) => {
-    if (newStatus === "APPROVED") {
-      // remove approved orders from main list (they belong to Approved list)
+    if (checkInvoiceStatus(newStatus)) {
+      // remove invoice-status orders from main PO list (they belong to Approved/Purchase Entry list)
       return prev.filter((po) => po.id !== id && po._id !== id);
     }
     return prev.map((po) =>
@@ -1068,10 +1065,9 @@ const updatePurchaseOrderStatus = (id, newStatus) => {
                   className="px-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="ALL">All Statuses</option>
-                  <option value="DRAFT">Draft</option>
-                  <option value="PENDING">Pending</option>
-                  <option value="REJECTED">Rejected</option>
-                  <option value="CANCELLED">Cancelled</option>
+                  <option value="draft">Draft</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="cancelled">Cancelled</option>
                 </select>
 
                 <select

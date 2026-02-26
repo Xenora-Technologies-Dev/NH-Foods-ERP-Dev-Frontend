@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Download, Printer, ArrowRightCircle, XCircle, CheckCircle } from "lucide-react";
 import axiosInstance from "../../../axios/axios";
 import { formatNumber, formatDateGB } from "../../../utils/format";
+import { normalizeGRNStatus, GRN_STATUS } from "../../../utils/statusNormalizer";
 
 const GRNView = ({
   grn,
@@ -59,9 +60,10 @@ const GRNView = ({
 
   const vendor = vendors.find((v) => v._id === (grn.vendorId?._id || grn.vendorId)) || {};
   const vendorTRN = vendor.trnNO || grn.vendorTRN || "";
-  const isConverted = grn.status === "CONVERTED" || grn.convertedToPurchase;
-  const canConvert = grn.status === "RECEIVED" && !grn.convertedToPurchase;
-  const canCancel = grn.status === "RECEIVED" && !grn.convertedToPurchase;
+  const normalizedStatus = normalizeGRNStatus(grn.status);
+  const isConverted = normalizedStatus === GRN_STATUS.CONVERTED || grn.convertedToPurchase;
+  const canConvert = normalizedStatus === GRN_STATUS.RECEIVED && !grn.convertedToPurchase;
+  const canCancel = normalizedStatus === GRN_STATUS.RECEIVED && !grn.convertedToPurchase;
   const isDirectGRN = grn.entryMode === "direct";
 
   // Calculate totals

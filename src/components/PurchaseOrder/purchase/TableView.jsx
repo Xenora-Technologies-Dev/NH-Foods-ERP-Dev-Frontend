@@ -114,7 +114,12 @@ const TableView = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {paginatedPOs.map((po) => (
+            {paginatedPOs.map((po) => {
+              const normalizedStatus = String(po.status || "").toLowerCase();
+              const isDraft = normalizedStatus === "draft";
+              const isRejected = normalizedStatus === "rejected";
+
+              return (
               <tr
                 key={po.id}
                 className={`hover:bg-slate-50 transition-colors ${
@@ -188,7 +193,7 @@ const TableView = ({
                       )}`}
                     >
                       {getStatusIcon(po.status)}
-                      {po.status}
+                      {String(po.status || "").replace("_", " ").toUpperCase()}
                     </span>
                   </div>
                 </td>
@@ -217,7 +222,7 @@ const TableView = ({
                     </button>
 
                     {/* Edit: Only DRAFT */}
-                    {po.status === "DRAFT" && (
+                    {isDraft && (
                       <button
                         onClick={() => editPO(po)}
                         className="p-1.5 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
@@ -252,8 +257,7 @@ const TableView = ({
                           <Copy className="w-3 h-3" />
                           <span>Duplicate</span>
                         </button>
-                        {(po.status === "DRAFT" ||
-                          po.status === "REJECTED") && (
+                        {(isDraft || isRejected) && (
                           <button
                             onClick={() => deletePO(po.id)}
                             className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
@@ -267,7 +271,8 @@ const TableView = ({
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

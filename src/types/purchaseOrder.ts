@@ -5,7 +5,9 @@ export interface PurchaseOrder {
   vendorName: string;
   date: string;
   deliveryDate: string;
-  status: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
+  /** DB stores lowercase via Mongoose transform. Legacy data may have mixed casing.
+   *  Use normalizeTransactionStatus() from utils/statusNormalizer for comparisons. */
+  status: "draft" | "approved" | "paid" | "partial" | "rejected" | "cancelled" | string;
   approvalStatus: string;
   totalAmount: string;
   items: Array<{
@@ -23,4 +25,7 @@ export interface PurchaseOrder {
   grnGenerated: boolean;
   invoiceGenerated: boolean;
   priority: "High" | "Medium" | "Low";
+  // GRN-related fields
+  sourceGrnId?: string;
+  sourceGrnNumber?: string;
 }

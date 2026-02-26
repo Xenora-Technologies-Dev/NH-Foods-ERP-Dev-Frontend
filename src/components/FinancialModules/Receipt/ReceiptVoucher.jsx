@@ -10,7 +10,6 @@ import {
   Calendar,
   CreditCard,
   FileText,
-  DollarSign,
   Building,
   Banknote,
   RefreshCw,
@@ -32,6 +31,7 @@ import axios from "../../../axios/axios";
 import { exportVouchersToExcel } from "../../../utils/excelExport";
 import InvoiceSelection from "./InvoiceSelection";
 import PaymentInvoiceView from "../Payment/PaymentInvoiceView";
+import ReceiptAllocation from "./ReceiptAllocation";
 import CustomerSelect from "./CustomerSelect";
 import VoucherDocument from "./VoucherDocument";
 import { useCustomerList } from "../../../hooks/useDataFetching";
@@ -172,6 +172,7 @@ const ReceiptVoucherManagement = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [selectedReceipt, setSelectedReceipt] = useState(null);
+  const [allocatingReceipt, setAllocatingReceipt] = useState(null); // For allocation workflow (Stage 2)
   const [viewVoucher, setViewVoucher] = useState(null); // For viewing voucher document
 
   const formRef = useRef(null);
@@ -325,12 +326,12 @@ const fetchUnpaidInvoices = useCallback(
 
       let invoices = takeArray(response);
 
-      // Filter only APPROVED invoices (including those with PAID/PARTIAL legacy status) that have outstanding balance
+      // Filter only APPROVED invoices that have outstanding balance
       const outstandingInvoices = invoices
         .filter((inv) => {
           const outstanding = Number(inv.outstandingAmount || 0);
-          const status = (inv.status || "").toUpperCase();
-          const isEligible = ["APPROVED", "PAID", "PARTIAL"].includes(status);
+          const status = String(inv.status || "").toLowerCase();
+          const isEligible = status === "approved";
           return outstanding > 0 && isEligible;
         })
         .map((inv) => ({
@@ -468,8 +469,8 @@ const handleInvoiceAmountChange = useCallback(
     if (!formData.date) e.date = "Date is required";
     if (!formData.amount || Number(formData.amount) <= 0)
       e.amount = "Amount must be greater than 0";
-    if (!asArray(formData.linkedInvoices).length)
-      e.linkedInvoices = "At least one invoice must be selected";
+    // Invoice selection is NOT mandatory (Enterprise two-stage allocation model)
+    // Receipts can be created without invoice linkage and allocated later
     return e;
   }, [formData]);
 
@@ -664,8 +665,20 @@ const handleInvoiceAmountChange = useCallback(
     const todayReceipts = safeReceipts.filter(
       (r) => new Date(r.date).toDateString() === new Date().toDateString()
     ).length;
-    const avgAmount = totalReceipts ? totalAmount / totalReceipts : 0;
-    return { totalReceipts, totalAmount, todayReceipts, avgAmount };
+    // Allocation status counts
+    const unallocated = safeReceipts.filter((r) => {
+      const status = r.allocationStatus || (!r.receiptType ? "ALLOCATED" : "UNALLOCATED");
+      return status === "UNALLOCATED";
+    }).length;
+    const partiallyAllocated = safeReceipts.filter((r) => r.allocationStatus === "PARTIAL").length;
+    const fullyAllocated = safeReceipts.filter((r) => {
+      const status = r.allocationStatus || (!r.receiptType ? "ALLOCATED" : "UNALLOCATED");
+      return status === "ALLOCATED";
+    }).length;
+    const totalUnallocatedAmount = safeReceipts.reduce(
+      (sum, r) => sum + (Number(r.unallocatedAmount) || 0), 0
+    );
+    return { totalReceipts, totalAmount, todayReceipts, unallocated, partiallyAllocated, fullyAllocated, totalUnallocatedAmount };
   }, [safeReceipts]);
 
   const sortedAndFilteredReceipts = useMemo(() => {
@@ -715,6 +728,22 @@ const handleInvoiceAmountChange = useCallback(
     }
     return filtered;
   }, [safeReceipts, searchTerm, sortConfig]);
+
+  // ── Allocation Workflow View (Stage 2) ──
+  if (allocatingReceipt) {
+    return (
+      <ReceiptAllocation
+        receipt={allocatingReceipt}
+        onBack={() => setAllocatingReceipt(null)}
+        onSuccess={() => {
+          setAllocatingReceipt(null);
+          fetchReceipts();
+          showToastMessage("Receipt allocation completed successfully!", "success");
+        }}
+        showToast={showToastMessage}
+      />
+    );
+  }
 
   if (selectedReceipt) {
     return (
@@ -824,15 +853,26 @@ const handleInvoiceAmountChange = useCallback(
             subText="All time records"
           />
           <StatCard
-            title="Today's Receipts"
-            count={receiptStats.todayReceipts}
-            icon={<Calendar size={24} />}
-            bgColor="bg-blue-50"
-            textColor="text-blue-700"
-            borderColor="border-blue-200"
-            iconBg="bg-blue-100"
-            iconColor="text-blue-600"
-            subText="Current day activity"
+            title="🟢 Allocated"
+            count={receiptStats.fullyAllocated}
+            icon={<CheckCircle size={24} />}
+            bgColor="bg-green-50"
+            textColor="text-green-700"
+            borderColor="border-green-200"
+            iconBg="bg-green-100"
+            iconColor="text-green-600"
+            subText="Fully allocated receipts"
+          />
+          <StatCard
+            title="🔴 Unallocated"
+            count={receiptStats.unallocated}
+            icon={<AlertCircle size={24} />}
+            bgColor="bg-red-50"
+            textColor="text-red-700"
+            borderColor="border-red-200"
+            iconBg="bg-red-100"
+            iconColor="text-red-600"
+            subText={<>{formatCurrency(receiptStats.totalUnallocatedAmount)} pending</>}
           />
           <StatCard
             title="Total Amount"
@@ -844,17 +884,6 @@ const handleInvoiceAmountChange = useCallback(
             iconBg="bg-purple-100"
             iconColor="text-purple-600"
             subText="All collected payments"
-          />
-          <StatCard
-            title="Avg Receipt Value"
-            count={formatCurrency(receiptStats.avgAmount, "text-indigo-700")}
-            icon={<Banknote size={24} />}
-            bgColor="bg-indigo-50"
-            textColor="text-indigo-700"
-            borderColor="border-indigo-200"
-            iconBg="bg-indigo-100"
-            iconColor="text-indigo-600"
-            subText="Per receipt average"
           />
         </div>
       </div>
@@ -933,10 +962,10 @@ const handleInvoiceAmountChange = useCallback(
                     { key: "voucherNo", label: "Voucher No" },
                     { key: "date", label: "Date" },
                     { key: "customerName", label: "Customer" },
+                    { key: "allocationStatus", label: "Allocation" },
                     { key: "linkedInvoices", label: "Linked Invoices" },
                     { key: "toAccountId", label: "Deposit Account" },
                     { key: "amount", label: "Amount" },
-                    { key: "narration", label: "Narration" },
                     { key: null, label: "Actions" },
                   ].map((col) => (
                     <th
@@ -957,7 +986,17 @@ const handleInvoiceAmountChange = useCallback(
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {sortedAndFilteredReceipts.map((r) => (
+                {sortedAndFilteredReceipts.map((r) => {
+                  // Derive allocation status with legacy normalization
+                  const allocStatus = r.allocationStatus || (r.receiptType === "LEGACY" ? "ALLOCATED" : (!r.receiptType ? "ALLOCATED" : "UNALLOCATED"));
+                  const isLegacy = r.isLegacy || r.receiptType === "LEGACY" || (!r.receiptType && !r.allocationStatus);
+                  const allocBadge = {
+                    UNALLOCATED: { color: "bg-red-100 text-red-700 border-red-200", icon: "🔴", label: "Unallocated" },
+                    PARTIAL: { color: "bg-yellow-100 text-yellow-700 border-yellow-200", icon: "🟡", label: "Partial" },
+                    ALLOCATED: { color: "bg-green-100 text-green-700 border-green-200", icon: "🟢", label: "Allocated" },
+                  }[allocStatus] || { color: "bg-gray-100 text-gray-600", icon: "⚪", label: allocStatus };
+
+                  return (
                   <tr
                     key={r._id}
                     className="hover:bg-gradient-to-r hover:from-purple-50 hover:to-blue-50 transition-all duration-200"
@@ -983,9 +1022,24 @@ const handleInvoiceAmountChange = useCallback(
                         </div>
                       </div>
                     </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${allocBadge.color}`}>
+                          <span className="mr-1">{allocBadge.icon}</span> {allocBadge.label}
+                        </span>
+                        {isLegacy && (
+                          <span className="text-[10px] text-gray-400 font-medium">LEGACY</span>
+                        )}
+                        {!isLegacy && allocStatus !== "ALLOCATED" && (
+                          <span className="text-[10px] text-gray-500">
+                            {formatCurrency(r.unallocatedAmount ?? 0)} remaining
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
                       <div className="flex flex-wrap gap-1">
-                        {asArray(r.linkedInvoices).map((invoice, idx) => (
+                        {asArray(r.linkedInvoices).length > 0 ? asArray(r.linkedInvoices).map((invoice, idx) => (
                           <span
                             key={idx}
                             className="px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-xs font-medium flex items-center"
@@ -1001,7 +1055,9 @@ const handleInvoiceAmountChange = useCallback(
                               </span>
                             )}
                           </span>
-                        ))}
+                        )) : (
+                          <span className="text-xs text-gray-400 italic">No invoices linked</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -1015,22 +1071,32 @@ const handleInvoiceAmountChange = useCallback(
                     <td className="px-6 py-4 text-sm text-gray-900 font-medium">
                       {formatCurrency(r.totalAmount ?? r.amount)}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
-                      {r.narration || "-"}
-                    </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center justify-center">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => setViewVoucher(r)}
-                          className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                          title="View receipt voucher"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 hover:text-blue-900 rounded-lg transition-all duration-200"
+                          title="View receipt voucher details"
                         >
-                          <Eye size={18} />
+                          <Eye size={14} />
+                          <span>View</span>
                         </button>
+                        {/* Allocate button: only for STANDARD receipts that are not fully allocated */}
+                        {!isLegacy && allocStatus !== "ALLOCATED" && (
+                          <button
+                            onClick={() => setAllocatingReceipt(r)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-lg shadow-sm transition-all duration-200"
+                            title="Allocate receipt amount to invoices"
+                          >
+                            <ArrowUpRight size={14} />
+                            <span>Allocate</span>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1204,15 +1270,25 @@ const handleInvoiceAmountChange = useCallback(
 
                 {/* ========== AMOUNT & NARRATION SECTION ========== */}
                 <FormInput
-                  label="Total Amount"
-                  icon={DollarSign}
+                  label="Total Amount (AED)"
+                  icon={Banknote}
                   type="number"
                   name="amount"
                   value={formData.amount}
-                  readOnly
+                  onChange={asArray(formData.linkedInvoices).length > 0 ? undefined : handleChange}
+                  readOnly={asArray(formData.linkedInvoices).length > 0}
                   error={errors.amount}
-                  className="bg-gray-50 text-gray-500"
+                  required
+                  className={asArray(formData.linkedInvoices).length > 0 ? "bg-gray-50 text-gray-500" : ""}
                 />
+                {asArray(formData.linkedInvoices).length === 0 && (
+                  <div className="md:col-span-2">
+                    <p className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center">
+                      <AlertTriangle size={14} className="mr-2 flex-shrink-0" />
+                      No invoices selected. Receipt will be created as <strong className="mx-1">UNALLOCATED</strong>. You can allocate to invoices later.
+                    </p>
+                  </div>
+                )}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     <FileText size={16} className="inline mr-2" /> Narration

@@ -43,14 +43,14 @@ export const badgeClassForMode = (mode) => {
 
 export const iconForMode = (mode, LucideIcons) => {
   const m = displayMode(mode);
-  const { DollarSign, Building, FileText, CreditCard } = LucideIcons;
+  const { Banknote, Building, FileText, CreditCard } = LucideIcons;
   const map = {
-    Cash: <DollarSign size={14} className="text-emerald-600" />,
+    Cash: <Banknote size={14} className="text-emerald-600" />,
     Bank: <Building size={14} className="text-blue-600" />,
     Cheque: <FileText size={14} className="text-purple-600" />,
     Online: <CreditCard size={14} className="text-indigo-600" />,
   };
-  return map[m] || <DollarSign size={14} className="text-slate-600" />;
+  return map[m] || <Banknote size={14} className="text-slate-600" />;
 };
 
 export const formatCurrency = (amount, colorClass = "text-gray-900") => {

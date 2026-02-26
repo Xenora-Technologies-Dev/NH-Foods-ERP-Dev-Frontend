@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   User,
   Lock,
@@ -6,23 +6,16 @@ import {
   EyeOff,
   ArrowRight,
   Shield,
-  Zap,
   Building2,
   CheckCircle,
-  Smartphone,
-  Monitor,
-  Globe,
-  Layers,
-  LayoutDashboard,
-  TrendingUp,
-  Users,
-  Package,
-  DollarSign,
-  BarChart3,
-  Settings,
-  Activity,
   AlertCircle,
   X,
+  BarChart3,
+  Package,
+  DollarSign,
+  Users,
+  TrendingUp,
+  ClipboardList,
 } from "lucide-react";
 import axiosInstance from "../../axios/axios";
 
@@ -34,48 +27,18 @@ const ERPLogin = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [currentFeature, setCurrentFeature] = useState(0);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const canvasRef = useRef(null);
 
-  const features = [
-    {
-      icon: <LayoutDashboard className="w-8 h-8" />,
-      title: "Comprehensive Dashboard",
-      description: "Real-time insights at your fingertips",
-    },
-    {
-      icon: <TrendingUp className="w-8 h-8" />,
-      title: "Advanced Analytics",
-      description: "Data-driven decision making",
-    },
-    {
-      icon: <Users className="w-8 h-8" />,
-      title: "Team Collaboration",
-      description: "Seamless workflow management",
-    },
-    {
-      icon: <Package className="w-8 h-8" />,
-      title: "Inventory Control",
-      description: "Smart stock management",
-    },
-    {
-      icon: <DollarSign className="w-8 h-8" />,
-      title: "Financial Tracking",
-      description: "Complete financial oversight",
-    },
-    {
-      icon: <Settings className="w-8 h-8" />,
-      title: "Customizable Solutions",
-      description: "Tailored to your business needs",
-    },
-  ];
-
-  const stats = [
-    { number: "50K+", label: "Active Users" },
-    { number: "99.9%", label: "Uptime" },
-    { number: "24/7", label: "Support" },
+  const cubeFaces = [
+    { icon: <BarChart3 className="w-7 h-7" />, label: "Analytics" },
+    { icon: <Package className="w-7 h-7" />, label: "Inventory" },
+    { icon: <DollarSign className="w-7 h-7" />, label: "Finance" },
+    { icon: <Users className="w-7 h-7" />, label: "HR & Team" },
+    { icon: <TrendingUp className="w-7 h-7" />, label: "Sales" },
+    { icon: <ClipboardList className="w-7 h-7" />, label: "Purchase" },
   ];
 
   // Token management functions
@@ -236,13 +199,63 @@ const ERPLogin = () => {
     };
   }, []);
 
-  // Feature carousel effect
+  // 3D particle canvas
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentFeature((prev) => (prev + 1) % features.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [features.length]);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    let animId;
+    const resize = () => { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; };
+    resize();
+    window.addEventListener("resize", resize);
+
+    const particles = Array.from({ length: 60 }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      z: Math.random() * 400,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      vz: (Math.random() - 0.5) * 0.5,
+    }));
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const cx = canvas.width / 2, cy = canvas.height / 2;
+      for (const p of particles) {
+        p.x += p.vx; p.y += p.vy; p.z += p.vz;
+        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+        if (p.z < 0 || p.z > 400) p.vz *= -1;
+        const scale = 400 / (400 + p.z);
+        const sx = cx + (p.x - cx) * scale;
+        const sy = cy + (p.y - cy) * scale;
+        const r = Math.max(1, 3 * scale);
+        const alpha = 0.15 + 0.35 * scale;
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(99, 102, 241, ${alpha})`;
+        ctx.fill();
+      }
+      // connections
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 120) {
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `rgba(99, 102, 241, ${0.06 * (1 - dist / 120)})`;
+            ctx.stroke();
+          }
+        }
+      }
+      animId = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => { cancelAnimationFrame(animId); window.removeEventListener("resize", resize); };
+  }, []);
 
   // Mouse position tracking
   useEffect(() => {
@@ -380,73 +393,120 @@ const ERPLogin = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white relative overflow-hidden">
-      {/* Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-gray-200/20 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-gray-300/20 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-gray-100/30 rounded-full blur-2xl animate-pulse"></div>
-      </div>
+    <div className="min-h-screen relative overflow-hidden flex" style={{ background: "linear-gradient(135deg, #0f0c29 0%, #1a1a4e 40%, #24243e 100%)" }}>
+      {/* CSS animations */}
+      <style>{`
+        @keyframes rotateCube {
+          0%   { transform: rotateX(-20deg) rotateY(0deg); }
+          25%  { transform: rotateX(-20deg) rotateY(90deg); }
+          50%  { transform: rotateX(-20deg) rotateY(180deg); }
+          75%  { transform: rotateX(-20deg) rotateY(270deg); }
+          100% { transform: rotateX(-20deg) rotateY(360deg); }
+        }
+        @keyframes float3d {
+          0%, 100% { transform: translateY(0) translateZ(0) rotateX(0); }
+          50% { transform: translateY(-20px) translateZ(20px) rotateX(5deg); }
+        }
+        @keyframes orbitRing {
+          0% { transform: rotateX(70deg) rotateZ(0deg); }
+          100% { transform: rotateX(70deg) rotateZ(360deg); }
+        }
+        @keyframes glowPulse {
+          0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.3), 0 0 60px rgba(99, 102, 241, 0.1); }
+          50% { box-shadow: 0 0 40px rgba(99, 102, 241, 0.5), 0 0 80px rgba(99, 102, 241, 0.2); }
+        }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        .cube-scene { perspective: 800px; }
+        .cube {
+          width: 140px; height: 140px; position: relative;
+          transform-style: preserve-3d;
+          animation: rotateCube 16s linear infinite;
+        }
+        .cube-face {
+          position: absolute; width: 140px; height: 140px;
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          background: rgba(99, 102, 241, 0.08);
+          backdrop-filter: blur(12px);
+          border: 1px solid rgba(129, 140, 248, 0.25);
+          border-radius: 16px; color: #a5b4fc;
+          font-size: 11px; font-weight: 600; letter-spacing: 0.05em;
+        }
+        .cube-face.front  { transform: translateZ(70px); }
+        .cube-face.back   { transform: rotateY(180deg) translateZ(70px); }
+        .cube-face.left   { transform: rotateY(-90deg) translateZ(70px); }
+        .cube-face.right  { transform: rotateY(90deg) translateZ(70px); }
+        .cube-face.top    { transform: rotateX(90deg) translateZ(70px); }
+        .cube-face.bottom { transform: rotateX(-90deg) translateZ(70px); }
+        .orbit-ring {
+          position: absolute; width: 260px; height: 260px;
+          border: 1px solid rgba(129, 140, 248, 0.15);
+          border-radius: 50%;
+          animation: orbitRing 12s linear infinite;
+        }
+        .orbit-dot {
+          position: absolute; width: 8px; height: 8px;
+          background: #818cf8; border-radius: 50%;
+          box-shadow: 0 0 12px rgba(129, 140, 248, 0.6);
+          top: -4px; left: 50%; margin-left: -4px;
+        }
+        .glass-card {
+          background: rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(24px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 24px;
+        }
+        .input-glass {
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 14px;
+          transition: all 0.3s;
+          color: #e2e8f0;
+        }
+        .input-glass:focus {
+          background: rgba(255, 255, 255, 0.1);
+          border-color: rgba(129, 140, 248, 0.5);
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+          outline: none;
+        }
+        .input-glass::placeholder { color: rgba(148, 163, 184, 0.6); }
+        .btn-primary {
+          background: linear-gradient(135deg, #6366f1, #818cf8);
+          border-radius: 14px; color: white; font-weight: 600;
+          transition: all 0.3s; position: relative; overflow: hidden;
+        }
+        .btn-primary:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 30px rgba(99, 102, 241, 0.35);
+        }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .animate-slideUp { animation: slideUp 0.6s ease-out both; }
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
+      `}</style>
 
-      {/* Floating Icons Animation */}
-      <div className="absolute inset-0 pointer-events-none">
-        {[
-          { icon: <Activity className="w-4 h-4" />, top: "10%", left: "10%" },
-          { icon: <BarChart3 className="w-5 h-5" />, top: "20%", right: "15%" },
-          { icon: <Globe className="w-4 h-4" />, bottom: "25%", left: "8%" },
-          { icon: <Layers className="w-5 h-5" />, bottom: "15%", right: "12%" },
-          { icon: <Shield className="w-4 h-4" />, top: "40%", left: "5%" },
-          { icon: <Zap className="w-5 h-5" />, top: "60%", right: "8%" },
-        ].map((item, index) => (
-          <div
-            key={index}
-            className="absolute text-gray-400/30 animate-bounce"
-            style={{
-              top: item.top,
-              left: item.left,
-              right: item.right,
-              bottom: item.bottom,
-              animationDelay: `${index * 0.5}s`,
-              animationDuration: "3s",
-            }}
-          >
-            {item.icon}
-          </div>
-        ))}
-      </div>
+      {/* 3D Particle Canvas (background) */}
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }} />
 
-      {/* Mouse Follower */}
-      <div
-        className="fixed w-96 h-96 bg-gray-200/10 rounded-full blur-3xl pointer-events-none transition-all duration-1000 ease-out"
-        style={{
-          left: mousePosition.x - 192,
-          top: mousePosition.y - 192,
-        }}
-      ></div>
+      {/* Radial glow following mouse */}
+      <div className="fixed pointer-events-none transition-all duration-700 ease-out"
+        style={{ left: mousePosition.x - 300, top: mousePosition.y - 300, width: 600, height: 600,
+          background: "radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)",
+          borderRadius: "50%", zIndex: 1 }} />
 
-      {/* Error/Success Messages */}
+      {/* Error/Success Toast */}
       {(error || success) && (
-        <div className="fixed top-4 right-4 z-50 max-w-sm">
-          <div
-            className={`p-4 rounded-lg shadow-lg border ${
-              error
-                ? "bg-red-50 border-red-200 text-red-800"
-                : "bg-green-50 border-green-200 text-green-800"
-            }`}
-          >
-            <div className="flex items-start justify-between">
+        <div className="fixed top-6 right-6 z-50 max-w-sm animate-slideUp">
+          <div className={`p-4 rounded-2xl shadow-2xl border backdrop-blur-xl ${
+            error ? "bg-red-500/10 border-red-500/30 text-red-300" : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+          }`}>
+            <div className="flex items-center justify-between">
               <div className="flex items-center">
-                {error ? (
-                  <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0" />
-                ) : (
-                  <CheckCircle className="w-5 h-5 mr-2 flex-shrink-0" />
-                )}
+                {error ? <AlertCircle className="w-5 h-5 mr-3" /> : <CheckCircle className="w-5 h-5 mr-3" />}
                 <span className="text-sm font-medium">{error || success}</span>
               </div>
-              <button
-                onClick={dismissMessage}
-                className="ml-2 text-gray-400 hover:text-gray-600"
-              >
+              <button onClick={dismissMessage} className="ml-3 text-white/40 hover:text-white/70">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -454,259 +514,162 @@ const ERPLogin = () => {
         </div>
       )}
 
-      <div className="relative z-10 min-h-screen flex">
-        {/* Left Side - Feature Showcase */}
-        <div className="hidden lg:flex lg:w-1/2 pl-32 bg-gray-100/50 backdrop-blur-xl relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-200/20 to-gray-300/20"></div>
+      {/* LEFT: 3D Showcase */}
+      <div className="hidden lg:flex lg:w-1/2 relative items-center justify-center" style={{ zIndex: 2 }}>
+        <div className="flex flex-col items-center">
+          {/* Brand */}
+          <div className="mb-14 text-center animate-slideUp">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center"
+              style={{ background: "linear-gradient(135deg, #6366f1, #818cf8)", animation: "glowPulse 3s ease-in-out infinite" }}>
+              <Building2 className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-4xl font-bold text-white tracking-tight mb-2">ERP NEXUS</h1>
+            <p className="text-indigo-300/80 text-sm tracking-wide">Enterprise Resource Planning</p>
+          </div>
 
-          <div className="relative z-10 flex flex-col justify-center items-center p-12 text-center">
-            {/* Logo and Branding */}
-            <div className="mb-12">
-              <div className="w-20 h-20 bg-gray-200 rounded-3xl flex items-center justify-center shadow-2xl mb-6 mx-auto transform hover:scale-110 transition-all duration-500">
-                <Building2 className="w-10 h-10 text-gray-800" />
-              </div>
-              <h1 className="text-4xl font-bold text-gray-800 mb-4">
-                ERP NEXUS
-              </h1>
-              <p className="text-xl text-gray-600 mb-8">Enterprise System</p>
-
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-8 mb-12">
-                {stats.map((stat, index) => (
-                  <div key={index} className="text-center">
-                    <div className="text-3xl font-bold text-gray-800 mb-2">
-                      {stat.number}
-                    </div>
-                    <div className="text-sm text-gray-600">{stat.label}</div>
+          {/* 3D Cube + orbit ring */}
+          <div className="relative flex items-center justify-center animate-slideUp delay-1" style={{ width: 280, height: 280 }}>
+            <div className="orbit-ring" style={{ top: 10, left: 10 }}>
+              <div className="orbit-dot"></div>
+            </div>
+            <div className="orbit-ring" style={{ top: 10, left: 10, animationDirection: "reverse", animationDuration: "18s", opacity: 0.5 }}>
+              <div className="orbit-dot" style={{ background: "#c084fc" }}></div>
+            </div>
+            <div className="cube-scene">
+              <div className="cube">
+                {["front", "back", "right", "left", "top", "bottom"].map((face, i) => (
+                  <div key={face} className={`cube-face ${face}`}>
+                    {cubeFaces[i].icon}
+                    <span className="mt-2">{cubeFaces[i].label}</span>
                   </div>
                 ))}
               </div>
             </div>
+          </div>
 
-            {/* Feature Carousel */}
-            <div className="w-full max-w-md">
-              <div className="bg-gray-100/50 backdrop-blur-xl rounded-3xl p-8 border border-gray-200/50 shadow-2xl">
-                <div className="flex items-center justify-center mb-6 text-gray-700">
-                  {features[currentFeature].icon}
-                </div>
-                <h3 className="text-2xl font-bold text-gray-800 mb-4">
-                  {features[currentFeature].title}
-                </h3>
-                <p className="text-gray-600">
-                  {features[currentFeature].description}
-                </p>
+          {/* Stats bar */}
+          <div className="mt-14 flex gap-10 animate-slideUp delay-2">
+            {[
+              { n: "50K+", l: "Users" },
+              { n: "99.9%", l: "Uptime" },
+              { n: "24/7", l: "Support" },
+            ].map((s, i) => (
+              <div key={i} className="text-center">
+                <div className="text-2xl font-bold text-white">{s.n}</div>
+                <div className="text-xs text-indigo-400/70 mt-1">{s.l}</div>
               </div>
+            ))}
+          </div>
 
-              {/* Feature Indicators */}
-              <div className="flex justify-center mt-8 space-x-2">
-                {features.map((_, index) => (
-                  <div
-                    key={index}
-                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                      index === currentFeature
-                        ? "bg-gray-600 w-8"
-                        : "bg-gray-300"
-                    }`}
-                  ></div>
-                ))}
-              </div>
-            </div>
-
-            {/* Trust Indicators */}
-            <div className="mt-12 flex items-center space-x-8">
-              {[
-                { icon: <Shield className="w-6 h-6" />, text: "Secure" },
-                { icon: <Monitor className="w-6 h-6" />, text: "Reliable" },
-                {
-                  icon: <Smartphone className="w-6 h-6" />,
-                  text: "Mobile Ready",
-                },
-              ].map((item, index) => (
-                <div
-                  key={index}
-                  className="flex items-center space-x-2 text-gray-600"
-                >
-                  {item.icon}
-                  <span className="text-sm font-medium">{item.text}</span>
-                </div>
-              ))}
-            </div>
+          {/* Trust strip */}
+          <div className="mt-10 flex items-center gap-6 text-indigo-400/60 text-xs animate-slideUp delay-3">
+            <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5" /> Encrypted</span>
+            <span className="flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> SOC2 Ready</span>
+            <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5" /> GDPR</span>
           </div>
         </div>
+      </div>
 
-        {/* Right Side - Login Form */}
-        <div className="w-full lg:w-1/2 flex items-center justify-center p-8 relative">
+      {/* RIGHT: Login Form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-10 relative" style={{ zIndex: 2 }}>
+        <div className="w-full max-w-md">
+
           {/* Mobile Logo */}
-          <div className="lg:hidden absolute top-8 left-1/2 transform -translate-x-1/2">
-            <div className="w-16 h-16 bg-gray-200 rounded-2xl flex items-center justify-center shadow-lg mb-4">
-              <Building2 className="w-8 h-8 text-gray-800" />
+          <div className="lg:hidden text-center mb-10 animate-slideUp">
+            <div className="w-14 h-14 mx-auto mb-3 rounded-xl flex items-center justify-center"
+              style={{ background: "linear-gradient(135deg, #6366f1, #818cf8)" }}>
+              <Building2 className="w-7 h-7 text-white" />
             </div>
-            <div className="text-center">
-              <h1 className="text-2xl font-bold text-gray-800">ERP NEXUS</h1>
-              <p className="text-gray-600">Enterprise System</p>
-            </div>
+            <h1 className="text-2xl font-bold text-white">ERP NEXUS</h1>
           </div>
 
-          <div className="w-full max-w-md mt-24 lg:mt-0">
-            {/* Welcome Message */}
+          {/* Form Card */}
+          <div className="glass-card p-8 sm:p-10 animate-slideUp delay-1">
             <div className="text-center mb-8">
-              <h2 className="text-3xl lg:text-4xl font-bold text-gray-800 mb-4">
-                Welcome Back
-              </h2>
-              <p className="text-gray-600">
-                Sign in to access your ERP dashboard
-              </p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">Welcome Back</h2>
+              <p className="text-slate-400 text-sm">Sign in to your ERP dashboard</p>
             </div>
 
-            {/* Login Form */}
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Email Field */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Email Address
-                </label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-gray-400 group-focus-within:text-gray-600 transition-colors" />
-                  </div>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    onKeyPress={handleKeyPress}
-                    disabled={isLoading}
-                    className="w-full pl-12 pr-4 py-4 bg-gray-100/50 backdrop-blur-xl border border-gray-200/50 rounded-2xl focus:outline-none focus:ring-2 focus:ring-gray-300 focus:border-transparent transition-all duration-300 text-gray-800 placeholder-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    placeholder="Enter your email"
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Email */}
+              <div className="animate-slideUp delay-2">
+                <label className="block text-xs font-medium text-slate-400 mb-2 ml-1">Email Address</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
+                  <input type="email" name="email" value={formData.email} onChange={handleInputChange}
+                    onKeyPress={handleKeyPress} disabled={isLoading} placeholder="you@company.com"
                     autoComplete="email"
-                  />
+                    className="w-full pl-12 pr-4 py-3.5 input-glass text-sm disabled:opacity-50" />
                 </div>
               </div>
 
-              {/* Password Field */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Password
-                </label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-gray-400 group-focus-within:text-gray-600 transition-colors" />
-                  </div>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    name="password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    onKeyPress={handleKeyPress}
-                    disabled={isLoading}
-                    className="w-full pl-12 pr-12 py-4 bg-gray-100/50 backdrop-blur-xl border border-gray-200/50 rounded-2xl focus:outline-none focus:ring-2 focus:ring-gray-300 focus:border-transparent transition-all duration-300 text-gray-800 placeholder-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    placeholder="Enter your password"
-                    autoComplete="current-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    disabled={isLoading}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors disabled:cursor-not-allowed"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-5 w-5" />
-                    ) : (
-                      <Eye className="h-5 w-5" />
-                    )}
+              {/* Password */}
+              <div className="animate-slideUp delay-3">
+                <label className="block text-xs font-medium text-slate-400 mb-2 ml-1">Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
+                  <input type={showPassword ? "text" : "password"} name="password" value={formData.password}
+                    onChange={handleInputChange} onKeyPress={handleKeyPress} disabled={isLoading}
+                    placeholder="Enter password" autoComplete="current-password"
+                    className="w-full pl-12 pr-12 py-3.5 input-glass text-sm disabled:opacity-50" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} disabled={isLoading}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors">
+                    {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
                   </button>
                 </div>
               </div>
 
-              {/* Remember Me & Forgot Password */}
-              <div className="flex items-center justify-between">
-                <label className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    name="rememberMe"
-                    checked={formData.rememberMe}
-                    onChange={handleInputChange}
-                    disabled={isLoading}
-                    className="w-4 h-4 text-gray-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-300 focus:ring-2 disabled:cursor-not-allowed"
-                  />
-                  <span className="text-sm text-gray-700">Remember me</span>
+              {/* Options row */}
+              <div className="flex items-center justify-between animate-slideUp delay-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" name="rememberMe" checked={formData.rememberMe}
+                    onChange={handleInputChange} disabled={isLoading}
+                    className="w-3.5 h-3.5 rounded border-slate-600 text-indigo-500 focus:ring-indigo-500/30 bg-transparent" />
+                  <span className="text-xs text-slate-400">Remember me</span>
                 </label>
-                <button
-                  type="button"
-                  className="text-sm text-gray-600 hover:text-gray-800 transition-colors"
-                >
+                <button type="button" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
                   Forgot password?
                 </button>
               </div>
 
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isLoading || !formData.email || !formData.password}
-                className="group w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-4 px-6 rounded-2xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 shadow-lg hover:shadow-xl transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-              >
-                <div className="flex items-center justify-center space-x-2">
-                  {isLoading ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin"></div>
-                      <span>Signing In...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Sign In</span>
-                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </>
-                  )}
-                </div>
+              {/* Submit */}
+              <button type="submit" disabled={isLoading || !formData.email || !formData.password}
+                className="w-full py-3.5 btn-primary text-sm flex items-center justify-center gap-2 mt-2">
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    Sign In
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </form>
 
-            {/* Divider */}
-            <div className="my-8 flex items-center">
-              <div className="flex-1 border-t border-gray-200"></div>
-              <span className="px-4 text-sm text-gray-500">or</span>
-              <div className="flex-1 border-t border-gray-200"></div>
+            <div className="mt-7 text-center">
+              <p className="text-xs text-slate-500">
+                Don&apos;t have an account?{" "}
+                <button className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
+                  Contact Administrator
+                </button>
+              </p>
             </div>
+          </div>
 
-            {/* Alternative Login Options */}
-            <div className="grid grid-cols-2 gap-4">
-              <button className="group flex items-center justify-center px-4 py-3 bg-gray-100/50 backdrop-blur-xl border border-gray-200/50 rounded-xl hover:bg-gray-200/50 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-gray-300">
-                <div className="w-5 h-5 bg-gray-600 rounded mr-3"></div>
-                <span className="text-sm font-medium text-gray-700">SSO</span>
-              </button>
-              <button className="group flex items-center justify-center px-4 py-3 bg-gray-100/50 backdrop-blur-xl border border-gray-200/50 rounded-xl hover:bg-gray-200/50 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-gray-300">
-                <Shield className="w-5 h-5 text-gray-600 mr-3" />
-                <span className="text-sm font-medium text-gray-700">2FA</span>
-              </button>
-            </div>
-
-            {/* Footer */}
-            <div className="mt-8 text-center text-sm text-gray-600">
-              Don't have an account?{" "}
-              <button className="text-gray-800 hover:text-gray-600 font-medium transition-colors">
-                Contact Administrator
-              </button>
-            </div>
-
-            {/* Trust Badge */}
-            <div className="mt-6 flex items-center justify-center space-x-2 text-gray-500">
-              <CheckCircle className="w-4 h-4" />
-              <span className="text-xs">
-                Secured with enterprise-grade encryption
-              </span>
-            </div>
+          {/* Bottom badge */}
+          <div className="mt-6 flex items-center justify-center gap-2 text-slate-600 animate-slideUp delay-4">
+            <Shield className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Enterprise-grade encryption</span>
           </div>
         </div>
       </div>
 
-      {/* Version Info */}
-      <div className="absolute bottom-4 left-4 text-xs text-gray-400">
-        ERP NEXUS v2.4.1
-      </div>
-
-      <div className="absolute bottom-4 right-4 text-xs text-gray-400">
-        © 2025 Enterprise System
-      </div>
+      {/* Version / Copyright */}
+      <div className="absolute bottom-4 left-5 text-[11px] text-slate-700 z-10">ERP NEXUS v4.0.0</div>
+      <div className="absolute bottom-4 right-5 text-[11px] text-slate-700 z-10">&copy; 2026 XENORA Technologies</div>
     </div>
   );
 };

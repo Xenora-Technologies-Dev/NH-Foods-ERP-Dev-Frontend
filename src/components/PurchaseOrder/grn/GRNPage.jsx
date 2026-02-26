@@ -291,7 +291,11 @@ const GRNManagement = () => {
       cancelled: "CANCELLED",
     };
     const tabStatus = tabStatusMap[activeTab];
-    return grns.filter((grn) => grn.status === tabStatus);
+    // Use case-insensitive comparison to handle legacy data with mixed casing
+    return grns.filter((grn) => {
+      const s = String(grn.status || "").toUpperCase();
+      return s === tabStatus;
+    });
   }, [grns, activeTab]);
 
   // Filter pending POs for selection (vendor already filtered via API call)

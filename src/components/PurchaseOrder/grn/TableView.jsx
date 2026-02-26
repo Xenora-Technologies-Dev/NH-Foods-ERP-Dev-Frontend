@@ -11,9 +11,10 @@ import {
   CheckCircle,
   Clock,
 } from "lucide-react";
+import { normalizeGRNStatus, GRN_STATUS } from "../../../utils/statusNormalizer";
 
 const TableView = ({ grns, onView, onConvert, onCancel, onDelete }) => {
-  const getStatusBadge = (status, converted) => {
+  const getStatusBadge = (rawStatus, converted) => {
     if (converted) {
       return (
         <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium flex items-center gap-1">
@@ -23,29 +24,30 @@ const TableView = ({ grns, onView, onConvert, onCancel, onDelete }) => {
       );
     }
 
+    const status = normalizeGRNStatus(rawStatus);
     switch (status) {
-      case "RECEIVED":
+      case GRN_STATUS.RECEIVED:
         return (
           <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium flex items-center gap-1">
             <Clock className="w-3 h-3" />
             Received
           </span>
         );
-      case "CONVERTED":
+      case GRN_STATUS.CONVERTED:
         return (
           <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium flex items-center gap-1">
             <CheckCircle className="w-3 h-3" />
             Converted
           </span>
         );
-      case "CANCELLED":
+      case GRN_STATUS.CANCELLED:
         return (
           <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium flex items-center gap-1">
             <XCircle className="w-3 h-3" />
             Cancelled
           </span>
         );
-      case "DRAFT":
+      case GRN_STATUS.DRAFT:
         return (
           <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
             Draft
@@ -54,7 +56,7 @@ const TableView = ({ grns, onView, onConvert, onCancel, onDelete }) => {
       default:
         return (
           <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
-            {status}
+            {rawStatus}
           </span>
         );
     }
@@ -144,7 +146,7 @@ const TableView = ({ grns, onView, onConvert, onCancel, onDelete }) => {
                     <Eye className="w-4 h-4" />
                   </button>
                   
-                  {grn.status === "RECEIVED" && !grn.convertedToPurchase && (
+                  {normalizeGRNStatus(grn.status) === GRN_STATUS.RECEIVED && !grn.convertedToPurchase && (
                     <button
                       onClick={() => onConvert(grn._id)}
                       className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition"
@@ -154,7 +156,7 @@ const TableView = ({ grns, onView, onConvert, onCancel, onDelete }) => {
                     </button>
                   )}
                   
-                  {grn.status === "RECEIVED" && !grn.convertedToPurchase && (
+                  {normalizeGRNStatus(grn.status) === GRN_STATUS.RECEIVED && !grn.convertedToPurchase && (
                     <button
                       onClick={() => onCancel(grn._id)}
                       className="p-2 text-orange-600 hover:bg-orange-100 rounded-lg transition"
@@ -164,7 +166,7 @@ const TableView = ({ grns, onView, onConvert, onCancel, onDelete }) => {
                     </button>
                   )}
                   
-                  {grn.status === "DRAFT" && (
+                  {normalizeGRNStatus(grn.status) === GRN_STATUS.DRAFT && (
                     <button
                       onClick={() => onDelete(grn._id)}
                       className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition"

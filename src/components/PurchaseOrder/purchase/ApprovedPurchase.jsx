@@ -79,7 +79,7 @@ const ApprovedPurchase = () => {
       date: entry.date,
       approvedAt: entry.convertedAt,
       deliveryDate: entry.receivedDate,
-      status: "APPROVED",
+      status: (entry.status || "APPROVED").toUpperCase(),
       totalAmount: Number(entry.totalAmount || 0).toFixed(2),
       items: entry.items || [],
       terms: "",
@@ -139,7 +139,7 @@ const ApprovedPurchase = () => {
         date: entry.date,
         approvedAt: entry.convertedAt,
         deliveryDate: entry.receivedDate,
-        status: entry.status,
+        status: entry.status, // Now reflects actual Transaction status from backend
         totalAmount: Number(entry.totalAmount || 0).toFixed(2),
         items: entry.items || [],
         terms: "",
@@ -153,38 +153,69 @@ const ApprovedPurchase = () => {
         entryType: "GRN", // Mark as GRN-based entry
       }));
 
+      // Build a Set of PO numbers covered by GRN entries for deduplication
+      const grnPoNumbers = new Set();
+      for (const entry of grnResponse.data?.data || []) {
+        const poKey = String(entry.poNumber || "").trim().toLowerCase();
+        if (poKey) grnPoNumbers.add(poKey);
+      }
+
+      // Build GRN cross-reference map for legacy entries that somehow lack sourceGrnId
+      const grnByPoNumber = new Map();
+      for (const entry of grnResponse.data?.data || []) {
+        const poKey = String(entry.poNumber || "").trim().toLowerCase();
+        if (!poKey) continue;
+        if (!grnByPoNumber.has(poKey)) {
+          grnByPoNumber.set(poKey, {
+            grnNumber: entry.grnNumber || null,
+            sourceGrnId: entry.id || null,
+          });
+        }
+      }
+
       // Legacy approved POs (approved directly - not via GRN conversion)
-      // IMPORTANT: Only exclude POs that have sourceGrnId (meaning they were converted via GRN)
-      // We keep POs without sourceGrnId because:
-      // 1. Old entries approved before GRN system - should display
-      // 2. POs with grnGenerated=true but no sourceGrnId - partial GRN, but if APPROVED was set manually before GRN system
+      // Exclude POs that already appear in GRN entries (by PO number) to avoid duplicates
       const legacyEntries = (legacyResponse.data?.data || [])
-        .filter((t) => !t.sourceGrnId) // Only exclude if it was converted via GRN (has sourceGrnId)
-        .map((t) => ({
-          id: t._id,
-          transactionNo: t.transactionNo,
-          orderNumber: t.orderNumber,
-          grnNumber: null, // No GRN for legacy entries
-          poNumber: t.transactionNo || t.orderNumber,
-          vendorId: t.partyId,
-          vendorName: t.party?.vendorName || t.partyName,
-          vendorReference: t.vendorReference || "",
-          date: t.date,
-          approvedAt: t.approvedAt || t.updatedAt,
-          deliveryDate: t.deliveryDate,
-          status: t.status,
-          totalAmount: Number(t.totalAmount || 0).toFixed(2),
-          items: t.items || [],
-          terms: t.terms || "",
-          notes: t.notes || "",
-          createdBy: t.createdBy,
-          createdAt: t.createdAt,
-          invoiceGenerated: t.invoiceGenerated,
-          priority: t.priority || "Medium",
-          sourceGrnNumber: null,
-          sourceGrnId: null,
-          entryType: "LEGACY", // Mark as legacy entry
-        }));
+        .filter((t) => {
+          // If this transaction has sourceGrnId AND its PO number is in GRN entries, skip it
+          const poRef = String(t.orderNumber || t.transactionNo || t.poNumber || "").trim().toLowerCase();
+          if (grnPoNumbers.has(poRef)) return false; // Already covered by GRN entry
+          return true;
+        })
+        .map((t) => {
+          const poRef = t.orderNumber || t.transactionNo || t.poNumber || "";
+          const grnFallback = grnByPoNumber.get(
+            String(poRef).trim().toLowerCase()
+          );
+          const resolvedGrnNumber =
+            t.grnNumber || t.sourceGrnNumber || grnFallback?.grnNumber || null;
+
+          return {
+            id: t._id,
+            transactionNo: t.transactionNo,
+            orderNumber: t.orderNumber,
+            grnNumber: resolvedGrnNumber,
+            poNumber: t.transactionNo || t.orderNumber,
+            vendorId: t.partyId,
+            vendorName: t.party?.vendorName || t.partyName,
+            vendorReference: t.vendorReference || "",
+            date: t.date,
+            approvedAt: t.approvedAt || t.updatedAt,
+            deliveryDate: t.deliveryDate,
+            status: t.status,
+            totalAmount: Number(t.totalAmount || 0).toFixed(2),
+            items: t.items || [],
+            terms: t.terms || "",
+            notes: t.notes || "",
+            createdBy: t.createdBy,
+            createdAt: t.createdAt,
+            invoiceGenerated: t.invoiceGenerated,
+            priority: t.priority || "Medium",
+            sourceGrnNumber: resolvedGrnNumber,
+            sourceGrnId: t.sourceGrnId || grnFallback?.sourceGrnId || null,
+            entryType: resolvedGrnNumber ? "GRN" : "LEGACY",
+          };
+        });
 
       // Combine and sort by date (newest first)
       const allEntries = [...grnEntries, ...legacyEntries].sort(
@@ -243,7 +274,18 @@ const ApprovedPurchase = () => {
   const totalPages = Math.ceil(filteredAndSortedPOs.length / itemsPerPage);
   const paginatedPOs = filteredAndSortedPOs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  const getStatusColor = () => "bg-emerald-100 text-emerald-700 border-emerald-200";
+  const getStatusColor = (status) => {
+    const s = String(status || "").toLowerCase();
+    switch (s) {
+      case "paid":
+        return "bg-emerald-100 text-emerald-700 border-emerald-200";
+      case "partial":
+        return "bg-amber-100 text-amber-700 border-amber-200";
+      case "approved":
+      default:
+        return "bg-emerald-100 text-emerald-700 border-emerald-200";
+    }
+  };
   const getStatusIcon = () => null;
   const getPriorityColor = () => "bg-yellow-500";
 

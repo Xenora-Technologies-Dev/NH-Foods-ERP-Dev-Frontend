@@ -400,7 +400,7 @@ export const exportSalesInvoicesToExcel = (salesInvoices, fileName = 'Sales_Invo
     'Customer': invoice.customerName || invoice.partyName || '-',
     'Invoice Date': invoice.date ? new Date(invoice.date).toLocaleDateString() : '-',
     'Status': invoice.status || '-',
-    'Payment Status': ['PAID', 'PARTIAL'].includes(invoice.status) ? invoice.status : (Number(invoice.paidAmount || 0) > 0 ? (Number(invoice.outstandingAmount || 0) <= 0 ? 'PAID' : 'PARTIAL') : 'UNPAID'),
+    'Payment Status': ['PAID', 'PARTIAL'].includes(String(invoice.status || '').toUpperCase()) ? String(invoice.status).toUpperCase() : (Number(invoice.paidAmount || 0) > 0 ? (Number(invoice.outstandingAmount || 0) <= 0 ? 'PAID' : 'PARTIAL') : 'UNPAID'),
     'Total Amount': invoice.totalAmount ? String(invoice.totalAmount) : '-',
     'Paid Amount': invoice.paidAmount ? String(invoice.paidAmount) : '0',
     'Outstanding': invoice.outstandingAmount ? String(invoice.outstandingAmount) : String((invoice.totalAmount || 0) - (invoice.paidAmount || 0)),
@@ -467,7 +467,7 @@ export const exportPurchaseInvoicesToExcel = (purchaseInvoices, fileName = 'Purc
     'Vendor': invoice.vendorName || invoice.partyName || '-',
     'Invoice Date': invoice.date ? new Date(invoice.date).toLocaleDateString() : '-',
     'Status': invoice.status || '-',
-    'Payment Status': ['PAID', 'PARTIAL'].includes(invoice.status) ? invoice.status : (Number(invoice.paidAmount || 0) > 0 ? (Number(invoice.outstandingAmount || 0) <= 0 ? 'PAID' : 'PARTIAL') : 'UNPAID'),
+    'Payment Status': ['PAID', 'PARTIAL'].includes(String(invoice.status || '').toUpperCase()) ? String(invoice.status).toUpperCase() : (Number(invoice.paidAmount || 0) > 0 ? (Number(invoice.outstandingAmount || 0) <= 0 ? 'PAID' : 'PARTIAL') : 'UNPAID'),
     'Total Amount': invoice.totalAmount ? String(invoice.totalAmount) : '-',
     'Paid Amount': invoice.paidAmount ? String(invoice.paidAmount) : '0',
     'Outstanding': invoice.outstandingAmount ? String(invoice.outstandingAmount) : String((invoice.totalAmount || 0) - (invoice.paidAmount || 0)),
@@ -996,4 +996,153 @@ export const exportLedgerEntriesExcel = (entries, accountInfo = {}, filters = {}
   const acctName = (accountInfo.accountName || 'General').replace(/[^a-zA-Z0-9]/g, '_');
   const stamp = getFileNameDateTimeStamp();
   XLSX.writeFile(wb, `Ledger_${acctName}_${stamp}.xlsx`);
+};
+
+/**
+ * Export Vendor (Debit Account) Ledger to Excel
+ * Used in VendorDetailsPage for individual vendor account export
+ */
+export const exportVendorLedgerExcel = (vendor, ledger, filters = {}) => {
+  if (!ledger || ledger.length === 0) {
+    console.warn('No vendor ledger entries to export');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+  const vendorName = vendor?.name || 'Unknown Vendor';
+
+  const data = [
+    [DEFAULT_COMPANY_NAME],
+    [DEFAULT_COMPANY_ADDRESS],
+    [''],
+    ['VENDOR LEDGER - DEBIT ACCOUNT (ACCOUNTS PAYABLE)'],
+    [''],
+    [`Vendor: ${vendorName}`],
+    [`Vendor ID: ${vendor?.partyId || '-'}`],
+    [`Outstanding Balance: ${CURRENCY} ${formatNumber(vendor?.currentBalance)}`],
+    [''],
+  ];
+
+  if (filters.fromDate) data.push([`From: ${filters.fromDate}`]);
+  if (filters.toDate) data.push([`To: ${filters.toDate}`]);
+  if (filters.status && filters.status !== 'all') data.push([`Status Filter: ${filters.status}`]);
+  if (filters.type && filters.type !== 'all') data.push([`Type Filter: ${filters.type}`]);
+  data.push([`Generated: ${formatDateTime(new Date())}`]);
+  data.push(['']);
+
+  // Table Headers
+  data.push([
+    'Date', 'Type', 'Invoice No', `Debit (${CURRENCY})`, `Credit (${CURRENCY})`,
+    `Balance (${CURRENCY})`, 'Reference', 'Status'
+  ]);
+
+  let totalDebit = 0;
+  let totalCredit = 0;
+
+  ledger.forEach(log => {
+    const isDebit = log.drCr === 'Dr' || log.type.includes('Return') || log.type.includes('Payment');
+    const debitAmt = isDebit ? log.amount : 0;
+    const creditAmt = !isDebit ? log.amount : 0;
+    totalDebit += debitAmt;
+    totalCredit += creditAmt;
+
+    data.push([
+      log.date ? new Date(log.date).toLocaleDateString('en-GB') : '-',
+      log.type || '-',
+      log.invNo || '-',
+      debitAmt > 0 ? formatNumber(debitAmt) : '-',
+      creditAmt > 0 ? formatNumber(creditAmt) : '-',
+      formatNumber(log.balance),
+      log.ref || '-',
+      log.status || '-',
+    ]);
+  });
+
+  data.push(['']);
+  data.push(['TOTALS', '', '', formatNumber(totalDebit), formatNumber(totalCredit), '', '', '']);
+  data.push([`Total Entries: ${ledger.length}`]);
+  data.push([`Closing Balance: ${CURRENCY} ${formatNumber(vendor?.currentBalance)}`]);
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  applyStyles(ws, [12, 20, 18, 16, 16, 16, 18, 10]);
+  XLSX.utils.book_append_sheet(wb, ws, 'Vendor Ledger');
+
+  const safeName = vendorName.replace(/[^a-zA-Z0-9]/g, '_');
+  const stamp = getFileNameDateTimeStamp();
+  XLSX.writeFile(wb, `Vendor_Ledger_${safeName}_${stamp}.xlsx`);
+};
+
+/**
+ * Export Customer (Credit Account) Ledger to Excel
+ * Used in CustomerDetailsPage for individual customer account export
+ */
+export const exportCustomerLedgerExcel = (customer, ledger, filters = {}) => {
+  if (!ledger || ledger.length === 0) {
+    console.warn('No customer ledger entries to export');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+  const customerName = customer?.name || 'Unknown Customer';
+
+  const data = [
+    [DEFAULT_COMPANY_NAME],
+    [DEFAULT_COMPANY_ADDRESS],
+    [''],
+    ['CUSTOMER LEDGER - CREDIT ACCOUNT (ACCOUNTS RECEIVABLE)'],
+    [''],
+    [`Customer: ${customerName}`],
+    [`Customer ID: ${customer?.partyId || '-'}`],
+    [`Outstanding Balance: ${CURRENCY} ${formatNumber(customer?.currentBalance)}`],
+    [''],
+  ];
+
+  if (filters.fromDate) data.push([`From: ${filters.fromDate}`]);
+  if (filters.toDate) data.push([`To: ${filters.toDate}`]);
+  if (filters.status && filters.status !== 'all') data.push([`Status Filter: ${filters.status}`]);
+  if (filters.type && filters.type !== 'all') data.push([`Type Filter: ${filters.type}`]);
+  data.push([`Generated: ${formatDateTime(new Date())}`]);
+  data.push(['']);
+
+  // Table Headers
+  data.push([
+    'Date', 'Type', 'Invoice No', `Debit (${CURRENCY})`, `Credit (${CURRENCY})`,
+    `Balance (${CURRENCY})`, 'Reference', 'Status'
+  ]);
+
+  let totalDebit = 0;
+  let totalCredit = 0;
+
+  ledger.forEach(log => {
+    const isDebit = log.drCr === 'Dr' && !log.type.includes('Return') && !log.type.includes('Receipt');
+    const isCredit = log.drCr === 'Cr' || log.type.includes('Return') || log.type.includes('Receipt');
+    const debitAmt = isDebit ? log.amount : 0;
+    const creditAmt = isCredit ? log.amount : 0;
+    totalDebit += debitAmt;
+    totalCredit += creditAmt;
+
+    data.push([
+      log.date ? new Date(log.date).toLocaleDateString('en-GB') : '-',
+      log.type || '-',
+      log.invNo || '-',
+      debitAmt > 0 ? formatNumber(debitAmt) : '-',
+      creditAmt > 0 ? formatNumber(creditAmt) : '-',
+      formatNumber(log.balance),
+      log.ref || '-',
+      log.status || '-',
+    ]);
+  });
+
+  data.push(['']);
+  data.push(['TOTALS', '', '', formatNumber(totalDebit), formatNumber(totalCredit), '', '', '']);
+  data.push([`Total Entries: ${ledger.length}`]);
+  data.push([`Closing Balance: ${CURRENCY} ${formatNumber(customer?.currentBalance)}`]);
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  applyStyles(ws, [12, 20, 18, 16, 16, 16, 18, 10]);
+  XLSX.utils.book_append_sheet(wb, ws, 'Customer Ledger');
+
+  const safeName = customerName.replace(/[^a-zA-Z0-9]/g, '_');
+  const stamp = getFileNameDateTimeStamp();
+  XLSX.writeFile(wb, `Customer_Ledger_${safeName}_${stamp}.xlsx`);
 };

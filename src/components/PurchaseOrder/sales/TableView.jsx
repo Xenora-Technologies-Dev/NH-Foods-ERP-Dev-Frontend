@@ -132,11 +132,15 @@ const TableView = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {paginatedSOs.map((so,i) => (
-              <tr
-                key={i}
-                className="hover:bg-slate-50/50 transition-colors"
-              >
+            {paginatedSOs.map((so, i) => {
+              const normalizedStatus = String(so.status || "").toLowerCase();
+              const isDraft = normalizedStatus === "draft";
+
+              return (
+                <tr
+                  key={i}
+                  className="hover:bg-slate-50/50 transition-colors"
+                >
                 {showSelection && (
                   <td className="px-4 py-4">
                     <input
@@ -166,7 +170,7 @@ const TableView = ({
                       <p className="font-medium text-slate-900">
                         {(() => {
                           // For DRAFT SOs, display orderNumber, fallback to a display-friendly transaction number
-                          if (so.status === "DRAFT") {
+                          if (isDraft) {
                             return so.orderNumber || so.displayTransactionNo || "";
                           }
 
@@ -214,7 +218,7 @@ const TableView = ({
                     >
                       {getStatusIcon(so.status)}
                       <span className="ml-1">
-                        {so.status.replace("_", " ")}
+                        {String(so.status || "").replace("_", " ").toUpperCase()}
                       </span>
                     </div>
                     <div className="flex space-x-1">
@@ -249,7 +253,7 @@ const TableView = ({
                     >
                       <Eye className="w-4 h-4" />
                     </button>
-                    {so.status === "DRAFT" && (
+                    {isDraft && (
                       <button
                         onClick={() => editSO(so)}
                         className="p-1.5 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
@@ -278,7 +282,7 @@ const TableView = ({
                         <button onClick={() => onDownloadCustomer && onDownloadCustomer(so)} className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
                           Duplicate
                         </button>
-                        {so.status === "DRAFT" && (
+                        {isDraft && (
                           <button
                             onClick={() => deleteSO(so.id)}
                             className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
@@ -291,7 +295,8 @@ const TableView = ({
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

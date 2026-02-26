@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../../../axios/axios";
-import { ArrowLeft, Users, DollarSign, RefreshCw, BookOpen, ArrowUpRight, ArrowDownRight, Info } from "lucide-react";
+import { ArrowLeft, Users, DollarSign, RefreshCw, BookOpen, ArrowUpRight, ArrowDownRight, Info, Download } from "lucide-react";
+import { exportCustomerLedgerExcel } from "../../../utils/excelExport";
 
 // Accounting Info Component
 const AccountingLegend = () => (
@@ -129,6 +130,21 @@ console.log(customerId)
           <h3 className="text-2xl font-bold text-gray-800">Filters</h3>
           <div className="flex gap-3 mt-4 sm:mt-0">
             <button
+              onClick={() => {
+                if (ledger.length === 0) return;
+                exportCustomerLedgerExcel(customer, ledger, {
+                  fromDate: fromDate,
+                  toDate: toDate,
+                  status: statusFilter,
+                  type: typeFilter,
+                });
+              }}
+              disabled={ledger.length === 0}
+              className="px-5 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download size={18} /> Export Excel
+            </button>
+            <button
               onClick={fetchLedger}
               className="px-5 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition flex items-center gap-2"
             >
@@ -186,9 +202,9 @@ console.log(customerId)
               className="w-full px-5 py-4 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-purple-300 focus:border-purple-500 outline-none transition"
             >
               <option value="all">All Types</option>
-              <option value="purchase_order">Purchase Invoice</option>
-              <option value="purchase_return">Purchase Return</option>
-              <option value="payment_received">Payment Received</option>
+              <option value="sales_order">Sales Invoice</option>
+              <option value="sales_return">Sales Return</option>
+              <option value="payment_made">Payment Made</option>
             </select>
           </div>
         </div>

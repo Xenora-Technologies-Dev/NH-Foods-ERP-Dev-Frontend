@@ -1,8 +1,9 @@
 // src/components/AccountsModule/Sales/SaleAccountsManagement.jsx
-// Credit Accounts - Accounts Receivable (Customer Accounts)
-// Accounting Principle: Asset accounts have a DEBIT normal balance
-// When you sell to a customer, you DEBIT Accounts Receivable (increase asset)
-// When customer pays, you CREDIT Accounts Receivable (decrease asset)
+// Customer Accounts — Accounts Receivable
+// Flow: Sales Invoice → Receipt Voucher → Balance
+// Sales Invoice creates debt (customer owes us)
+// Receipt Voucher reduces debt (customer pays us)
+// Balance = Total Invoiced - Total Received = What customer still owes
 
 import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -15,213 +16,73 @@ import {
   Users,
   DollarSign,
   TrendingUp,
-  TrendingDown,
   AlertCircle,
   ChevronLeft,
   ChevronRight,
-  BookOpen,
-  Wallet,
-  Receipt,
   FileText,
   ArrowUpRight,
   ArrowDownRight,
   Loader2,
   CheckCircle,
   XCircle,
-  Info,
   Download,
+  Receipt,
+  Banknote,
+  Scale,
 } from "lucide-react";
 import Select from "react-select";
 import { exportAccountVouchersExcel } from "../../../utils/excelExport";
 
-// Toast Component
 const Toast = ({ show, message, type }) =>
   show && (
-    <div
-      className={`fixed top-4 right-4 p-4 rounded-xl shadow-2xl text-white z-50 animate-slide-in ${
-        type === "success"
-          ? "bg-gradient-to-r from-emerald-500 to-emerald-600"
-          : "bg-gradient-to-r from-red-500 to-red-600"
-      }`}
-    >
+    <div className={`fixed top-4 right-4 p-4 rounded-xl shadow-2xl text-white z-50 animate-slide-in ${type === "success" ? "bg-emerald-500" : "bg-red-500"}`}>
       <div className="flex items-center space-x-3">
-        {type === "success" ? (
-          <CheckCircle size={20} className="animate-bounce" />
-        ) : (
-          <XCircle size={20} className="animate-pulse" />
-        )}
+        {type === "success" ? <CheckCircle size={20} /> : <XCircle size={20} />}
         <span className="font-medium">{message}</span>
       </div>
     </div>
   );
 
-// Currency formatter with debit/credit indication
-const formatCurrency = (amount, type = "normal") => {
-  const num = Number(amount) || 0;
-  const abs = Math.abs(num).toFixed(2);
-  const formattedAbs = parseFloat(abs).toLocaleString();
-  
-  if (type === "debit") {
-    return (
-      <span className="inline-flex items-center font-semibold text-purple-700">
-        <ArrowUpRight size={14} className="mr-1" />
-        <span className="text-xs mr-1 opacity-70">AED</span>
-        {formattedAbs}
-      </span>
-    );
-  }
-  if (type === "credit") {
-    return (
-      <span className="inline-flex items-center font-semibold text-blue-700">
-        <ArrowDownRight size={14} className="mr-1" />
-        <span className="text-xs mr-1 opacity-70">AED</span>
-        {formattedAbs}
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center font-semibold text-gray-900">
-      <span className="text-xs mr-1 opacity-70">AED</span>
-      {formattedAbs}
-    </span>
-  );
+const fmtAED = (n) => {
+  const v = Math.abs(Number(n) || 0);
+  return `AED ${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
-// Stat Card Component
-const StatCard = ({
-  title,
-  count,
-  icon,
-  bgColor,
-  textColor,
-  borderColor,
-  iconBg,
-  iconColor,
-  subText,
-  accountingNote,
-}) => (
-  <div
-    className={`${bgColor} ${borderColor} rounded-2xl p-6 border-2 transition-all duration-300 hover:shadow-xl hover:scale-105 hover:-translate-y-1 cursor-default`}
-  >
-    <div className="flex items-center justify-between mb-4">
-      <div className={`p-3 ${iconBg} rounded-xl shadow-md`}>
-        <div className={iconColor}>{icon}</div>
-      </div>
-      {accountingNote && (
-        <span className={`text-xs ${textColor} font-medium px-2 py-1 bg-white/50 rounded-lg`}>
-          {accountingNote}
-        </span>
-      )}
-    </div>
-    <h3 className={`text-sm font-semibold ${textColor} mb-2 uppercase tracking-wide`}>
-      {title}
-    </h3>
-    <p className="text-3xl font-bold text-gray-900 mb-1">{count}</p>
-    <p className="text-xs text-gray-600 font-medium">{subText}</p>
-  </div>
-);
-
-// Accounting Info Banner
-const AccountingInfoBanner = () => (
-  <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-2xl p-4 mb-6">
-    <div className="flex items-start gap-3">
-      <div className="p-2 bg-purple-100 rounded-xl">
-        <BookOpen size={20} className="text-purple-600" />
-      </div>
-      <div className="flex-1">
-        <h4 className="text-sm font-bold text-purple-800 mb-1">
-          Accounts Receivable (Asset Account)
-        </h4>
-        <p className="text-xs text-purple-700 mb-2">
-          Double-Entry Accounting Principle: Asset accounts have a <strong>Debit</strong> normal balance.
-        </p>
-        <div className="flex flex-wrap gap-4 text-xs">
-          <div className="flex items-center gap-2 bg-white/70 px-3 py-1.5 rounded-lg">
-            <ArrowUpRight size={14} className="text-purple-600" />
-            <span className="text-gray-700">
-              <strong>Debit</strong> = Sales Invoice (Increase Receivable)
-            </span>
-          </div>
-          <div className="flex items-center gap-2 bg-white/70 px-3 py-1.5 rounded-lg">
-            <ArrowDownRight size={14} className="text-blue-600" />
-            <span className="text-gray-700">
-              <strong>Credit</strong> = Receipt from Customer (Decrease Receivable)
-            </span>
-          </div>
-          <div className="flex items-center gap-2 bg-white/70 px-3 py-1.5 rounded-lg">
-            <DollarSign size={14} className="text-emerald-600" />
-            <span className="text-gray-700">
-              <strong>Balance</strong> = Debits - Credits (Amount Due)
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
-// Pagination Component
-const Pagination = ({
-  currentPage,
-  totalPages,
-  onPageChange,
-  itemsPerPage,
-  onItemsPerPageChange,
-}) => {
-  const pageNumbers = useMemo(() => {
-    const pages = [];
+const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, onItemsPerPageChange }) => {
+  const pages = useMemo(() => {
+    const arr = [];
     const max = 5;
     let start = Math.max(1, currentPage - Math.floor(max / 2));
     let end = Math.min(totalPages, start + max - 1);
     if (end - start + 1 < max) start = Math.max(1, end - max + 1);
-    for (let i = start; i <= end; i++) pages.push(i);
-    return pages;
+    for (let i = start; i <= end; i++) arr.push(i);
+    return arr;
   }, [currentPage, totalPages]);
-
-  const options = [
-    { value: 10, label: "10 per page" },
-    { value: 25, label: "25 per page" },
-    { value: 50, label: "50 per page" },
-  ];
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-gray-50 border-t border-gray-200">
       <div className="flex items-center space-x-2 mb-4 sm:mb-0">
-        <span className="text-sm text-gray-600">Items per page:</span>
+        <span className="text-sm text-gray-600">Per page:</span>
         <Select
-          value={options.find((o) => o.value === itemsPerPage)}
+          value={[10,25,50].map(v=>({value:v,label:`${v}`})).find(o=>o.value===itemsPerPage)}
           onChange={(opt) => onItemsPerPageChange(opt.value)}
-          options={options}
-          className="w-32"
-          classNamePrefix="react-select"
+          options={[10,25,50].map(v=>({value:v,label:`${v} per page`}))}
+          className="w-32" classNamePrefix="react-select"
         />
       </div>
       <div className="flex items-center space-x-2">
-        <button
-          onClick={() => onPageChange(currentPage - 1)}
-          disabled={currentPage === 1}
-          className="p-2 rounded-lg bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-        >
+        <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1}
+          className="p-2 rounded-lg bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
           <ChevronLeft size={16} />
         </button>
-        {pageNumbers.map((p) => (
-          <button
-            key={p}
-            onClick={() => onPageChange(p)}
-            className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
-              currentPage === p
-                ? "bg-purple-600 text-white border-purple-600"
-                : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100"
-            }`}
-          >
+        {pages.map((p) => (
+          <button key={p} onClick={() => onPageChange(p)}
+            className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${currentPage === p ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100"}`}>
             {p}
           </button>
         ))}
-        <button
-          onClick={() => onPageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
-          className="p-2 rounded-lg bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-        >
+        <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages}
+          className="p-2 rounded-lg bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
           <ChevronRight size={16} />
         </button>
       </div>
@@ -229,332 +90,237 @@ const Pagination = ({
   );
 };
 
-// Main Component
 const CreditAccountsManagement = () => {
   const navigate = useNavigate();
-
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [showAccountingInfo, setShowAccountingInfo] = useState(true);
 
-  // Fetch customers from backend
   useEffect(() => {
-    const fetchCustomers = async () => {
+    (async () => {
       try {
         setLoading(true);
         const res = await axios.get("/ledger/credit-accounts");
         setCustomers(res.data?.data || []);
       } catch (err) {
         setError(err.response?.data?.message || "Failed to load customers");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchCustomers();
+      } finally { setLoading(false); }
+    })();
   }, []);
 
-  const filteredCustomers = useMemo(() => {
-    return customers.filter(
-      (c) =>
-        c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.partyId?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [customers, searchTerm]);
+  const filteredCustomers = useMemo(() =>
+    customers.filter(c =>
+      c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.partyId?.toLowerCase().includes(searchTerm.toLowerCase())
+    ), [customers, searchTerm]);
 
-  const paginated = filteredCustomers.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const paginated = filteredCustomers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage) || 1;
 
-  // Calculate accounting statistics
   const stats = useMemo(() => {
-    const totalDebit = customers.reduce((s, c) => s + (c.totalReceivable || 0), 0); // Total invoiced (Debit entries)
-    const totalCredit = customers.reduce((s, c) => s + (c.totalPaid || 0), 0); // Total received (Credit entries)
-    const balance = totalDebit - totalCredit; // Net receivable
-    
+    const totalInvoiced = customers.reduce((s, c) => s + (c.totalReceivable || 0), 0);
+    const totalReceived = customers.reduce((s, c) => s + (c.totalPaid || 0), 0);
+    const outstanding = totalInvoiced - totalReceived;
     return {
-      totalCustomers: customers.length,
-      totalDebit, // Sales invoices (Debit to A/R)
-      totalCredit, // Receipts received (Credit to A/R)
-      totalBalance: balance, // Outstanding receivable
-      activeCustomers: customers.filter(c => (c.balance || 0) > 0).length,
+      count: customers.length,
+      totalInvoiced,
+      totalReceived,
+      outstanding,
+      active: customers.filter(c => (c.balance || 0) > 0).length,
     };
   }, [customers]);
 
   const handleRefresh = async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      const res = await axios.get("/ledger/credit-accounts");
-      setCustomers(res.data?.data || []);
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to refresh");
-    } finally {
-      setLoading(false);
-    }
+    setError(null); setLoading(true);
+    try { const res = await axios.get("/ledger/credit-accounts"); setCustomers(res.data?.data || []); }
+    catch (err) { setError(err.response?.data?.message || "Failed to refresh"); }
+    finally { setLoading(false); }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-100 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 size={48} className="text-purple-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 text-lg font-medium">Loading customer accounts...</p>
+          <Loader2 size={48} className="text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600 text-lg">Loading customer accounts...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 p-4 sm:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-100 p-4 sm:p-6">
       <style>{`
         @keyframes slide-in { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         .animate-slide-in { animation: slide-in .3s ease-out; }
       `}</style>
-
       <Toast show={!!error} message={error} type="error" />
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6">
         <div className="flex items-center space-x-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-3 rounded-xl bg-white shadow-md hover:shadow-lg transition-all"
-          >
+          <button onClick={() => navigate(-1)} className="p-3 rounded-xl bg-white shadow-md hover:shadow-lg transition-all">
             <ArrowLeft size={20} className="text-gray-600" />
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
-              Accounts Receivable
-            </h1>
-            <p className="text-gray-600 mt-1 font-medium flex items-center gap-2">
-              <Wallet size={16} />
-              {customers.length} Customer Accounts (Credit Ledger)
-            </p>
+            <h1 className="text-3xl font-bold text-gray-900">Customer Accounts</h1>
+            <p className="text-gray-500 mt-1 text-sm">{customers.length} customers &middot; Accounts Receivable</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 mt-4 sm:mt-0">
-          <button
-            onClick={() => setShowAccountingInfo(!showAccountingInfo)}
-            className={`p-3 rounded-xl transition-all ${
-              showAccountingInfo ? "bg-purple-100 text-purple-700" : "bg-white text-gray-600"
-            } shadow-md hover:shadow-lg`}
-            title="Toggle accounting info"
-          >
-            <Info size={20} />
-          </button>
-          <button
-            onClick={handleRefresh}
-            disabled={loading}
-            className="p-3 rounded-xl bg-white shadow-md hover:shadow-lg transition-all"
-          >
-            <RefreshCw size={20} className={loading ? "animate-spin text-purple-600" : "text-gray-600"} />
-          </button>
+        <button onClick={handleRefresh} disabled={loading} className="mt-3 sm:mt-0 p-3 rounded-xl bg-white shadow-md hover:shadow-lg transition-all">
+          <RefreshCw size={20} className={loading ? "animate-spin text-blue-600" : "text-gray-600"} />
+        </button>
+      </div>
+
+      {/* Flow Explanation Banner */}
+      <div className="bg-white border border-blue-100 rounded-2xl p-5 mb-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6">
+          <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-xl">
+            <FileText size={18} className="text-blue-600" />
+            <span className="text-sm font-semibold text-blue-800">Sales Invoice</span>
+            <span className="text-xs text-blue-600">(Customer owes us)</span>
+          </div>
+          <div className="text-gray-400 text-xl font-light hidden sm:block">&rarr;</div>
+          <div className="text-gray-400 text-xl font-light sm:hidden">&darr;</div>
+          <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 rounded-xl">
+            <Receipt size={18} className="text-emerald-600" />
+            <span className="text-sm font-semibold text-emerald-800">Receipt Voucher</span>
+            <span className="text-xs text-emerald-600">(Customer pays)</span>
+          </div>
+          <div className="text-gray-400 text-xl font-light hidden sm:block">=</div>
+          <div className="text-gray-400 text-xl font-light sm:hidden">&darr;</div>
+          <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 rounded-xl">
+            <Scale size={18} className="text-amber-600" />
+            <span className="text-sm font-semibold text-amber-800">Outstanding Balance</span>
+            <span className="text-xs text-amber-600">(Still owed to us)</span>
+          </div>
         </div>
       </div>
 
-      {/* Accounting Info Banner */}
-      {showAccountingInfo && <AccountingInfoBanner />}
-
-      {/* Stats - Accounting Style */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <StatCard
-          title="Total Customers"
-          count={stats.totalCustomers}
-          icon={<Users size={24} />}
-          bgColor="bg-slate-50"
-          textColor="text-slate-700"
-          borderColor="border-slate-200"
-          iconBg="bg-slate-100"
-          iconColor="text-slate-600"
-          subText="Registered customers"
-        />
-        <StatCard
-          title="Total Debits"
-          count={`AED ${stats.totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-          icon={<ArrowUpRight size={24} />}
-          bgColor="bg-purple-50"
-          textColor="text-purple-700"
-          borderColor="border-purple-200"
-          iconBg="bg-purple-100"
-          iconColor="text-purple-600"
-          subText="Sales invoices"
-          accountingNote="Dr"
-        />
-        <StatCard
-          title="Total Credits"
-          count={`AED ${stats.totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-          icon={<ArrowDownRight size={24} />}
-          bgColor="bg-blue-50"
-          textColor="text-blue-700"
-          borderColor="border-blue-200"
-          iconBg="bg-blue-100"
-          iconColor="text-blue-600"
-          subText="Receipts received"
-          accountingNote="Cr"
-        />
-        <StatCard
-          title="Net Receivable"
-          count={`AED ${stats.totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-          icon={<DollarSign size={24} />}
-          bgColor="bg-emerald-50"
-          textColor="text-emerald-700"
-          borderColor="border-emerald-200"
-          iconBg="bg-emerald-100"
-          iconColor="text-emerald-600"
-          subText="Outstanding balance"
-          accountingNote="Dr Balance"
-        />
-        <StatCard
-          title="Active Accounts"
-          count={stats.activeCustomers}
-          icon={<AlertCircle size={24} />}
-          bgColor="bg-amber-50"
-          textColor="text-amber-700"
-          borderColor="border-amber-200"
-          iconBg="bg-amber-100"
-          iconColor="text-amber-600"
-          subText="With outstanding"
-        />
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2.5 bg-slate-100 rounded-xl"><Users size={20} className="text-slate-600" /></div>
+          </div>
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Total Customers</p>
+          <p className="text-2xl font-bold text-gray-900">{stats.count}</p>
+          <p className="text-xs text-gray-400 mt-1">{stats.active} with outstanding</p>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-blue-100 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2.5 bg-blue-50 rounded-xl"><FileText size={20} className="text-blue-600" /></div>
+            <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md">INVOICED</span>
+          </div>
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Total Invoiced</p>
+          <p className="text-2xl font-bold text-blue-700">{fmtAED(stats.totalInvoiced)}</p>
+          <p className="text-xs text-gray-400 mt-1">Sales invoices raised</p>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-emerald-100 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2.5 bg-emerald-50 rounded-xl"><Banknote size={20} className="text-emerald-600" /></div>
+            <span className="text-[10px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-md">RECEIVED</span>
+          </div>
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Total Received</p>
+          <p className="text-2xl font-bold text-emerald-700">{fmtAED(stats.totalReceived)}</p>
+          <p className="text-xs text-gray-400 mt-1">Receipt vouchers collected</p>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-amber-100 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2.5 bg-amber-50 rounded-xl"><DollarSign size={20} className="text-amber-600" /></div>
+            <span className="text-[10px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-md">OUTSTANDING</span>
+          </div>
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Outstanding</p>
+          <p className="text-2xl font-bold text-amber-700">{fmtAED(stats.outstanding)}</p>
+          <p className="text-xs text-gray-400 mt-1">Amount yet to collect</p>
+        </div>
       </div>
 
-      {/* Search */}
+      {/* Search bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
         <div className="relative flex-1 max-w-md">
-          <Search
-            size={18}
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-          />
-          <input
-            type="text"
-            placeholder="Search by customer name or ID..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-300 transition-all"
-          />
+          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input type="text" placeholder="Search customer name or ID..." value={searchTerm}
+            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+            className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-300 transition-all" />
         </div>
         <button
           onClick={() => exportAccountVouchersExcel(filteredCustomers, 'sale', { partyName: searchTerm })}
           disabled={filteredCustomers.length === 0}
-          className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Export to Excel"
-        >
+          className="flex items-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all shadow-md disabled:opacity-50">
           <Download size={18} /> Export
         </button>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-purple-50 to-blue-50">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <BookOpen size={20} className="text-purple-600" />
-                Customer Ledger Summary
-              </h2>
-              <p className="text-gray-600 text-sm mt-1">
-                Click any customer to view detailed transaction ledger
-              </p>
-            </div>
-            <div className="hidden sm:flex items-center gap-4 text-xs">
-              <div className="flex items-center gap-1 text-purple-700">
-                <ArrowUpRight size={14} /> Debit = Invoice
-              </div>
-              <div className="flex items-center gap-1 text-blue-700">
-                <ArrowDownRight size={14} /> Credit = Receipt
-              </div>
-            </div>
-          </div>
+      {/* Ledger Table */}
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+        <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-blue-50/80 to-indigo-50/80">
+          <h2 className="text-lg font-bold text-gray-900">Customer Ledger Summary</h2>
+          <p className="text-gray-500 text-sm mt-0.5">Click any row to view full transaction ledger</p>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+            <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Customer ID
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Customer Name
-                </th>
-                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Invoices
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Customer</th>
+                <th className="px-5 py-3.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Invoices</th>
+                <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   <span className="flex items-center justify-end gap-1">
-                    Debits <span className="text-purple-600">(Dr)</span>
+                    <FileText size={12} className="text-blue-500" /> Total Invoiced
                   </span>
                 </th>
-                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   <span className="flex items-center justify-end gap-1">
-                    Credits <span className="text-blue-600">(Cr)</span>
+                    <Receipt size={12} className="text-emerald-500" /> Total Received
                   </span>
                 </th>
-                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Balance
-                </th>
-                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Actions
-                </th>
+                <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Outstanding</th>
+                <th className="px-5 py-3.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-100">
               {paginated.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                     <Users size={48} className="mx-auto mb-4 text-gray-300" />
                     <p className="font-medium">No customers found</p>
-                    <p className="text-sm">Try adjusting your search criteria</p>
                   </td>
                 </tr>
               ) : (
                 paginated.map((c) => {
-                  const balance = (c.totalReceivable || 0) - (c.totalPaid || 0);
+                  const invoiced = c.totalReceivable || 0;
+                  const received = c.totalPaid || 0;
+                  const outstanding = invoiced - received;
                   return (
-                    <tr
-                      key={c._id}
+                    <tr key={c._id}
                       onClick={() => navigate(`/credit-accounts/customer/${c._id}`)}
-                      className="hover:bg-gradient-to-r hover:from-purple-50 hover:to-blue-50 cursor-pointer transition-all"
-                    >
-                      <td className="px-6 py-4 font-mono text-sm text-purple-700 font-bold">
-                        {c.partyId}
+                      className="hover:bg-blue-50/50 cursor-pointer transition-colors">
+                      <td className="px-5 py-4">
+                        <div className="font-semibold text-gray-900">{c.name}</div>
+                        <div className="text-xs text-gray-400 font-mono">{c.partyId}</div>
                       </td>
-                      <td className="px-6 py-4 font-semibold text-gray-900">
-                        {c.name}
+                      <td className="px-5 py-4 text-center">
+                        <span className="px-2.5 py-0.5 bg-gray-100 rounded-full text-sm font-medium text-gray-700">{c.totalInvoices || 0}</span>
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className="px-3 py-1 bg-gray-100 rounded-full text-sm font-medium">
-                          {c.totalInvoices || 0}
+                      <td className="px-5 py-4 text-right">
+                        <span className="font-semibold text-blue-700">{fmtAED(invoiced)}</span>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <span className="font-semibold text-emerald-600">{fmtAED(received)}</span>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <span className={`font-bold text-lg ${outstanding > 0 ? "text-amber-600" : outstanding < 0 ? "text-red-500" : "text-gray-400"}`}>
+                          {fmtAED(outstanding)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        {formatCurrency(c.totalReceivable || 0, "debit")}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        {formatCurrency(c.totalPaid || 0, "credit")}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className={`font-bold ${balance > 0 ? "text-emerald-600" : "text-red-600"}`}>
-                          AED {Math.abs(balance).toFixed(2)}
-                          <span className="text-xs ml-1 opacity-70">
-                            {balance > 0 ? "Dr" : balance < 0 ? "Cr" : ""}
-                          </span>
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/credit-accounts/customer/${c._id}`);
-                          }}
-                          className="text-purple-600 hover:text-purple-800 font-semibold flex items-center gap-1 mx-auto"
-                        >
-                          <Eye size={16} /> Ledger
+                      <td className="px-5 py-4">
+                        <button onClick={(e) => { e.stopPropagation(); navigate(`/credit-accounts/customer/${c._id}`); }}
+                          className="text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 mx-auto text-sm">
+                          <Eye size={15} /> View Ledger
                         </button>
                       </td>
                     </tr>
@@ -563,25 +329,17 @@ const CreditAccountsManagement = () => {
               )}
             </tbody>
             {paginated.length > 0 && (
-              <tfoot className="bg-gradient-to-r from-gray-100 to-gray-200">
+              <tfoot className="bg-gray-50 border-t-2 border-gray-200">
                 <tr>
-                  <td colSpan={3} className="px-6 py-4 font-bold text-gray-900">
-                    Page Totals
+                  <td colSpan={2} className="px-5 py-4 font-bold text-gray-700">Page Totals</td>
+                  <td className="px-5 py-4 text-right font-bold text-blue-700">
+                    {fmtAED(paginated.reduce((s, c) => s + (c.totalReceivable || 0), 0))}
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    {formatCurrency(
-                      paginated.reduce((s, c) => s + (c.totalReceivable || 0), 0),
-                      "debit"
-                    )}
+                  <td className="px-5 py-4 text-right font-bold text-emerald-600">
+                    {fmtAED(paginated.reduce((s, c) => s + (c.totalPaid || 0), 0))}
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    {formatCurrency(
-                      paginated.reduce((s, c) => s + (c.totalPaid || 0), 0),
-                      "credit"
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right font-bold text-emerald-600">
-                    AED {paginated.reduce((s, c) => s + ((c.totalReceivable || 0) - (c.totalPaid || 0)), 0).toFixed(2)}
+                  <td className="px-5 py-4 text-right font-bold text-amber-600">
+                    {fmtAED(paginated.reduce((s, c) => s + ((c.totalReceivable || 0) - (c.totalPaid || 0)), 0))}
                   </td>
                   <td></td>
                 </tr>
@@ -590,13 +348,8 @@ const CreditAccountsManagement = () => {
           </table>
         </div>
 
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-          itemsPerPage={itemsPerPage}
-          onItemsPerPageChange={setItemsPerPage}
-        />
+        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage}
+          itemsPerPage={itemsPerPage} onItemsPerPageChange={setItemsPerPage} />
       </div>
     </div>
   );

@@ -26,7 +26,13 @@ const GridView = ({
 }) => {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-      {paginatedPOs.map((po) => (
+      {paginatedPOs.map((po) => {
+        const normalizedStatus = String(po.status || "").toLowerCase();
+        const isDraft = normalizedStatus === "draft";
+        const isPending = normalizedStatus === "pending";
+        const isRejected = normalizedStatus === "rejected";
+
+        return (
         <div
           key={po.id}
           className="bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group hover:scale-105"
@@ -72,7 +78,7 @@ const GridView = ({
                     )}`}
                   >
                     {getStatusIcon(po.status)}
-                    <span className="ml-1">{po.status.replace("_", " ")}</span>
+                    <span className="ml-1">{String(po.status || "").replace("_", " ").toUpperCase()}</span>
                   </div>
                 </div>
               </div>
@@ -169,7 +175,7 @@ const GridView = ({
                   <Eye className="w-4 h-4" />
                   <span className="text-sm">View</span>
                 </button>
-                {po.status === "DRAFT" && (
+                {isDraft && (
                   <button
                     onClick={() => editPO(po)}
                     className="flex items-center space-x-1 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
@@ -181,7 +187,7 @@ const GridView = ({
               </div>
 
               <div className="flex space-x-2">
-                {po.status === "PENDING" && (
+                {isPending && (
                   <>
                     <button
                       onClick={() => approvePO(po.id)}
@@ -199,7 +205,7 @@ const GridView = ({
                     </button>
                   </>
                 )}
-                {(po.status === "DRAFT" || po.status === "REJECTED") && (
+                {(isDraft || isRejected) && (
                   <button
                     onClick={() => deletePO(po.id)}
                     className="flex items-center space-x-1 px-3 py-2 bg-rose-100 text-rose-700 rounded-lg hover:bg-rose-200 transition-colors"
@@ -212,7 +218,7 @@ const GridView = ({
             </div>
           </div>
         </div>
-      ))}
+      );})}
     </div>
   );
 };

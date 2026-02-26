@@ -85,7 +85,8 @@ const SaleInvoiceView = ({
   if (!so) return null;
 
   const customer = customers.find((c) => c._id === so.customerId) || {};
-  const isApproved = ["APPROVED", "PAID", "PARTIAL"].includes(so.status);
+  const normalizedStatus = String(so.status || "").toLowerCase();
+  const isApproved = ["approved", "paid", "partial"].includes(normalizedStatus);
 
   const deriveInvoiceNo = (soObj) => {
     try {
@@ -267,7 +268,7 @@ const handleConvertToInvoice = async () => {
             </button>
             <button onClick={handlePrint} className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded hover:bg-green-700"><Printer className="w-4 h-4" /> Print</button>
             <button onClick={() => alert("Sent")} className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"><Send className="w-4 h-4" /> Send</button>
-            {so.status !== "APPROVED" && (
+            {!isApproved && (
   <button
     onClick={handleConvertToInvoice}
     disabled={isConverting}
