@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   X,
   Printer,
@@ -14,6 +14,7 @@ import {
   CheckCircle,
   Banknote,
 } from "lucide-react";
+import axiosInstance from "../../../axios/axios";
 
 const formatCurrency = (amount) => {
   const num = Number(amount) || 0;
@@ -35,6 +36,45 @@ const formatDate = (dateString) => {
 
 const VoucherDocument = ({ voucher, type = "receipt", onClose }) => {
   const printRef = useRef(null);
+
+  // ── Company profile state (mirrors InvoiceView approach) ──
+  const [profileData, setProfileData] = useState({
+    companyName: "NAJM ALHUDA FOODSTUFF TRADING LLC S.O.C.C.",
+    companyNameArabic: "نجم الهدى لتجارة المواد الغذائية ذ.م.م ش.ش.و",
+    addressLine1: "DIP 2, Dubai, U.A.E.",
+    addressLine2: "P.O. Box: 3352 - DUBAI - U.A.E.",
+    phoneNumber: "04 885 7575",
+    email: "corporate@elfab.ae",
+    website: "www.nhfoodsglobal.com",
+    vatNumber: "105033168300003",
+    logo: null,
+  });
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const { data } = await axiosInstance.get("/profile/me");
+        if (data.success) {
+          const d = data.data;
+          setProfileData((p) => ({
+            ...p,
+            companyName: d.companyInfo?.companyName || p.companyName,
+            companyNameArabic: d.companyInfo?.companyNameArabic || p.companyNameArabic,
+            addressLine1: d.companyInfo?.addressLine1 || p.addressLine1,
+            addressLine2: d.companyInfo?.addressLine2 || p.addressLine2,
+            phoneNumber: d.companyInfo?.phoneNumber || p.phoneNumber,
+            email: d.companyInfo?.emailAddress || p.email,
+            website: d.companyInfo?.website || p.website,
+            vatNumber: d.companyInfo?.vatNumber || p.vatNumber,
+            logo: d.companyInfo?.companyLogo?.url || p.logo,
+          }));
+        }
+      } catch (e) {
+        console.error("Failed to load company profile:", e);
+      }
+    };
+    loadProfile();
+  }, []);
 
   const handlePrint = () => {
     const printContent = printRef.current;
@@ -129,23 +169,41 @@ const VoucherDocument = ({ voucher, type = "receipt", onClose }) => {
             {/* Company Header */}
             <div className="bg-gradient-to-r from-blue-800 to-blue-600 text-white p-6">
               <div className="flex justify-between items-start">
-                <div>
-                  <h1 className="text-2xl font-bold tracking-wide">NH FOODSTUFF TRADING LLC</h1>
-                  <p className="text-blue-100 text-sm mt-1">S.O.C.</p>
+                <div className="flex items-start gap-4">
+                  {profileData.logo && (
+                    <img src={profileData.logo} alt="Company Logo" className="w-16 h-16 object-contain bg-white rounded-lg p-1" />
+                  )}
+                  <div>
+                    {profileData.companyNameArabic && (
+                      <p className="text-blue-200 text-sm mb-1" style={{ direction: "rtl" }}>{profileData.companyNameArabic}</p>
+                    )}
+                    <h1 className="text-2xl font-bold tracking-wide">{profileData.companyName}</h1>
+                  </div>
                 </div>
-                <div className="text-right text-sm text-blue-100">
+                <div className="text-right text-sm text-blue-100 space-y-1">
                   <p className="flex items-center justify-end gap-1">
                     <MapPin size={12} />
-                    Dubai, United Arab Emirates
+                    {profileData.addressLine1}
                   </p>
-                  <p className="flex items-center justify-end gap-1 mt-1">
+                  {profileData.addressLine2 && (
+                    <p className="flex items-center justify-end gap-1">
+                      <MapPin size={12} className="opacity-0" />
+                      {profileData.addressLine2}
+                    </p>
+                  )}
+                  <p className="flex items-center justify-end gap-1">
                     <Phone size={12} />
-                    +971 XX XXX XXXX
+                    {profileData.phoneNumber}
                   </p>
-                  <p className="flex items-center justify-end gap-1 mt-1">
+                  <p className="flex items-center justify-end gap-1">
                     <Mail size={12} />
-                    info@nhfoodstuff.com
+                    {profileData.email}
                   </p>
+                  {profileData.vatNumber && (
+                    <p className="text-xs mt-1 text-blue-200">
+                      VAT Reg. No: {profileData.vatNumber}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

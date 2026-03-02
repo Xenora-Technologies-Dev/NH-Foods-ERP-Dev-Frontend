@@ -384,14 +384,10 @@ const InventoryManagement = () => {
   const handleExport = useCallback(async () => {
     try {
       const csv = [
-        "MovementID,StockID,ItemName,Quantity,EventType,ReferenceNumber,UnitCost,TotalValue,Location,Date,CreatedBy",
+        "MovementID,ItemCode,ItemName,SKU,Vendor/Customer,PartyType,Quantity,EventType,ReferenceNumber,UnitCost,TotalValue,Location,Date,CreatedBy",
         ...movements.map(
           (m) =>
-            `${m._id},${m.stockId},"${m.itemName || m.stockId}",${m.quantity},${
-              m.eventType
-            },${m.referenceNumber},${m.unitCost},${m.totalValue},${
-              m.location
-            },${m.date},${m.createdBy || "Unknown"}`
+            `${m._id},${m.itemCode || m.stockId},"${m.itemName || 'Unknown'}","${m.sku || ''}","${m.partyName || ''}","${m.partyType || ''}",${m.quantity},${m.eventType},${m.referenceNumber},${m.unitCost},${m.totalValue},${m.location},${m.date},${m.createdBy || "Unknown"}`
         ),
       ].join("\n");
 
@@ -729,6 +725,9 @@ const InventoryManagement = () => {
                     Item Details
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Vendor / Customer
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Movement
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -765,13 +764,28 @@ const InventoryManagement = () => {
                           </div>
                           <div>
                             <p className="font-semibold text-gray-900">
-                              {movement.itemName || movement.stockId}
+                              {movement.itemName || "Unknown Item"}
                             </p>
-                            <p className="text-sm text-gray-500">
-                              ID: {movement.stockId}
+                            <p className="text-xs text-gray-500">
+                              {movement.sku ? `SKU: ${movement.sku}` : `Code: ${movement.itemCode || movement.stockId}`}
                             </p>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {movement.partyName ? (
+                          <div className="flex items-center space-x-2">
+                            <div className={`p-1.5 rounded-lg ${movement.partyType === 'Customer' ? 'bg-blue-100' : 'bg-emerald-100'}`}>
+                              <User size={14} className={movement.partyType === 'Customer' ? 'text-blue-600' : 'text-emerald-600'} />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{movement.partyName}</p>
+                              <p className="text-xs text-gray-500">{movement.partyType || ''}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">—</span>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center space-x-2">
@@ -1197,18 +1211,39 @@ const InventoryManagement = () => {
                     <label className="block text-sm font-semibold text-gray-600 mb-1">
                       Item Information
                     </label>
-                    <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                      <Package size={20} className="text-indigo-600" />
+                    <div className="flex items-center space-x-3 p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+                      <div className="p-2 bg-indigo-100 rounded-lg">
+                        <Package size={20} className="text-indigo-600" />
+                      </div>
                       <div>
-                        <p className="font-semibold text-gray-900">
-                          {selectedMovement.itemName || selectedMovement.stockId}
+                        <p className="font-bold text-gray-900 text-base">
+                          {selectedMovement.itemName || "Unknown Item"}
                         </p>
-                        <p className="text-sm text-gray-500">
-                          ID: {selectedMovement.stockId}
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {selectedMovement.sku ? `SKU: ${selectedMovement.sku}` : `Code: ${selectedMovement.itemCode || selectedMovement.stockId}`}
                         </p>
                       </div>
                     </div>
                   </div>
+
+                  {selectedMovement.partyName && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-600 mb-1">
+                        {selectedMovement.partyType === 'Customer' ? 'Customer' : 'Vendor'}
+                      </label>
+                      <div className={`flex items-center space-x-3 p-3 rounded-lg border ${
+                        selectedMovement.partyType === 'Customer'
+                          ? 'bg-blue-50 border-blue-100'
+                          : 'bg-emerald-50 border-emerald-100'
+                      }`}>
+                        <User size={18} className={selectedMovement.partyType === 'Customer' ? 'text-blue-600' : 'text-emerald-600'} />
+                        <div>
+                          <p className="font-semibold text-gray-900">{selectedMovement.partyName}</p>
+                          <p className="text-xs text-gray-500">{selectedMovement.partyType}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-600 mb-1">

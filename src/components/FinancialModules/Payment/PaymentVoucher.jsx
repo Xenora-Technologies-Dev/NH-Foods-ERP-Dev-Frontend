@@ -274,6 +274,12 @@ const PaymentVoucherManagement = () => {
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [viewVoucher, setViewVoucher] = useState(null); // For viewing voucher document
 
+  // ── Invoice Browser Popup State ──
+  const [showInvoiceBrowser, setShowInvoiceBrowser] = useState(false);
+  const [browserInvoices, setBrowserInvoices] = useState([]);
+  const [browserSearch, setBrowserSearch] = useState("");
+  const [browserLoading, setBrowserLoading] = useState(false);
+
   const formRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -365,14 +371,13 @@ const PaymentVoucherManagement = () => {
 
         let invoices = takeArray(response);
 
-        // Filter only Purchase Entries (GRN-converted) with outstanding balance > 0
-        // Raw Purchase Orders (not converted via GRN) must NOT appear for payment
+        // Filter all APPROVED / PARTIAL Purchase Orders with outstanding balance > 0.
+        // Any PO that reached APPROVED status is payable — regardless of whether it
+        // went through the GRN path or was approved directly (legacy).
         const outstandingInvoices = invoices
           .filter((inv) => {
             const outstanding = Number(inv.outstandingAmount || 0);
-            // Must have outstanding balance AND be a Purchase Entry (GRN-converted)
-            const isPurchaseEntry = inv.sourceGrnId || inv.sourceGrnNumber || inv.grnGenerated;
-            return outstanding > 0 && isPurchaseEntry;
+            return outstanding > 0;
           })
           .map((inv) => ({
             _id: inv._id,
@@ -394,6 +399,60 @@ const PaymentVoucherManagement = () => {
     },
     [showToastMessage]
   );
+
+  // ── Invoice Browser: fetch all APPROVED / PARTIAL POs across all vendors ──
+  const fetchBrowserInvoices = useCallback(async () => {
+    try {
+      setBrowserLoading(true);
+      const params = new URLSearchParams();
+      params.append("type", "purchase_order");
+      params.append("status", "APPROVED,PARTIAL");
+      const response = await axiosInstance.get(
+        `/transactions/transactions?${params.toString()}`
+      );
+      let invoices = takeArray(response);
+      const mapped = invoices
+        .filter((inv) => Number(inv.outstandingAmount || 0) > 0)
+        .map((inv) => ({
+          _id: inv._id,
+          transactionNo: inv.transactionNo || inv.docno || "N/A",
+          date: inv.date,
+          totalAmount: Number(inv.totalAmount || 0),
+          paidAmount: Number(inv.paidAmount || 0),
+          outstandingAmount: Number(inv.outstandingAmount || 0),
+          status: inv.status,
+          vendorName:
+            inv.partyId?.vendorName ||
+            inv.partyName ||
+            inv.vendorName ||
+            "-",
+          sourceGrnNumber: inv.sourceGrnNumber || null,
+        }));
+      setBrowserInvoices(mapped);
+    } catch (err) {
+      console.error("Error fetching browser invoices:", err);
+      showToastMessage("Failed to load invoices.", "error");
+      setBrowserInvoices([]);
+    } finally {
+      setBrowserLoading(false);
+    }
+  }, [showToastMessage]);
+
+  const openInvoiceBrowser = useCallback(() => {
+    setShowInvoiceBrowser(true);
+    setBrowserSearch("");
+    fetchBrowserInvoices();
+  }, [fetchBrowserInvoices]);
+
+  const filteredBrowserInvoices = useMemo(() => {
+    if (!browserSearch.trim()) return browserInvoices;
+    const term = browserSearch.trim().toLowerCase();
+    return browserInvoices.filter(
+      (inv) =>
+        (inv.transactionNo || "").toLowerCase().includes(term) ||
+        (inv.vendorName || "").toLowerCase().includes(term)
+    );
+  }, [browserInvoices, browserSearch]);
 
   // Fetch all transactor accounts at mount
   const fetchAllTransactors = useCallback(async () => {
@@ -1063,6 +1122,12 @@ const PaymentVoucherManagement = () => {
                 <Download size={18} /> Export
               </button>
               <button
+                onClick={openInvoiceBrowser}
+                className="flex items-center gap-3 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
+              >
+                <FileText size={18} /> Browse Invoices
+              </button>
+              <button
                 onClick={openAddModal}
                 className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
               >
@@ -1226,6 +1291,144 @@ const PaymentVoucherManagement = () => {
           type="payment"
           onClose={() => setViewVoucher(null)}
         />
+      )}
+
+      {/* ========== INVOICE BROWSER POPUP ========== */}
+      {showInvoiceBrowser && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col">
+            {/* Header */}
+            <div className="flex justify-between items-center p-5 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-t-2xl">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <FileText size={20} className="text-indigo-600" /> All Outstanding Invoices
+                </h3>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {filteredBrowserInvoices.length} invoice{filteredBrowserInvoices.length !== 1 ? "s" : ""} found
+                </p>
+              </div>
+              <button
+                onClick={() => setShowInvoiceBrowser(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white rounded-xl transition-all"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Search Bar */}
+            <div className="px-5 pt-4 pb-2">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search by invoice number or vendor name..."
+                  value={browserSearch}
+                  onChange={(e) => setBrowserSearch(e.target.value)}
+                  className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                  autoFocus
+                />
+                {browserSearch && (
+                  <button
+                    onClick={() => setBrowserSearch("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Invoice List */}
+            <div className="flex-1 overflow-y-auto px-5 pb-5">
+              {browserLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 size={28} className="animate-spin text-indigo-500" />
+                  <span className="ml-3 text-gray-500">Loading invoices...</span>
+                </div>
+              ) : filteredBrowserInvoices.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                  <FileText size={40} className="mb-3" />
+                  <p className="text-sm">
+                    {browserSearch
+                      ? "No invoices match your search"
+                      : "No outstanding invoices found"}
+                  </p>
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-gray-50">
+                    <tr>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Invoice #</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Vendor</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Date</th>
+                      <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Total</th>
+                      <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Paid</th>
+                      <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Outstanding</th>
+                      <th className="text-center px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredBrowserInvoices.map((inv) => (
+                      <tr
+                        key={inv._id}
+                        className="hover:bg-indigo-50/50 transition-colors"
+                      >
+                        <td className="px-3 py-3 font-medium text-indigo-700">
+                          {inv.transactionNo}
+                        </td>
+                        <td className="px-3 py-3 text-gray-700">{inv.vendorName}</td>
+                        <td className="px-3 py-3 text-gray-500">
+                          {inv.date ? new Date(inv.date).toLocaleDateString() : "-"}
+                        </td>
+                        <td className="px-3 py-3 text-right text-gray-900">
+                          {formatCurrency(inv.totalAmount)}
+                        </td>
+                        <td className="px-3 py-3 text-right text-gray-500">
+                          {formatCurrency(inv.paidAmount)}
+                        </td>
+                        <td className="px-3 py-3 text-right font-semibold text-red-600">
+                          {formatCurrency(inv.outstandingAmount)}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              inv.status === "APPROVED"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : inv.status === "PARTIAL"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {inv.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-gray-200 px-5 py-3 flex justify-between items-center bg-gray-50 rounded-b-2xl">
+              <p className="text-xs text-gray-500">
+                Total Outstanding:{" "}
+                <span className="font-semibold text-gray-900">
+                  AED{" "}
+                  {filteredBrowserInvoices
+                    .reduce((s, i) => s + i.outstandingAmount, 0)
+                    .toFixed(2)}
+                </span>
+              </p>
+              <button
+                onClick={() => setShowInvoiceBrowser(false)}
+                className="px-5 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {showModal && (
         <div className="fixed inset-0 bg-white/50 flex items-center justify-center p-4 z-50 modal-container transform scale-95 transition-transform duration-300">

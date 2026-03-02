@@ -668,7 +668,7 @@ const ERPLogin = () => {
       </div>
 
       {/* Version / Copyright */}
-      <div className="absolute bottom-4 left-5 text-[11px] text-slate-700 z-10">ERP NEXUS v4.0.0</div>
+      <div className="absolute bottom-4 left-5 text-[11px] text-slate-700 z-10">ERP NEXUS v4.0.5</div>
       <div className="absolute bottom-4 right-5 text-[11px] text-slate-700 z-10">&copy; 2026 XENORA Technologies</div>
     </div>
   );
