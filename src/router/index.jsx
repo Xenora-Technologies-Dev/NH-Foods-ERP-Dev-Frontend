@@ -31,8 +31,8 @@ const PaymentVoucherManagement = lazy(() => import("../components/FinancialModul
 const JournalVoucherManagement = lazy(() => import("../components/FinancialModules/Journal/JournalVoucherManagement.jsx"));
 const ContraVoucherManagement = lazy(() => import("../components/FinancialModules/Contra/ContraVoucherManagement.jsx"));
 const ExpenseVoucherManagement = lazy(() => import("../components/FinancialModules/Expense/ExpenseVoucherManagement.jsx"));
-const PurchaseAccounts = lazy(() => import("../components/AccountsModule/Purchase/PurchaseAccount.jsx"));
-const SaleAccountsManagement = lazy(() => import("../components/AccountsModule//Sales/SaleAccountsManagement.jsx"));
+const AccountsPayablePage = lazy(() => import("../components/AccountsModule/Purchase/AccountsPayablePage.jsx"));
+const AccountsReceivablePage = lazy(() => import("../components/AccountsModule/Sales/AccountsReceivablePage.jsx"));
 const TransactionsManagement = lazy(() => import("../components/AccountsModule/Transaction/TransactionsManagement.jsx"));
 const ChartOfAccountsManagement = lazy(() => import("../components/AccountsModule/ChartOfAccounts/ChartOfAccountsManagement.jsx"));
 const ExpenseAccountsPage = lazy(() => import("../components/AccountsModule/Expense/ExpenseAccountsPage.jsx"));
@@ -89,12 +89,12 @@ export default function AdminRouter() {
         <Route path="/contra-voucher" element={<ContraVoucherManagement />} />{" "}
         <Route path="/expense-voucher" element={<ExpenseVoucherManagement />} />{" "}
         {/* Accounts Module */}
-        <Route path="/debit-accounts" element={<PurchaseAccounts />} />{" "}
+        <Route path="/debit-accounts" element={<AccountsPayablePage />} />{" "}
         <Route
           path="/debit-accounts/vendor/:vendorId"
           element={<VendorDetailsPage />}
         />
-        <Route path="/credit-accounts" element={<SaleAccountsManagement />} />{" "}
+        <Route path="/credit-accounts" element={<AccountsReceivablePage />} />{" "}
         <Route
           path="/credit-accounts/customer/:customerId"
           element={<CustomerDetailsPage />}

@@ -85,7 +85,7 @@ const ApprovedSales = () => {
       customerId: t.partyId,
       customerName: t.party?.customerName || t.partyName,
       date: t.date,
-      approvedAt: t.approvedAt || t.updatedAt || t.approvedDate || null,
+      approvedAt: t.approvedAt || t.approvedDate || t.updatedAt || null,
       deliveryDate: t.deliveryDate,
       status: t.status,
       totalAmount: Number(t.totalAmount || 0).toFixed(2),
@@ -140,7 +140,7 @@ const ApprovedSales = () => {
           customerId: t.partyId,
           customerName: t.party?.customerName || t.partyName,
           date: t.date,
-          approvedAt: t.approvedAt || t.updatedAt || t.approvedDate || null,
+          approvedAt: t.approvedAt || t.approvedDate || t.updatedAt || null,
           deliveryDate: t.deliveryDate,
           // Status is unified: APPROVED=unpaid, PAID=fully paid, PARTIAL=partially paid
           status: t.status,

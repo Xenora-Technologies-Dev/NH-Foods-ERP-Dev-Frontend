@@ -946,7 +946,7 @@ const updatePurchaseOrderStatus = (id, newStatus) => {
     }
     return prev.map((po) =>
       po.id === id || po._id === id
-        ? { ...po, status: newStatus, approvedAt: new Date().toISOString() }
+        ? { ...po, status: newStatus }
         : po
     );
   });

@@ -98,13 +98,14 @@ console.log(customerId)
         onClick={() => navigate(-1)}
         className="mb-6 flex items-center gap-3 text-purple-700 hover:text-purple-900 font-semibold transition-all hover:scale-105"
       >
-        <ArrowLeft size={24} /> Back to Credit Accounts
+        <ArrowLeft size={24} /> Back to Accounts Receivable
       </button>
 
       {/* Header Card */}
       <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-3xl shadow-2xl p-8 mb-8">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
           <div>
+            <p className="text-purple-200 text-xs mb-1 italic">Accounts Receivable (Previously called Credit Accounts)</p>
             <h1 className="text-3xl font-bold flex items-center gap-4 mb-3">
               <Users size={28} /> {customer?.name || "Customer Ledger"}
             </h1>
@@ -114,9 +115,15 @@ console.log(customerId)
           <div className="text-right">
             <p className="text-purple-100 text-sm uppercase tracking-wider">Outstanding Balance</p>
             <p className="text-4xl font-bold text-white mt-2">
-              AED {customer?.currentBalance?.toFixed(2) || "0.00"}
+              AED {Math.abs(customer?.currentBalance || 0).toFixed(2)}
             </p>
-            <p className="text-purple-200 text-sm mt-1">{customer?.currentBalance > 0 ? "Debit Balance (Receivable)" : "Settled"}</p>
+            <p className="text-purple-200 text-sm mt-1">
+              {customer?.currentBalance > 0
+                ? "Debit Balance (Receivable)"
+                : customer?.currentBalance < 0
+                ? "Credit Balance (Advance)"
+                : "Settled"}
+            </p>
           </div>
         </div>
       </div>
@@ -204,7 +211,7 @@ console.log(customerId)
               <option value="all">All Types</option>
               <option value="sales_order">Sales Invoice</option>
               <option value="sales_return">Sales Return</option>
-              <option value="payment_made">Payment Made</option>
+              <option value="payment_made">Receipt Voucher</option>
             </select>
           </div>
         </div>
@@ -250,8 +257,8 @@ console.log(customerId)
               ) : (
                 ledger.map((log, i) => {
                   // For A/R: Debit increases (invoice), Credit decreases (receipt/return)
-                  const isDebit = log.drCr === "Dr" && !log.type.includes("Return") && !log.type.includes("Receipt");
-                  const isCredit = log.drCr === "Cr" || log.type.includes("Return") || log.type.includes("Receipt");
+                  const isDebit = log.drCr === "Dr" && !log.type.includes("Return") && !log.type.includes("PAYMENT");
+                  const isCredit = log.drCr === "Cr" || log.type.includes("Return") || log.type.includes("PAYMENT");
                   return (
                     <tr key={i} className="hover:bg-purple-50 transition">
                       <td className="px-6 py-4">
@@ -260,12 +267,12 @@ console.log(customerId)
                       <td className="px-6 py-4">
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            log.type.includes("Return") || log.type.includes("Receipt")
+                            log.type.includes("Return") || log.type.includes("PAYMENT")
                               ? "bg-blue-100 text-blue-700"
                               : "bg-purple-100 text-purple-700"
                           }`}
                         >
-                          {log.type}
+                          {log.type === "PAYMENT MADE" ? "Receipt Voucher" : log.type}
                         </span>
                       </td>
                       <td className="px-6 py-4 font-mono font-bold text-gray-700">{log.invNo}</td>
@@ -290,7 +297,8 @@ console.log(customerId)
                         )}
                       </td>
                       <td className="px-6 py-4 text-right font-bold text-emerald-600">
-                        AED {log.balance?.toFixed(2)} <span className="text-xs opacity-70">Dr</span>
+                        AED {Math.abs(log.balance || 0).toFixed(2)}{" "}
+                        <span className="text-xs opacity-70">{log.balance >= 0 ? "Dr" : "Cr"}</span>
                       </td>
                       <td className="px-6 py-4 text-gray-600">{log.ref}</td>
                       <td className="px-6 py-4 text-center">

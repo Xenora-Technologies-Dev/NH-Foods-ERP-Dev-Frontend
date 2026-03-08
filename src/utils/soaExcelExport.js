@@ -40,7 +40,7 @@ const getCompanyAddress = (statement) => {
 
 /**
  * Export Statement of Account to Excel
- * Standard format with customer details, transactions, and excess payments
+ * Clean ledger format — one row per transaction (industry standard)
  */
 export const exportStatementOfAccountExcel = (statement) => {
   const wb = XLSX.utils.book_new();
@@ -79,15 +79,14 @@ export const exportStatementOfAccountExcel = (statement) => {
   mainData.push(['']);
 
   // Opening Balance
-  mainData.push(['OPENING BALANCE:', '', '', '', `${CURRENCY} ${formatNumber(statement.openingBalance)}`]);
+  mainData.push(['OPENING BALANCE:', '', '', `${CURRENCY} ${formatNumber(statement.openingBalance)}`]);
   mainData.push(['']);
 
   // Transaction Headers
   mainData.push([
     'Date',
     'Type',
-    'Invoice #',
-    'LPO No',
+    'Document No',
     `Debit (${CURRENCY})`,
     `Credit (${CURRENCY})`,
     `Balance (${CURRENCY})`,
@@ -100,7 +99,6 @@ export const exportStatementOfAccountExcel = (statement) => {
       formatDate(t.date),
       t.type || '',
       t.reference || '',
-      t.lpoNo || '-',
       t.debit > 0 ? formatNumber(t.debit) : '',
       t.credit > 0 ? formatNumber(t.credit) : '',
       formatNumber(t.balance),
@@ -115,7 +113,6 @@ export const exportStatementOfAccountExcel = (statement) => {
     'TOTALS',
     '',
     '',
-    '',
     formatNumber(statement.totals?.totalDebit),
     formatNumber(statement.totals?.totalCredit),
     formatNumber(statement.closingBalance),
@@ -123,7 +120,7 @@ export const exportStatementOfAccountExcel = (statement) => {
 
   // Closing Balance
   mainData.push(['']);
-  mainData.push(['CLOSING BALANCE:', '', '', '', '', '', `${CURRENCY} ${formatNumber(statement.closingBalance)}`]);
+  mainData.push(['CLOSING BALANCE:', '', '', '', '', `${CURRENCY} ${formatNumber(statement.closingBalance)}`]);
 
   // Summary Section
   mainData.push(['']);
@@ -139,90 +136,14 @@ export const exportStatementOfAccountExcel = (statement) => {
   mainWs['!cols'] = [
     { wch: 15 },  // Date
     { wch: 18 },  // Type
-    { wch: 22 },  // Invoice #
-    { wch: 22 },  // LPO No
-    { wch: 15 },  // Debit
-    { wch: 15 },  // Credit
-    { wch: 15 },  // Balance
+    { wch: 24 },  // Document No
+    { wch: 16 },  // Debit
+    { wch: 16 },  // Credit
+    { wch: 16 },  // Balance
   ];
 
   // Add main sheet to workbook
   XLSX.utils.book_append_sheet(wb, mainWs, 'Statement of Account');
-
-  // ===== EXCESS PAYMENTS SHEET =====
-  const excessPayments = statement.excessPayments || [];
-  if (excessPayments.length > 0) {
-    const excessData = [];
-
-    // Header
-    excessData.push([companyName]);
-    excessData.push([companyAddress]);
-    excessData.push(['']);
-    excessData.push(['EXCESS / PARTIAL PAYMENTS']);
-    excessData.push(['']);
-    excessData.push(['Customer:', customer.customerName || 'N/A']);
-    excessData.push(['Period:', `${formatDate(period.from)} - ${formatDate(period.to)}`]);
-    excessData.push(['']);
-
-    // Description
-    excessData.push(['These payments are partial or advance payments not fully allocated to invoices.']);
-    excessData.push(['']);
-
-    // Table Headers
-    excessData.push([
-      'Date',
-      'Voucher No',
-      'Description',
-      `Amount (${CURRENCY})`,
-      'Type',
-      'Remaining Balance',
-    ]);
-
-    // Excess Payment Rows
-    excessPayments.forEach((e) => {
-      excessData.push([
-        formatDate(e.date),
-        e.voucherNo || '',
-        e.description || '',
-        formatNumber(e.amount),
-        e.isPartial ? 'Partial Payment' : 'Advance Payment',
-        formatNumber(e.remainingBalance),
-      ]);
-    });
-
-    // Total
-    excessData.push(['']);
-    excessData.push([
-      'TOTAL EXCESS AMOUNT',
-      '',
-      '',
-      formatNumber(statement.excessTotal),
-      '',
-      '',
-    ]);
-
-    // Summary
-    excessData.push(['']);
-    excessData.push(['EXCESS PAYMENT SUMMARY']);
-    excessData.push(['Total Partial Payments:', statement.summary?.totalPartialPayments || 0]);
-    excessData.push(['Total Advance Payments:', statement.summary?.totalAdvancePayments || 0]);
-
-    // Create excess payments worksheet
-    const excessWs = XLSX.utils.aoa_to_sheet(excessData);
-
-    // Apply column widths
-    excessWs['!cols'] = [
-      { wch: 15 },  // Date
-      { wch: 18 },  // Voucher No
-      { wch: 45 },  // Description
-      { wch: 15 },  // Amount
-      { wch: 18 },  // Type
-      { wch: 18 },  // Remaining Balance
-    ];
-
-    // Add excess sheet to workbook
-    XLSX.utils.book_append_sheet(wb, excessWs, 'Excess Payments');
-  }
 
   // ===== GENERATE FILENAME AND SAVE =====
   const customerNameClean = (customer.customerName || 'Customer').replace(/[^a-zA-Z0-9]/g, '_');

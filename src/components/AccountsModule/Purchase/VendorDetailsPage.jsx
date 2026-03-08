@@ -98,13 +98,14 @@ const VendorDetailsPage = () => {
         onClick={() => navigate(-1)}
         className="mb-6 flex items-center gap-3 text-purple-700 hover:text-purple-900 font-semibold transition-all hover:scale-105"
       >
-        <ArrowLeft size={24} /> Back to Debit Accounts
+        <ArrowLeft size={24} /> Back to Accounts Payable
       </button>
 
       {/* Header Card */}
       <div className="bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-3xl shadow-2xl p-8 mb-8">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
           <div>
+            <p className="text-amber-200 text-xs mb-1 italic">Accounts Payable (Previously called Debit Accounts)</p>
             <h1 className="text-3xl font-bold flex items-center gap-4 mb-3">
               <Users size={28} /> {vendor?.name || "Vendor Ledger"}
             </h1>
@@ -114,9 +115,15 @@ const VendorDetailsPage = () => {
           <div className="text-right">
             <p className="text-amber-100 text-sm uppercase tracking-wider">Outstanding Balance</p>
             <p className="text-4xl font-bold text-white mt-2">
-              AED {vendor?.currentBalance?.toFixed(2) || "0.00"}
+              AED {Math.abs(vendor?.currentBalance || 0).toFixed(2)}
             </p>
-            <p className="text-amber-200 text-sm mt-1">{vendor?.currentBalance > 0 ? "Credit Balance (Payable)" : "Settled"}</p>
+            <p className="text-amber-200 text-sm mt-1">
+              {vendor?.currentBalance > 0
+                ? "Credit Balance (Payable)"
+                : vendor?.currentBalance < 0
+                ? "Debit Balance (Advance)"
+                : "Settled"}
+            </p>
           </div>
         </div>
       </div>
@@ -205,7 +212,7 @@ const VendorDetailsPage = () => {
               <option value="purchase_order">Purchase Invoice</option>
               <option value="grn_purchase">GRN Purchase Entry</option>
               <option value="purchase_return">Purchase Return</option>
-              <option value="payment_received">Payment Made</option>
+              <option value="payment_received">Payment Voucher</option>
             </select>
           </div>
         </div>
@@ -251,7 +258,7 @@ const VendorDetailsPage = () => {
               ) : (
                 ledger.map((log, i) => {
                   // For A/P: Credit increases (invoice), Debit decreases (payment/return)
-                  const isDebit = log.drCr === "Dr" || log.type.includes("Return") || log.type.includes("Payment");
+                  const isDebit = log.drCr === "Dr" || log.type.includes("Return") || log.type.includes("PAYMENT");
                   return (
                     <tr key={i} className="hover:bg-amber-50 transition">
                       <td className="px-6 py-4">
@@ -260,12 +267,12 @@ const VendorDetailsPage = () => {
                       <td className="px-6 py-4">
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            log.type.includes("Return") || log.type.includes("Payment")
+                            log.type.includes("Return") || log.type.includes("PAYMENT")
                               ? "bg-amber-100 text-amber-700"
                               : "bg-emerald-100 text-emerald-700"
                           }`}
                         >
-                          {log.type}
+                          {log.type === "PAYMENT RECEIVED" ? "Payment Voucher" : log.type}
                         </span>
                       </td>
                       <td className="px-6 py-4 font-mono font-bold text-gray-700">{log.invNo}</td>
@@ -290,7 +297,8 @@ const VendorDetailsPage = () => {
                         )}
                       </td>
                       <td className="px-6 py-4 text-right font-bold text-red-600">
-                        AED {log.balance?.toFixed(2)} <span className="text-xs opacity-70">Cr</span>
+                        AED {Math.abs(log.balance || 0).toFixed(2)}{" "}
+                        <span className="text-xs opacity-70">{log.balance >= 0 ? "Cr" : "Dr"}</span>
                       </td>
                       <td className="px-6 py-4 text-gray-600">{log.ref}</td>
                       <td className="px-6 py-4 text-center">

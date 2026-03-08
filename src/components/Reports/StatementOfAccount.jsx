@@ -9,7 +9,6 @@ import {
   User,
   Building2,
   RefreshCw,
-  AlertCircle,
   DollarSign,
   TrendingUp,
   TrendingDown,
@@ -68,7 +67,7 @@ const formatDate = (dateString) => {
 const StatementViewModal = ({ isOpen, onClose, statement, onExportExcel, onExportPDF, isExporting, isExportingPDF }) => {
   if (!isOpen || !statement) return null;
 
-  const { customer, period, openingBalance, closingBalance, transactions, totals, excessPayments, excessTotal, summary } = statement;
+  const { customer, period, openingBalance, closingBalance, transactions, totals, summary } = statement;
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -124,7 +123,7 @@ const StatementViewModal = ({ isOpen, onClose, statement, onExportExcel, onExpor
             </div>
           </div>
 
-          {/* Transactions Table */}
+          {/* Transactions Table — Clean ledger layout (industry standard) */}
           <div className="bg-gray-50 rounded-2xl p-4 mb-6">
             <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
               <FileSpreadsheet size={20} /> Transaction Details
@@ -135,8 +134,7 @@ const StatementViewModal = ({ isOpen, onClose, statement, onExportExcel, onExpor
                   <tr className="bg-gray-200 text-gray-700">
                     <th className="px-4 py-3 text-left font-semibold rounded-tl-lg">Date</th>
                     <th className="px-4 py-3 text-left font-semibold">Type</th>
-                    <th className="px-4 py-3 text-left font-semibold">Invoice #</th>
-                    <th className="px-4 py-3 text-left font-semibold">LPO No</th>
+                    <th className="px-4 py-3 text-left font-semibold">Document No</th>
                     <th className="px-4 py-3 text-right font-semibold">Debit (AED)</th>
                     <th className="px-4 py-3 text-right font-semibold">Credit (AED)</th>
                     <th className="px-4 py-3 text-right font-semibold rounded-tr-lg">Balance (AED)</th>
@@ -145,7 +143,7 @@ const StatementViewModal = ({ isOpen, onClose, statement, onExportExcel, onExpor
                 <tbody>
                   {transactions.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
+                      <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
                         No transactions found for the selected period
                       </td>
                     </tr>
@@ -167,7 +165,6 @@ const StatementViewModal = ({ isOpen, onClose, statement, onExportExcel, onExpor
                           </span>
                         </td>
                         <td className="px-4 py-3 text-gray-700 font-mono">{t.reference}</td>
-                        <td className="px-4 py-3 text-gray-600">{t.lpoNo || "-"}</td>
                         <td className="px-4 py-3 text-right font-medium text-blue-600">
                           {t.debit > 0 ? formatCurrency(t.debit) : "-"}
                         </td>
@@ -184,7 +181,7 @@ const StatementViewModal = ({ isOpen, onClose, statement, onExportExcel, onExpor
                 {transactions.length > 0 && (
                   <tfoot>
                     <tr className="bg-gray-200 font-bold">
-                      <td colSpan="4" className="px-4 py-3 text-right">TOTALS</td>
+                      <td colSpan="3" className="px-4 py-3 text-right">TOTALS</td>
                       <td className="px-4 py-3 text-right text-blue-700">
                         {formatCurrency(totals?.totalDebit, true)}
                       </td>
@@ -200,62 +197,6 @@ const StatementViewModal = ({ isOpen, onClose, statement, onExportExcel, onExpor
               </table>
             </div>
           </div>
-
-          {/* Excess/Partial Payments Section */}
-          {excessPayments && excessPayments.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
-              <h4 className="text-lg font-bold text-amber-800 mb-4 flex items-center gap-2">
-                <AlertCircle size={20} /> Excess / Partial Payments
-              </h4>
-              <p className="text-amber-700 text-sm mb-4">
-                The following payments are partial or advance payments not fully allocated to invoices.
-              </p>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-amber-100 text-amber-800">
-                      <th className="px-4 py-3 text-left font-semibold rounded-tl-lg">Date</th>
-                      <th className="px-4 py-3 text-left font-semibold">Voucher No</th>
-                      <th className="px-4 py-3 text-left font-semibold">Description</th>
-                      <th className="px-4 py-3 text-right font-semibold">Amount (AED)</th>
-                      <th className="px-4 py-3 text-center font-semibold rounded-tr-lg">Type</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {excessPayments.map((e, idx) => (
-                      <tr
-                        key={idx}
-                        className={`border-b border-amber-200 ${idx % 2 === 0 ? "bg-white" : "bg-amber-50"}`}
-                      >
-                        <td className="px-4 py-3 text-gray-700">{formatDate(e.date)}</td>
-                        <td className="px-4 py-3 text-gray-700 font-mono">{e.voucherNo}</td>
-                        <td className="px-4 py-3 text-gray-600">{e.description}</td>
-                        <td className="px-4 py-3 text-right font-medium text-amber-700">
-                          {formatCurrency(e.amount)}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            e.isPartial ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"
-                          }`}>
-                            {e.isPartial ? "Partial" : "Advance"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-amber-100 font-bold">
-                      <td colSpan="3" className="px-4 py-3 text-right">Total Excess Amount</td>
-                      <td className="px-4 py-3 text-right text-amber-800">
-                        {formatCurrency(excessTotal, true)}
-                      </td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer Actions */}

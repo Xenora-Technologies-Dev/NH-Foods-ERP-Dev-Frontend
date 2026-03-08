@@ -719,6 +719,90 @@ export const exportVouchersToExcel = (vouchers, voucherType = 'All', filters = {
 };
 
 /**
+ * Export Ledger transactions to Excel.
+ * Exports exactly what is displayed in the filtered ledger view (Task 8).
+ */
+export const exportLedgerExcel = (transactions, account, summary) => {
+  if (!transactions || transactions.length === 0) {
+    console.warn('No ledger transactions to export');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+  const accountName = account?.name || 'Account';
+
+  const data = createHeaderRows(
+    `LEDGER: ${accountName.toUpperCase()}`,
+    'Filtered View',
+    new Date()
+  );
+
+  // Summary row
+  if (summary) {
+    data.push([`Opening Balance: ${CURRENCY} ${formatNumber(summary.openingBalance)}`]);
+    data.push([`Closing Balance: ${CURRENCY} ${formatNumber(summary.closingBalance)}`]);
+    data.push([`Total Debit: ${CURRENCY} ${formatNumber(summary.totalDebit)}   |   Total Credit: ${CURRENCY} ${formatNumber(summary.totalCredit)}`]);
+    data.push([`Transactions: ${summary.transactionCount}`]);
+    if (summary.lastTransactionDate) {
+      data.push([`Last Transaction: ${new Date(summary.lastTransactionDate).toLocaleDateString('en-GB')}`]);
+    }
+    data.push(['']);
+  }
+
+  // Transaction type label map (matches frontend renaming)
+  const TYPE_LABELS = {
+    'SALES ORDER': 'Sales Invoice',
+    'PURCHASE ORDER': 'Purchase Invoice',
+    'PAYMENT RECEIVED': 'Payment Voucher',
+    'PAYMENT MADE': 'Receipt Voucher',
+    'RECEIPT_ADVANCE': 'Receipt Voucher (Advance)',
+    'PAYMENT_ADVANCE': 'Payment Voucher (Advance)',
+    'SALES RETURN': 'Sales Return',
+    'PURCHASE RETURN': 'Purchase Return',
+    'GRN PURCHASE': 'Purchase Invoice',
+    'JOURNAL': 'Journal Entry',
+    'ADJUSTMENT': 'Adjustment',
+    'EXPENSE': 'Expense Voucher',
+  };
+
+  const resolveType = (raw) => {
+    if (!raw) return 'Transaction';
+    const upper = raw.toUpperCase().replace(/_/g, ' ').trim();
+    return TYPE_LABELS[upper] || upper.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  };
+
+  data.push(['Date', 'Type', 'Voucher/Invoice No', 'Reference/Party', `Debit (${CURRENCY})`, `Credit (${CURRENCY})`, `Balance (${CURRENCY})`]);
+
+  transactions.forEach((t) => {
+    data.push([
+      t.date ? new Date(t.date).toLocaleDateString('en-GB') : '-',
+      resolveType(t.type || t.voucherType),
+      t.voucherNo || '-',
+      t.partyName || t.referenceNo || '-',
+      formatNumber(t.debitAmount),
+      formatNumber(t.creditAmount),
+      formatNumber(t.runningBalance),
+    ]);
+  });
+
+  data.push(['']);
+  data.push([
+    'TOTALS', '', '', '',
+    formatNumber(summary?.totalDebit || transactions.reduce((s, t) => s + (Number(t.debitAmount) || 0), 0)),
+    formatNumber(summary?.totalCredit || transactions.reduce((s, t) => s + (Number(t.creditAmount) || 0), 0)),
+    formatNumber(summary?.closingBalance || (transactions.length > 0 ? transactions[transactions.length - 1].runningBalance : 0)),
+  ]);
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  applyStyles(ws, [14, 20, 22, 25, 16, 16, 16]);
+  XLSX.utils.book_append_sheet(wb, ws, 'Ledger');
+
+  const stamp = getFileNameDateTimeStamp();
+  const safeName = accountName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+  XLSX.writeFile(wb, `Ledger_${safeName}_${stamp}.xlsx`);
+};
+
+/**
  * Export Chart of Accounts to Excel
  */
 export const exportChartOfAccountsExcel = (accounts, filters = {}) => {

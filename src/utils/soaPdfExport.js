@@ -188,12 +188,11 @@ export const exportStatementOfAccountPDF = async (statement, axiosInstance) => {
   // ===== TRANSACTIONS TABLE =====
   yPosition += 10;
 
-  // Table headers: Date, Invoice #, LPO No, Debit, Credit, Balance
+  // Table headers: Date, Type, Document No, Debit, Credit, Balance
   const tableHeaders = [
     { header: 'Date', dataKey: 'date' },
     { header: 'Type', dataKey: 'type' },
-    { header: 'Invoice #', dataKey: 'reference' },
-    { header: 'LPO No', dataKey: 'lpoNo' },
+    { header: 'Document No', dataKey: 'reference' },
     { header: 'Debit (AED)', dataKey: 'debit' },
     { header: 'Credit (AED)', dataKey: 'credit' },
     { header: 'Balance (AED)', dataKey: 'balance' },
@@ -204,7 +203,6 @@ export const exportStatementOfAccountPDF = async (statement, axiosInstance) => {
     date: formatDate(t.date),
     type: t.type || '',
     reference: t.reference || '',
-    lpoNo: t.lpoNo || '-',
     debit: t.debit > 0 ? formatNumber(t.debit) : '-',
     credit: t.credit > 0 ? formatNumber(t.credit) : '-',
     balance: formatNumber(t.balance),
@@ -231,13 +229,12 @@ export const exportStatementOfAccountPDF = async (statement, axiosInstance) => {
       valign: 'middle',
     },
     columnStyles: {
-      date: { cellWidth: 22, halign: 'center' },
-      type: { cellWidth: 26, halign: 'left' },
-      reference: { cellWidth: 28, halign: 'center' },
-      lpoNo: { cellWidth: 28, halign: 'center' },
-      debit: { cellWidth: 26, halign: 'right' },
-      credit: { cellWidth: 26, halign: 'right' },
-      balance: { cellWidth: 26, halign: 'right' },
+      date: { cellWidth: 26, halign: 'center' },
+      type: { cellWidth: 30, halign: 'left' },
+      reference: { cellWidth: 36, halign: 'center' },
+      debit: { cellWidth: 30, halign: 'right' },
+      credit: { cellWidth: 30, halign: 'right' },
+      balance: { cellWidth: 30, halign: 'right' },
     },
     alternateRowStyles: {
       fillColor: [248, 248, 248],
@@ -294,77 +291,6 @@ export const exportStatementOfAccountPDF = async (statement, axiosInstance) => {
   doc.text(`Total Invoices: ${summary.totalInvoices || 0}`, margin, yPosition);
   doc.text(`Total Receipts: ${summary.totalReceipts || 0}`, margin + 50, yPosition);
   doc.text(`Total Returns: ${summary.totalReturns || 0}`, margin + 100, yPosition);
-
-  // ===== EXCESS PAYMENTS SECTION (if any) =====
-  const excessPayments = statement.excessPayments || [];
-  if (excessPayments.length > 0) {
-    yPosition += 12;
-    
-    // Check if we need a new page
-    if (yPosition > pageHeight - 60) {
-      doc.addPage();
-      yPosition = margin;
-    }
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.setFillColor(255, 245, 200);
-    doc.rect(margin, yPosition - 4, pageWidth - (margin * 2), 7, 'F');
-    doc.text('EXCESS / PARTIAL PAYMENTS', margin + 2, yPosition);
-
-    yPosition += 8;
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'italic');
-    doc.text('These payments are partial or advance payments not fully allocated to invoices.', margin, yPosition);
-
-    yPosition += 5;
-
-    // Excess payments table
-    const excessHeaders = [
-      { header: 'Date', dataKey: 'date' },
-      { header: 'Voucher No', dataKey: 'voucherNo' },
-      { header: 'Description', dataKey: 'description' },
-      { header: 'Amount (AED)', dataKey: 'amount' },
-      { header: 'Type', dataKey: 'type' },
-    ];
-
-    const excessData = excessPayments.map((e) => ({
-      date: formatDate(e.date),
-      voucherNo: e.voucherNo || '',
-      description: e.description || '',
-      amount: formatNumber(e.amount),
-      type: e.isPartial ? 'Partial' : 'Advance',
-    }));
-
-    autoTable(doc, {
-      columns: excessHeaders,
-      body: excessData,
-      startY: yPosition,
-      theme: 'grid',
-      headStyles: {
-        fillColor: [180, 150, 50],
-        textColor: 255,
-        fontStyle: 'bold',
-        fontSize: 8,
-      },
-      bodyStyles: {
-        fontSize: 8,
-      },
-      columnStyles: {
-        date: { cellWidth: 25 },
-        voucherNo: { cellWidth: 30 },
-        description: { cellWidth: 70 },
-        amount: { cellWidth: 28, halign: 'right' },
-        type: { cellWidth: 25, halign: 'center' },
-      },
-      margin: { left: margin, right: margin },
-    });
-
-    yPosition = doc.lastAutoTable.finalY + 5;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text(`Total Excess Amount: AED ${formatNumber(statement.excessTotal || 0)}`, margin, yPosition);
-  }
 
   // ===== FOOTER =====
   yPosition = pageHeight - 25;

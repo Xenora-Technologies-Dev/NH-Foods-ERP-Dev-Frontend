@@ -2,7 +2,7 @@ import axios from "axios";
 
 const axiosInstance = axios.create({
     baseURL: "https://nh-foods-erp-dev-backend.onrender.com/api/v1",
-    //https://nh-foods-erp-dev-backend.onrender.com
+    //https://nh-foods-erp-dev-backend.onrender.com,http://localhost:3000
   headers: {
     "Content-Type": "application/json",
   },

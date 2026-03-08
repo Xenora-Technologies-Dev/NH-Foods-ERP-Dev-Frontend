@@ -162,8 +162,9 @@ const DebitAccountsManagement = () => {
             <ArrowLeft size={20} className="text-gray-600" />
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Vendor Accounts</h1>
-            <p className="text-gray-500 mt-1 text-sm">{vendors.length} vendors &middot; Accounts Payable</p>
+            <h1 className="text-3xl font-bold text-gray-900">Accounts Payable</h1>
+            <p className="text-gray-500 mt-1 text-sm">{vendors.length} vendors &middot; Vendor Ledger</p>
+            <p className="text-xs text-gray-400 mt-0.5 italic">Accounts Payable (Previously called Debit Accounts)</p>
           </div>
         </div>
         <button onClick={handleRefresh} disabled={loading} className="mt-3 sm:mt-0 p-3 rounded-xl bg-white shadow-md hover:shadow-lg transition-all">
@@ -254,7 +255,7 @@ const DebitAccountsManagement = () => {
       {/* Ledger Table */}
       <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
         <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-amber-50/80 to-orange-50/80">
-          <h2 className="text-lg font-bold text-gray-900">Vendor Ledger Summary</h2>
+          <h2 className="text-lg font-bold text-gray-900">Accounts Payable — Vendor Ledger</h2>
           <p className="text-gray-500 text-sm mt-0.5">Click any row to view full transaction ledger</p>
         </div>
 

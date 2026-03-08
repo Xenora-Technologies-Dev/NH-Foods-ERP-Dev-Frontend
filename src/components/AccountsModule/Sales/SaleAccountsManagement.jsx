@@ -166,8 +166,9 @@ const CreditAccountsManagement = () => {
             <ArrowLeft size={20} className="text-gray-600" />
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Customer Accounts</h1>
-            <p className="text-gray-500 mt-1 text-sm">{customers.length} customers &middot; Accounts Receivable</p>
+            <h1 className="text-3xl font-bold text-gray-900">Accounts Receivable</h1>
+            <p className="text-gray-500 mt-1 text-sm">{customers.length} customers &middot; Customer Ledger</p>
+            <p className="text-xs text-gray-400 mt-0.5 italic">Accounts Receivable (Previously called Credit Accounts)</p>
           </div>
         </div>
         <button onClick={handleRefresh} disabled={loading} className="mt-3 sm:mt-0 p-3 rounded-xl bg-white shadow-md hover:shadow-lg transition-all">
@@ -258,7 +259,7 @@ const CreditAccountsManagement = () => {
       {/* Ledger Table */}
       <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
         <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-blue-50/80 to-indigo-50/80">
-          <h2 className="text-lg font-bold text-gray-900">Customer Ledger Summary</h2>
+          <h2 className="text-lg font-bold text-gray-900">Accounts Receivable — Customer Ledger</h2>
           <p className="text-gray-500 text-sm mt-0.5">Click any row to view full transaction ledger</p>
         </div>
 

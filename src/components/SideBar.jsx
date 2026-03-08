@@ -112,16 +112,16 @@ const Sidebar = ({ isMobileOpen, onMobileClose }) => {
       {
         key: "accounts",
         icon: <Calculator strokeWidth={1.5} size={22} />,
-        text: "Accounts Module",
+        text: "Accounting",
         children: [
           {
             icon: <ShoppingCart strokeWidth={1.5} size={20} />,
-            text: "Debit Accounts",
+            text: "Accounts Payable",
             to: "/debit-accounts",
           },
           {
             icon: <FileText strokeWidth={1.5} size={20} />,
-            text: "Credit Accounts",
+            text: "Accounts Receivable",
             to: "/credit-accounts",
           },
           {

@@ -271,48 +271,11 @@ const VoucherDocument = ({ voucher, type = "receipt", onClose }) => {
               </div>
             </div>
 
-            {/* Invoice Details */}
-            {voucher.linkedInvoices && voucher.linkedInvoices.length > 0 && (
-              <div className="p-5 border-b">
-                <p className="text-xs text-gray-500 uppercase font-medium mb-3">
-                  {type === "receipt" ? "Payment Against Invoices" : "Payment For Invoices"}
-                </p>
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase">S.No</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Invoice No.</th>
-                      <th className="text-right py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Amount (AED)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {voucher.linkedInvoices.map((inv, idx) => (
-                      <tr key={idx} className="border-b border-gray-100">
-                        <td className="py-3 px-4 text-sm text-gray-600">{idx + 1}</td>
-                        <td className="py-3 px-4 text-sm font-medium text-gray-900">
-                          {inv.invoiceId?.transactionNo || 
-                           inv.invoiceId?.docno || 
-                           inv.transactionNo || 
-                           (typeof inv.invoiceId === 'string' ? inv.invoiceId : 'N/A')}
-                        </td>
-                        <td className="py-3 px-4 text-sm font-semibold text-gray-900 text-right">
-                          {formatCurrency(inv.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
             {/* Total Section */}
             <div className="p-5 bg-gradient-to-r from-blue-50 to-blue-100 border-b">
               <div className="flex justify-between items-center">
                 <div>
                   <p className="text-sm text-gray-600">Total Amount {type === "receipt" ? "Received" : "Paid"}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {voucher.linkedInvoices?.length || 0} invoice(s)
-                  </p>
                 </div>
                 <div className="text-right">
                   <p className="text-3xl font-bold text-blue-800">

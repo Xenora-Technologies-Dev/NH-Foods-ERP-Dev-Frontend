@@ -273,6 +273,11 @@ const PaymentVoucherManagement = () => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [viewVoucher, setViewVoucher] = useState(null); // For viewing voucher document
+  const [invoicePopup, setInvoicePopup] = useState(null); // For viewing linked invoices popup
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // ── Invoice Browser Popup State ──
   const [showInvoiceBrowser, setShowInvoiceBrowser] = useState(false);
@@ -329,7 +334,7 @@ const PaymentVoucherManagement = () => {
       try {
         showRefreshIndicator ? setIsRefreshing(true) : setIsLoading(true);
         const response = await axiosInstance.get("/vouchers/vouchers", {
-          params: { voucherType: "payment" },
+          params: { voucherType: "payment", limit: 1000 },
         });
         console.log(response);
         setPayments(takeArray(response));
@@ -959,6 +964,18 @@ const PaymentVoucherManagement = () => {
     return filtered;
   }, [safePayments, searchTerm, sortConfig]);
 
+  // Reset to page 1 when search/filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  // Paginated data
+  const totalPages = Math.ceil(sortedAndFilteredPayments.length / itemsPerPage);
+  const paginatedPayments = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return sortedAndFilteredPayments.slice(start, start + itemsPerPage);
+  }, [sortedAndFilteredPayments, currentPage, itemsPerPage]);
+
   if (selectedPayment) {
     return (
       <PaymentInvoiceView
@@ -1174,6 +1191,7 @@ const PaymentVoucherManagement = () => {
         {sortedAndFilteredPayments.length === 0 ? (
           <EmptyState />
         ) : (
+          <>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
@@ -1182,7 +1200,7 @@ const PaymentVoucherManagement = () => {
                     { key: "voucherNo", label: "Voucher No" },
                     { key: "date", label: "Date" },
                     { key: "vendorName", label: "Vendor" },
-                    { key: "linkedInvoices", label: "Linked Invoices" },
+                    { key: "linkedInvoices", label: "Invoices" },
                     { key: "fromAccountId", label: "Spend Account" },
                     { key: "amount", label: "Amount" },
                     { key: "narration", label: "Narration" },
@@ -1190,7 +1208,7 @@ const PaymentVoucherManagement = () => {
                   ].map((col) => (
                     <th
                       key={col.key || "actions"}
-                      className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={col.key ? () => handleSort(col.key) : undefined}
                     >
                       <div className="flex items-center space-x-1">
@@ -1206,85 +1224,217 @@ const PaymentVoucherManagement = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {sortedAndFilteredPayments.map((p) => (
+                {paginatedPayments.map((p) => {
+                  const invoiceCount = asArray(p.linkedInvoices).length;
+                  return (
                   <tr
                     key={p._id}
                     className="hover:bg-gradient-to-r hover:from-purple-50 hover:to-blue-50 transition-all duration-200"
                   >
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
                       <button
                         onClick={() => handleViewPayment(p)}
-                        className="text-blue-600 hover:underline"
+                        className="text-blue-600 hover:underline font-semibold"
                       >
                         {p.voucherNo}
                       </button>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {new Date(p.date).toLocaleDateString()}
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {new Date(p.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
+                    <td className="px-4 py-3 text-sm text-gray-900">
                       <div className="flex items-center">
-                        <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
-                          <User size={16} className="text-purple-600" />
+                        <div className="h-7 w-7 bg-purple-100 rounded-full flex items-center justify-center mr-2 flex-shrink-0">
+                          <User size={14} className="text-purple-600" />
                         </div>
-                        <div className="font-medium">
+                        <span className="font-medium truncate max-w-[160px]" title={p.partyName || p.vendorName || "-"}>
                           {p.partyName || p.vendorName || "-"}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      <div className="flex flex-wrap gap-1">
-                        {asArray(p.linkedInvoices).map((inv, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-xs font-medium flex items-center"
-                          >
-                            <LinkIcon size={10} className="mr-1" />
-                            {inv.invoiceId?.transactionNo ||
-                              inv.transactionNo ||
-                              (typeof inv.invoiceId === 'string' ? inv.invoiceId : null) ||
-                              "N/A"}
-                            {inv.amount && (
-                              <span className="ml-1">
-                                ({formatCurrency(inv.amount)})
-                              </span>
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center space-x-2">
-                        <Wallet size={16} className="text-red-600" />
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                          {p.fromAccountId?.accountName || p.accountType || "-"}
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 font-medium">
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {invoiceCount > 0 ? (
+                        <button
+                          onClick={() => setInvoicePopup(p)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors"
+                          title="View linked invoices"
+                        >
+                          <LinkIcon size={12} />
+                          {invoiceCount} invoice{invoiceCount > 1 ? "s" : ""}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-400 italic">None</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+                        <Wallet size={12} />
+                        <span className="truncate max-w-[120px]" title={p.fromAccountId?.accountName || p.accountType || "-"}>
+                          {p.fromAccountId?.accountName || p.accountType || "-"}
+                        </span>
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900 font-semibold whitespace-nowrap">
                       {formatCurrency(p.totalAmount ?? p.amount)}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
+                    <td className="px-4 py-3 text-sm text-gray-600 max-w-[150px] truncate" title={p.narration || "-"}>
                       {p.narration || "-"}
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center space-x-3">
-                        <button
-                          onClick={() => setViewVoucher(p)}
-                          className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                          title="View voucher"
-                        >
-                          <Eye size={16} />
-                        </button>
-                      </div>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => setViewVoucher(p)}
+                        className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded-lg transition-all"
+                        title="View voucher document"
+                      >
+                        <Eye size={13} />
+                      </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <div className="flex items-center gap-3 text-sm text-gray-600">
+              <span>Showing {((currentPage - 1) * itemsPerPage) + 1}–{Math.min(currentPage * itemsPerPage, sortedAndFilteredPayments.length)} of {sortedAndFilteredPayments.length}</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                className="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-purple-500"
+              >
+                <option value={10}>10 / page</option>
+                <option value={25}>25 / page</option>
+                <option value={50}>50 / page</option>
+                <option value={100}>100 / page</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                First
+              </button>
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                ‹ Prev
+              </button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${
+                      currentPage === pageNum
+                        ? "bg-purple-600 text-white border-purple-600"
+                        : "border-gray-300 hover:bg-gray-100"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next ›
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Last
+              </button>
+            </div>
+          </div>
+          </>
         )}
       </div>
+
+      {/* Linked Invoices Popup */}
+      {invoicePopup && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center p-5 border-b bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-2xl">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <LinkIcon size={18} className="text-blue-600" /> Linked Invoices
+                </h3>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {invoicePopup.voucherNo} — {invoicePopup.partyName || invoicePopup.vendorName || "-"}
+                </p>
+              </div>
+              <button
+                onClick={() => setInvoicePopup(null)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white rounded-xl transition-all"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase">#</th>
+                    <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Invoice No</th>
+                    <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Amount (AED)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {asArray(invoicePopup.linkedInvoices).map((inv, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="px-3 py-2.5 text-gray-500">{idx + 1}</td>
+                      <td className="px-3 py-2.5 font-medium text-gray-900">
+                        {inv.invoiceId?.transactionNo || inv.transactionNo || (typeof inv.invoiceId === 'string' ? inv.invoiceId : 'N/A')}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-semibold text-gray-900">
+                        {formatCurrency(inv.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-blue-50 font-bold">
+                    <td colSpan={2} className="px-3 py-2.5 text-right text-gray-700">Total</td>
+                    <td className="px-3 py-2.5 text-right text-blue-700">
+                      {formatCurrency(asArray(invoicePopup.linkedInvoices).reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <div className="p-4 border-t bg-gray-50 rounded-b-2xl flex justify-end">
+              <button
+                onClick={() => setInvoicePopup(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {viewVoucher && (
         <VoucherDocument
           voucher={viewVoucher}
