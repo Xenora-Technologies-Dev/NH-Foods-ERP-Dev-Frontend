@@ -9,6 +9,7 @@ import PaginationControl from "../../Pagination/PaginationControl";
 import { exportSalesInvoicesToExcel } from "../../../utils/excelExport";
 import { useCustomerList } from "../../../hooks/useDataFetching";
 import { PageListSkeleton, RefetchIndicator } from "../../ui/Skeletons";
+import EditApprovedInvoiceModal from "../EditApprovedInvoiceModal";
 
 const ApprovedSales = () => {
   const [viewMode, setViewMode] = useState("table");
@@ -28,6 +29,7 @@ const ApprovedSales = () => {
   const [salesOrders, setSalesOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [editingInvoice, setEditingInvoice] = useState(null);
 
   useEffect(() => {
     fetchTransactions();
@@ -389,6 +391,7 @@ const ApprovedSales = () => {
                 deleteSO={() => {}}
                 onDownloadInternal={() => {}}
                 onDownloadCustomer={() => {}}
+                onEditApproved={(so) => setEditingInvoice(so)}
                 showApprovedAt={true}
                 showSelection={false}
               />
@@ -407,6 +410,7 @@ const ApprovedSales = () => {
                 deleteSO={() => {}}
                 onDownloadInternal={() => {}}
                 onDownloadCustomer={() => {}}
+                onEditApproved={(so) => setEditingInvoice(so)}
               />
             )}
             {/* Professional Pagination */}
@@ -443,6 +447,20 @@ const ApprovedSales = () => {
           />
         )}
       </Modal>
+
+      {editingInvoice && (
+        <EditApprovedInvoiceModal
+          invoice={editingInvoice}
+          type="sales"
+          onClose={() => setEditingInvoice(null)}
+          onSaved={() => {
+            setEditingInvoice(null);
+            setNotification({ message: "Invoice updated successfully", type: "success" });
+            setTimeout(() => setNotification(null), 3000);
+            fetchTransactions();
+          }}
+        />
+      )}
     </div>
   );
 };

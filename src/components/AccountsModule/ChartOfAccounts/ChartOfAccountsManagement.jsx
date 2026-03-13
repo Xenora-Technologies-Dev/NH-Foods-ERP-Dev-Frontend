@@ -103,6 +103,7 @@ const TRANSACTION_TYPE_LABELS = {
   PAYMENT: "Payment Voucher",
   JOURNAL: "Journal Entry",
   ADJUSTMENT: "Adjustment",
+  "INVOICE EDIT": "Invoice Edit",
   EXPENSE: "Expense Voucher",
 };
 
@@ -256,6 +257,7 @@ const PRIMARY_TYPES = new Set([
   "GRN PURCHASE",
   "JOURNAL",
   "ADJUSTMENT",
+  "INVOICE EDIT",
   "EXPENSE",
   // Lowercase variants the backend may return
   "sales_order",
@@ -269,6 +271,7 @@ const PRIMARY_TYPES = new Set([
   "grn_purchase",
   "journal",
   "adjustment",
+  "invoice_edit",
   "expense",
 ]);
 
@@ -283,6 +286,7 @@ const TRANSACTION_TYPE_FILTER_OPTIONS = [
   { value: "receipt_advance", label: "Receipt Voucher (Advance)" },
   { value: "journal", label: "Journal Entry" },
   { value: "adjustment", label: "Adjustment" },
+  { value: "invoice_edit", label: "Invoice Edit" },
 ];
 
 // ==================================================================
@@ -697,6 +701,18 @@ const ChartOfAccountsManagement = () => {
               } else {
                 runningBalance -= debitAmount;
               }
+            } else if (upperType === "INVOICE EDIT") {
+              const editAmt = log.amount || 0;
+              if (editAmt > 0) {
+                creditAmount = Math.abs(editAmt);
+              } else {
+                debitAmount = Math.abs(editAmt);
+              }
+              if (log.balance !== undefined && log.balance !== null) {
+                runningBalance = Number(log.balance);
+              } else {
+                runningBalance += editAmt;
+              }
             }
 
             // Determine payment label: advance vs invoice payment
@@ -754,6 +770,18 @@ const ChartOfAccountsManagement = () => {
                 runningBalance = Number(log.balance);
               } else {
                 runningBalance -= creditAmount;
+              }
+            } else if (upperType === "INVOICE EDIT") {
+              const editAmt = log.amount || 0;
+              if (editAmt > 0) {
+                debitAmount = Math.abs(editAmt);
+              } else {
+                creditAmount = Math.abs(editAmt);
+              }
+              if (log.balance !== undefined && log.balance !== null) {
+                runningBalance = Number(log.balance);
+              } else {
+                runningBalance += editAmt;
               }
             }
 

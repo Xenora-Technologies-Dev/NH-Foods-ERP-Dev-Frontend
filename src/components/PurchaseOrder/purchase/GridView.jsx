@@ -23,6 +23,7 @@ const GridView = ({
   approvePO,
   rejectPO,
   deletePO,
+  onEditApproved,
 }) => {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -179,6 +180,15 @@ const GridView = ({
                   <button
                     onClick={() => editPO(po)}
                     className="flex items-center space-x-1 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    <span className="text-sm">Edit</span>
+                  </button>
+                )}
+                {!isDraft && normalizedStatus !== "paid" && (normalizedStatus === "approved" || normalizedStatus === "partial") && onEditApproved && (
+                  <button
+                    onClick={() => onEditApproved(po)}
+                    className="flex items-center space-x-1 px-3 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors"
                   >
                     <Edit3 className="w-4 h-4" />
                     <span className="text-sm">Edit</span>

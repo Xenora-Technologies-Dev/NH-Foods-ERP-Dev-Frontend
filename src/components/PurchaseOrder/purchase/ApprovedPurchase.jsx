@@ -9,6 +9,7 @@ import PaginationControl from "../../Pagination/PaginationControl";
 import { exportPurchaseInvoicesToExcel } from "../../../utils/excelExport";
 import { useVendorList } from "../../../hooks/useDataFetching";
 import { PageListSkeleton, RefetchIndicator } from "../../ui/Skeletons";
+import EditApprovedInvoiceModal from "../EditApprovedInvoiceModal";
 
 const ApprovedPurchase = () => {
   const [viewMode, setViewMode] = useState("table");
@@ -29,6 +30,7 @@ const ApprovedPurchase = () => {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [editingInvoice, setEditingInvoice] = useState(null);
 
   // Debounce search term
   useEffect(() => {
@@ -128,6 +130,7 @@ const ApprovedPurchase = () => {
 
       const grnEntries = (grnResponse.data?.data || []).map((entry) => ({
         id: entry.id,
+        transactionId: entry.transactionId || entry.poId || null,
         transactionNo: entry.grnNumber,
         orderNumber: entry.poNumber,
         grnNumber: entry.grnNumber,
@@ -417,6 +420,7 @@ const ApprovedPurchase = () => {
                 editPO={() => {}}
                 approvePO={() => {}}
                 deletePO={() => {}}
+                onEditApproved={(po) => setEditingInvoice(po)}
                 showApprovedAt={true}
                 showSelection={false}
               />
@@ -434,6 +438,7 @@ const ApprovedPurchase = () => {
                 approvePO={() => {}}
                 rejectPO={() => {}}
                 deletePO={() => {}}
+                onEditApproved={(po) => setEditingInvoice(po)}
               />
             )}
             {/* Professional Pagination */}
@@ -470,6 +475,20 @@ const ApprovedPurchase = () => {
           />
         )}
       </Modal>
+
+      {editingInvoice && (
+        <EditApprovedInvoiceModal
+          invoice={editingInvoice}
+          type="purchase"
+          onClose={() => setEditingInvoice(null)}
+          onSaved={() => {
+            setEditingInvoice(null);
+            setNotification({ message: "Purchase invoice updated successfully", type: "success" });
+            setTimeout(() => setNotification(null), 3000);
+            fetchTransactions();
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from "react";
-import { Route, Routes, Navigate } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import { PageListSkeleton } from "../components/ui/Skeletons";
 
 // Layout and Login load eagerly (always needed)
@@ -32,7 +32,9 @@ const JournalVoucherManagement = lazy(() => import("../components/FinancialModul
 const ContraVoucherManagement = lazy(() => import("../components/FinancialModules/Contra/ContraVoucherManagement.jsx"));
 const ExpenseVoucherManagement = lazy(() => import("../components/FinancialModules/Expense/ExpenseVoucherManagement.jsx"));
 const AccountsPayablePage = lazy(() => import("../components/AccountsModule/Purchase/AccountsPayablePage.jsx"));
+const VendorDetailsPage = lazy(() => import("../components/AccountsModule/Purchase/VendorDetailsPage.jsx"));
 const AccountsReceivablePage = lazy(() => import("../components/AccountsModule/Sales/AccountsReceivablePage.jsx"));
+const CustomerDetailsPage = lazy(() => import("../components/AccountsModule/Sales/CustomerDetailsPage.jsx"));
 const TransactionsManagement = lazy(() => import("../components/AccountsModule/Transaction/TransactionsManagement.jsx"));
 const ChartOfAccountsManagement = lazy(() => import("../components/AccountsModule/ChartOfAccounts/ChartOfAccountsManagement.jsx"));
 const ExpenseAccountsPage = lazy(() => import("../components/AccountsModule/Expense/ExpenseAccountsPage.jsx"));
@@ -44,8 +46,6 @@ const ProfitLossReport = lazy(() => import("../components/Reports/ProfitLossRepo
 const BalanceSheetReport = lazy(() => import("../components/Reports/BalanceSheetReport.jsx"));
 const StatementOfAccount = lazy(() => import("../components/Reports/StatementOfAccount.jsx"));
 const ItemProfitabilityReport = lazy(() => import("../components/Reports/ItemProfitabilityReport.jsx"));
-const VendorDetailsPage = lazy(() => import("../components/AccountsModule/Purchase/VendorDetailsPage.jsx"));
-const CustomerDetailsPage = lazy(() => import("../components/AccountsModule/Sales/CustomerDetailsPage.jsx"));
 const GRNPage = lazy(() => import("../components/PurchaseOrder/grn/GRNPage.jsx"));
 
 // Suspense fallback shown while lazy chunk loads
@@ -88,7 +88,7 @@ export default function AdminRouter() {
         <Route path="/journal-voucher" element={<JournalVoucherManagement />} />{" "}
         <Route path="/contra-voucher" element={<ContraVoucherManagement />} />{" "}
         <Route path="/expense-voucher" element={<ExpenseVoucherManagement />} />{" "}
-        {/* Accounts Module */}
+        {/* Accounts Module — AP/AR two-level drill-down (summary → invoice register) */}
         <Route path="/debit-accounts" element={<AccountsPayablePage />} />{" "}
         <Route
           path="/debit-accounts/vendor/:vendorId"

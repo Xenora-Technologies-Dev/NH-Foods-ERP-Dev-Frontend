@@ -2,12 +2,8 @@ import React from "react";
 import {
   Eye,
   Edit3,
-  CheckSquare,
   MoreVertical,
-  Download,
   Trash2,
-  Copy,
-  Hash,
   HashIcon,
   Building2,
 } from "lucide-react";
@@ -27,6 +23,7 @@ const TableView = ({
   editPO,
   approvePO,
   deletePO,
+  onEditApproved,
   showApprovedAt = false,
   showSelection = true,
 }) => {
@@ -232,32 +229,24 @@ const TableView = ({
                       </button>
                     )}
 
-                    {/* Approve: Only PENDING */}
-                    {/* {po.status === "PENDING" && (
+                    {/* Edit Approved: only APPROVED or PARTIAL, never PAID */}
+                    {!isDraft && normalizedStatus !== "paid" && (normalizedStatus === "approved" || normalizedStatus === "partial") && onEditApproved && (
                       <button
-                        onClick={() => approvePO(po.id)}
-                        className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                        title="Approve"
+                        onClick={() => onEditApproved(po)}
+                        className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                        title="Edit Invoice"
                       >
-                        <CheckSquare className="w-4 h-4" />
+                        <Edit3 className="w-4 h-4" />
                       </button>
-                    )} */}
+                    )}
 
-                    {/* More Actions */}
+                    {/* More Actions: only for DRAFT/REJECTED */}
+                    {(isDraft || isRejected) && (
                     <div className="relative group">
                       <button className="p-1.5 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">
                         <MoreVertical className="w-4 h-4" />
                       </button>
                       <div className="absolute right-0 top-8 w-32 bg-white rounded-lg shadow-lg border border-slate-200 py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
-                        <button className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center space-x-2">
-                          <Download className="w-3 h-3" />
-                          <span>Download</span>
-                        </button>
-                        <button className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center space-x-2">
-                          <Copy className="w-3 h-3" />
-                          <span>Duplicate</span>
-                        </button>
-                        {(isDraft || isRejected) && (
                           <button
                             onClick={() => deletePO(po.id)}
                             className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
@@ -265,9 +254,9 @@ const TableView = ({
                             <Trash2 className="w-3 h-3" />
                             <span>Delete</span>
                           </button>
-                        )}
                       </div>
                     </div>
+                    )}
                   </div>
                 </td>
               </tr>

@@ -29,6 +29,7 @@ const TableView = ({
   deleteSO,
   onDownloadInternal,
   onDownloadCustomer,
+  onEditApproved,
   showApprovedAt = false,
   showSelection = true,
 }) => {
@@ -262,15 +263,17 @@ const TableView = ({
                         <Edit3 className="w-4 h-4" />
                       </button>
                     )}
-                    {/* {so.status === "DRAFT" && (
+                    {/* Edit Approved: only APPROVED or PARTIAL, never PAID */}
+                    {!isDraft && normalizedStatus !== "paid" && (normalizedStatus === "approved" || normalizedStatus === "partial") && onEditApproved && (
                       <button
-                        onClick={() => confirmSO(so.id)}
-                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Confirm"
+                        onClick={() => onEditApproved(so)}
+                        className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                        title="Edit Invoice"
                       >
-                        <CheckSquare className="w-4 h-4" />
+                        <Edit3 className="w-4 h-4" />
                       </button>
-                    )} */}
+                    )}
+                    {isDraft && (
                     <div className="relative group">
                       <button className="p-1.5 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">
                         <MoreVertical className="w-4 h-4" />
@@ -279,19 +282,15 @@ const TableView = ({
                         <button onClick={() => onDownloadInternal && onDownloadInternal(so)} className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
                           Download
                         </button>
-                        <button onClick={() => onDownloadCustomer && onDownloadCustomer(so)} className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
-                          Duplicate
-                        </button>
-                        {isDraft && (
                           <button
                             onClick={() => deleteSO(so.id)}
                             className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
                           >
                             Delete
                           </button>
-                        )}
                       </div>
                     </div>
+                    )}
                   </div>
                 </td>
               </tr>
