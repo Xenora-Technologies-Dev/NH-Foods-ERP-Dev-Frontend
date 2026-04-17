@@ -254,6 +254,7 @@ const PaymentVoucherManagement = () => {
     // Payment Details
     amount: "",
     narration: "",
+    reference: "",
     attachedProof: null,
   });
   const [selectedFile, setSelectedFile] = useState(null);
@@ -715,6 +716,7 @@ const PaymentVoucherManagement = () => {
       linkedInvoices: [],
       amount: "",
       narration: "",
+      reference: "",
       attachedProof: null,
     });
     setSelectedFile(null);
@@ -754,6 +756,7 @@ const PaymentVoucherManagement = () => {
         // Payment Details
         totalAmount: Number(formData.amount),
         narration: formData.narration,
+        reference: formData.reference,
         voucherType: "payment",
         attachedProof: existingProof?._id || null,
       };
@@ -838,6 +841,7 @@ const PaymentVoucherManagement = () => {
         linkedInvoices,
         amount: String(payment.totalAmount || payment.amount || 0),
         narration: payment.narration || payment.remarks || "",
+        reference: payment.reference || "",
         attachedProof: null,
       });
       
@@ -1878,6 +1882,15 @@ const PaymentVoucherManagement = () => {
 
                 {/* ========== AMOUNT & ATTACHMENTS SECTION ========== */}
 
+                <FormInput
+                  label="Reference"
+                  icon={FileText}
+                  type="text"
+                  name="reference"
+                  value={formData.reference}
+                  onChange={handleChange}
+                  placeholder="e.g. Cheque No, Bank Ref, Transaction ID..."
+                />
                 <FormInput
                   label="Total Amount"
                   icon={DollarSign}

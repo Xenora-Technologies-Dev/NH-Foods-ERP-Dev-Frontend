@@ -158,6 +158,7 @@ const ReceiptVoucherManagement = () => {
     // Payment Details
     amount: "",
     narration: "",
+    reference: "",
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -494,6 +495,7 @@ const handleInvoiceAmountChange = useCallback(
       // Payment Details
       amount: "",
       narration: "",
+      reference: "",
     });
     setErrors({});
     setChartOfAccountsAccounts([]);
@@ -528,6 +530,7 @@ const handleInvoiceAmountChange = useCallback(
         // Payment Details
         totalAmount: Number(formData.amount),
         narration: formData.narration,
+        reference: formData.reference,
         voucherType: "receipt",
       };
       if (editReceiptId) {
@@ -602,6 +605,7 @@ const handleInvoiceAmountChange = useCallback(
         // Payment Details
         amount: String(receipt.totalAmount || receipt.amount || 0),
         narration: receipt.narration || "",
+        reference: receipt.reference || "",
       });
       
       // Fetch accounts for the account type if present (local filter)
@@ -1414,6 +1418,15 @@ const handleInvoiceAmountChange = useCallback(
                 </div>
 
                 {/* ========== AMOUNT & NARRATION SECTION ========== */}
+                <FormInput
+                  label="Reference"
+                  icon={FileText}
+                  type="text"
+                  name="reference"
+                  value={formData.reference}
+                  onChange={handleChange}
+                  placeholder="e.g. Cheque No, Bank Ref, Transaction ID..."
+                />
                 <FormInput
                   label="Total Amount (AED)"
                   icon={Banknote}

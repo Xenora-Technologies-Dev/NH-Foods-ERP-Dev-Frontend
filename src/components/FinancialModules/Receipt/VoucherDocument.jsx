@@ -1,28 +1,15 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
   X,
   Printer,
   Download,
-  Building2,
-  Phone,
-  Mail,
-  MapPin,
-  Calendar,
-  FileText,
-  User,
-  CreditCard,
-  CheckCircle,
-  Banknote,
+  Loader2,
 } from "lucide-react";
 import axiosInstance from "../../../axios/axios";
 
 const formatCurrency = (amount) => {
   const num = Number(amount) || 0;
-  return new Intl.NumberFormat("en-AE", {
-    style: "currency",
-    currency: "AED",
-    minimumFractionDigits: 2,
-  }).format(num);
+  return `AED ${num.toLocaleString("en-AE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 const formatDate = (dateString) => {
@@ -34,20 +21,57 @@ const formatDate = (dateString) => {
   });
 };
 
+/* ─── SVG icon paths (inline to survive print/PDF) ─── */
+const SvgMapPin = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline-block", verticalAlign: "middle", marginRight: 4 }}>
+    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+  </svg>
+);
+const SvgPhone = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline-block", verticalAlign: "middle", marginRight: 4 }}>
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+  </svg>
+);
+const SvgMail = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline-block", verticalAlign: "middle", marginRight: 4 }}>
+    <rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+  </svg>
+);
+const SvgUser = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+  </svg>
+);
+const SvgBanknote = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>
+  </svg>
+);
+const SvgCheck = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline-block", verticalAlign: "middle", marginRight: 4 }}>
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>
+  </svg>
+);
+
 const VoucherDocument = ({ voucher, type = "receipt", onClose }) => {
   const printRef = useRef(null);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  // ── Company profile state (mirrors InvoiceView approach) ──
   const [profileData, setProfileData] = useState({
-    companyName: "NAJM ALHUDA FOODSTUFF TRADING LLC S.O.C.C.",
-    companyNameArabic: "نجم الهدى لتجارة المواد الغذائية ذ.م.م ش.ش.و",
-    addressLine1: "DIP 2, Dubai, U.A.E.",
-    addressLine2: "P.O. Box: 3352 - DUBAI - U.A.E.",
-    phoneNumber: "04 885 7575",
-    email: "corporate@elfab.ae",
-    website: "www.nhfoodsglobal.com",
-    vatNumber: "105033168300003",
+    companyName: "",
+    companyNameArabic: "",
+    addressLine1: "",
+    addressLine2: "",
+    phoneNumber: "",
+    email: "",
+    website: "",
+    vatNumber: "",
     logo: null,
+    bankName: "",
+    accountNumber: "",
+    accountName: "",
+    ibanNumber: "",
+    currency: "AED",
   });
 
   useEffect(() => {
@@ -67,6 +91,11 @@ const VoucherDocument = ({ voucher, type = "receipt", onClose }) => {
             website: d.companyInfo?.website || p.website,
             vatNumber: d.companyInfo?.vatNumber || p.vatNumber,
             logo: d.companyInfo?.companyLogo?.url || p.logo,
+            bankName: d.companyInfo?.bankDetails?.bankName || p.bankName,
+            accountNumber: d.companyInfo?.bankDetails?.accountNumber || p.accountNumber,
+            accountName: d.companyInfo?.bankDetails?.accountName || p.accountName,
+            ibanNumber: d.companyInfo?.bankDetails?.ibanNumber || p.ibanNumber,
+            currency: d.companyInfo?.bankDetails?.currency || p.currency,
           }));
         }
       } catch (e) {
@@ -76,60 +105,43 @@ const VoucherDocument = ({ voucher, type = "receipt", onClose }) => {
     loadProfile();
   }, []);
 
-  const handlePrint = () => {
-    const printContent = printRef.current;
-    const printWindow = window.open("", "", "width=800,height=600");
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>${type === "receipt" ? "Receipt" : "Payment"} Voucher - ${voucher.voucherNo || "N/A"}</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; color: #333; }
-            .voucher-container { max-width: 800px; margin: 0 auto; border: 2px solid #1e40af; }
-            .header { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: white; padding: 20px; }
-            .company-name { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
-            .company-details { font-size: 12px; opacity: 0.9; }
-            .voucher-title { text-align: center; padding: 15px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
-            .voucher-title h2 { font-size: 20px; color: #1e40af; text-transform: uppercase; letter-spacing: 2px; }
-            .voucher-info { display: flex; justify-content: space-between; padding: 15px 20px; background: #f1f5f9; }
-            .info-item { text-align: center; }
-            .info-label { font-size: 11px; color: #64748b; text-transform: uppercase; }
-            .info-value { font-size: 14px; font-weight: 600; color: #1e293b; margin-top: 3px; }
-            .section { padding: 15px 20px; border-bottom: 1px solid #e2e8f0; }
-            .section-title { font-size: 12px; color: #64748b; text-transform: uppercase; margin-bottom: 10px; font-weight: 600; }
-            .party-name { font-size: 16px; font-weight: 600; color: #1e293b; }
-            .table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            .table th { background: #f1f5f9; padding: 10px; text-align: left; font-size: 12px; color: #64748b; border-bottom: 2px solid #e2e8f0; }
-            .table td { padding: 10px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
-            .table .amount { text-align: right; font-weight: 600; }
-            .total-section { background: #f8fafc; padding: 15px 20px; }
-            .total-row { display: flex; justify-content: space-between; padding: 8px 0; }
-            .total-row.grand { font-size: 18px; font-weight: bold; color: #1e40af; border-top: 2px solid #1e40af; padding-top: 15px; margin-top: 10px; }
-            .footer { padding: 20px; border-top: 2px solid #e2e8f0; }
-            .signatures { display: flex; justify-content: space-between; margin-top: 40px; }
-            .signature-box { text-align: center; width: 200px; }
-            .signature-line { border-top: 1px solid #333; margin-top: 50px; padding-top: 5px; font-size: 12px; }
-            .stamp-area { text-align: center; margin-top: 20px; padding: 20px; border: 1px dashed #cbd5e1; }
-            .narration { font-style: italic; color: #64748b; padding: 10px; background: #f8fafc; border-radius: 5px; margin-top: 10px; }
-            @media print {
-              body { padding: 0; }
-              .voucher-container { border: 1px solid #000; }
-            }
-          </style>
-        </head>
-        <body>
-          ${printContent.innerHTML}
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 250);
-  };
+  const handlePrint = useCallback(() => {
+    const el = printRef.current;
+    if (!el) return;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><title>${type === "receipt" ? "Receipt" : "Payment"} Voucher - ${voucher.voucherNo || ""}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif}@media print{body{margin:0;padding:0}}</style></head><body>${el.innerHTML}</body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); w.close(); }, 300);
+  }, [voucher, type]);
+
+  const handleDownloadPDF = useCallback(async () => {
+    try {
+      setIsGeneratingPDF(true);
+      const html2canvas = (await import("html2canvas")).default;
+      const { jsPDF } = await import("jspdf");
+      const input = printRef.current;
+      if (!input) return;
+      const canvas = await html2canvas(input, {
+        scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", logging: false,
+        width: input.scrollWidth, height: input.scrollHeight,
+      });
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pW = pdf.internal.pageSize.getWidth();
+      const pH = pdf.internal.pageSize.getHeight();
+      const r = Math.min(pW / (canvas.width * 0.264583), pH / (canvas.height * 0.264583));
+      const iW = canvas.width * 0.264583 * r;
+      const iH = canvas.height * 0.264583 * r;
+      pdf.addImage(imgData, "JPEG", (pW - iW) / 2, 0, iW, iH, undefined, "FAST");
+      pdf.save(`${type === "receipt" ? "Receipt" : "Payment"}_${voucher.voucherNo}_${new Date().toISOString().split("T")[0]}.pdf`);
+    } catch (e) {
+      console.error("PDF error:", e);
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  }, [voucher, type]);
 
   const partyName = type === "receipt"
     ? (voucher.customerName || voucher.partyId?.customerName || voucher.partyName || "N/A")
@@ -137,198 +149,239 @@ const VoucherDocument = ({ voucher, type = "receipt", onClose }) => {
 
   const accountName = voucher.toAccountId?.accountName || voucher.fromAccountId?.accountName || voucher.accountType || "N/A";
 
+  // Receipt = blue, Payment = purple
+  const isReceipt = type === "receipt";
+  const gradientFrom = isReceipt ? "#1e40af" : "#6d28d9";
+  const gradientTo = isReceipt ? "#3b82f6" : "#8b5cf6";
+  const accentBg = isReceipt ? "#eff6ff" : "#f5f3ff";
+  const titleColor = isReceipt ? "#1e40af" : "#6d28d9";
+  const partyBg = isReceipt ? "#f0fdf9" : "#faf5ff";
+  const partyBorder = isReceipt ? "#d1fae5" : "#e9d5ff";
+  const totalGradientFrom = isReceipt ? "#1e40af" : "#6d28d9";
+  const totalGradientTo = isReceipt ? "#3b82f6" : "#8b5cf6";
+
+  const voucherTitle = isReceipt ? "RECEIPT VOUCHER" : "PAYMENT VOUCHER";
+  const totalAmount = Number(voucher.totalAmount ?? voucher.amount ?? 0);
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden flex flex-col">
-        {/* Modal Header */}
-        <div className="flex justify-between items-center p-4 border-b bg-gradient-to-r from-blue-600 to-blue-700">
+        {/* ── Modal toolbar ── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #e5e7eb", background: `linear-gradient(135deg, ${gradientFrom}, ${gradientTo})` }}>
           <h3 className="text-lg font-bold text-white flex items-center gap-2">
-            <FileText size={20} />
-            {type === "receipt" ? "Receipt" : "Payment"} Voucher
+            {isReceipt ? "Receipt" : "Payment"} Voucher
           </h3>
           <div className="flex items-center gap-2">
             <button
-              onClick={handlePrint}
-              className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg flex items-center gap-2 transition-all"
+              onClick={handleDownloadPDF}
+              disabled={isGeneratingPDF}
+              className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg flex items-center gap-2 transition-all disabled:opacity-50"
             >
-              <Printer size={16} />
-              Print
+              {isGeneratingPDF ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              {isGeneratingPDF ? "Generating..." : "Download PDF"}
             </button>
-            <button
-              onClick={onClose}
-              className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-all"
-            >
+            <button onClick={handlePrint} className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg flex items-center gap-2 transition-all">
+              <Printer size={16} /> Print
+            </button>
+            <button onClick={onClose} className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-all">
               <X size={20} />
             </button>
           </div>
         </div>
 
-        {/* Voucher Content */}
+        {/* ── Document body (all inline styles) ── */}
         <div className="flex-1 overflow-y-auto p-6 bg-gray-100">
-          <div ref={printRef} className="bg-white shadow-lg max-w-3xl mx-auto">
-            {/* Company Header */}
-            <div className="bg-gradient-to-r from-blue-800 to-blue-600 text-white p-6">
-              <div className="flex justify-between items-start">
-                <div className="flex items-start gap-4">
+          <div
+            ref={printRef}
+            id="receipt-content"
+            style={{
+              maxWidth: 800,
+              margin: "0 auto",
+              fontFamily: "'Segoe UI', Arial, sans-serif",
+              color: "#333",
+              backgroundColor: "#fff",
+              border: `2px solid ${gradientFrom}`,
+              boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
+            }}
+          >
+            {/* ── Company Header ── */}
+            <div style={{ background: `linear-gradient(135deg, ${gradientFrom} 0%, ${gradientTo} 100%)`, color: "white", padding: "20px 24px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
                   {profileData.logo && (
-                    <img src={profileData.logo} alt="Company Logo" className="w-16 h-16 object-contain bg-white rounded-lg p-1" />
+                    <img src={profileData.logo} alt="Logo" style={{ width: 64, height: 64, objectFit: "contain", backgroundColor: "white", borderRadius: 8, padding: 4 }} />
                   )}
                   <div>
                     {profileData.companyNameArabic && (
-                      <p className="text-blue-200 text-sm mb-1" style={{ direction: "rtl" }}>{profileData.companyNameArabic}</p>
+                      <p style={{ fontSize: 13, opacity: 0.85, marginBottom: 4, direction: "rtl" }}>{profileData.companyNameArabic}</p>
                     )}
-                    <h1 className="text-2xl font-bold tracking-wide">{profileData.companyName}</h1>
+                    <h1 style={{ fontSize: 22, fontWeight: "bold", letterSpacing: "0.5px", margin: 0 }}>
+                      {profileData.companyName || "Company Name"}
+                    </h1>
                   </div>
                 </div>
-                <div className="text-right text-sm text-blue-100 space-y-1">
-                  <p className="flex items-center justify-end gap-1">
-                    <MapPin size={12} />
-                    {profileData.addressLine1}
-                  </p>
-                  {profileData.addressLine2 && (
-                    <p className="flex items-center justify-end gap-1">
-                      <MapPin size={12} className="opacity-0" />
-                      {profileData.addressLine2}
-                    </p>
-                  )}
-                  <p className="flex items-center justify-end gap-1">
-                    <Phone size={12} />
-                    {profileData.phoneNumber}
-                  </p>
-                  <p className="flex items-center justify-end gap-1">
-                    <Mail size={12} />
-                    {profileData.email}
-                  </p>
-                  {profileData.vatNumber && (
-                    <p className="text-xs mt-1 text-blue-200">
-                      VAT Reg. No: {profileData.vatNumber}
-                    </p>
-                  )}
+                <div style={{ textAlign: "right", fontSize: 12, lineHeight: 1.8, opacity: 0.9 }}>
+                  {profileData.addressLine1 && <p style={{ margin: 0 }}><SvgMapPin />{profileData.addressLine1}</p>}
+                  {profileData.addressLine2 && <p style={{ margin: 0 }}><span style={{ display: "inline-block", width: 16 }}></span>{profileData.addressLine2}</p>}
+                  {profileData.phoneNumber && <p style={{ margin: 0 }}><SvgPhone />{profileData.phoneNumber}</p>}
+                  {profileData.email && <p style={{ margin: 0 }}><SvgMail />{profileData.email}</p>}
+                  {profileData.vatNumber && <p style={{ margin: "4px 0 0 0", fontSize: 11, opacity: 0.8 }}>VAT Reg. No: {profileData.vatNumber}</p>}
                 </div>
               </div>
             </div>
 
-            {/* Voucher Title */}
-            <div className="text-center py-4 bg-gray-50 border-b-2 border-blue-600">
-              <h2 className="text-xl font-bold text-blue-800 uppercase tracking-widest">
-                {type === "receipt" ? "Receipt Voucher" : "Payment Voucher"}
+            {/* ── Voucher Title ── */}
+            <div style={{ textAlign: "center", padding: "16px 20px", background: "#f8fafc", borderBottom: `2px solid ${gradientFrom}` }}>
+              <h2 style={{ fontSize: 20, fontWeight: "bold", color: titleColor, textTransform: "uppercase", letterSpacing: 2, margin: 0 }}>
+                {voucherTitle}
               </h2>
-              <p className="text-gray-500 text-sm mt-1">Official Document</p>
+              <p style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>Official Document</p>
             </div>
 
-            {/* Voucher Info Bar */}
-            <div className="grid grid-cols-3 gap-4 p-4 bg-blue-50 border-b">
-              <div className="text-center">
-                <p className="text-xs text-gray-500 uppercase font-medium">Voucher No.</p>
-                <p className="text-lg font-bold text-blue-800">{voucher.voucherNo || "N/A"}</p>
+            {/* ── Voucher Info Bar ── */}
+            <div style={{ display: "flex", justifyContent: "space-around", padding: "14px 20px", background: accentBg, borderBottom: "1px solid #e2e8f0" }}>
+              <div style={{ textAlign: "center" }}>
+                <p style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", fontWeight: 600, margin: "0 0 4px 0" }}>Voucher No.</p>
+                <p style={{ fontSize: 16, fontWeight: "bold", color: titleColor, margin: 0 }}>{voucher.voucherNo || "N/A"}</p>
               </div>
-              <div className="text-center">
-                <p className="text-xs text-gray-500 uppercase font-medium">Date</p>
-                <p className="text-lg font-bold text-gray-800">{formatDate(voucher.date)}</p>
+              <div style={{ textAlign: "center" }}>
+                <p style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", fontWeight: 600, margin: "0 0 4px 0" }}>Date</p>
+                <p style={{ fontSize: 16, fontWeight: "bold", color: "#1e293b", margin: 0 }}>{formatDate(voucher.date)}</p>
               </div>
-              <div className="text-center">
-                <p className="text-xs text-gray-500 uppercase font-medium">Status</p>
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
-                  <CheckCircle size={14} />
-                  Confirmed
-                </span>
+              <div style={{ textAlign: "center" }}>
+                <p style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", fontWeight: 600, margin: "0 0 4px 0" }}>Status</p>
+                <p style={{ fontSize: 14, fontWeight: 600, color: "#16a34a", margin: 0 }}><SvgCheck />Confirmed</p>
               </div>
+              {voucher.reference && (
+                <div style={{ textAlign: "center" }}>
+                  <p style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", fontWeight: 600, margin: "0 0 4px 0" }}>Reference</p>
+                  <p style={{ fontSize: 14, fontWeight: "bold", color: "#1e293b", margin: 0 }}>{voucher.reference}</p>
+                </div>
+              )}
             </div>
 
-            {/* Party Information */}
-            <div className="p-5 border-b">
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <p className="text-xs text-gray-500 uppercase font-medium mb-2">
-                    {type === "receipt" ? "Received From" : "Paid To"}
+            {/* ── Party Information ── */}
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 24 }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", fontWeight: 600, margin: "0 0 10px 0", letterSpacing: 1 }}>
+                    {isReceipt ? "RECEIVED FROM" : "PAID TO"}
                   </p>
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                      <User size={20} className="text-blue-600" />
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, background: partyBg, border: `1px solid ${partyBorder}`, borderRadius: 10, padding: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: isReceipt ? "#dbeafe" : "#ede9fe", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <SvgUser />
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-900">{partyName}</p>
-                      <p className="text-sm text-gray-500">
-                        {type === "receipt" ? "Customer" : "Vendor"}
-                      </p>
+                      <p style={{ fontSize: 15, fontWeight: 600, color: "#1e293b", margin: 0 }}>{partyName}</p>
+                      <p style={{ fontSize: 12, color: "#64748b", margin: "2px 0 0 0" }}>{isReceipt ? "Customer" : "Vendor"}</p>
                     </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase font-medium mb-2">
-                    {type === "receipt" ? "Deposited To" : "Paid From"}
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", fontWeight: 600, margin: "0 0 10px 0", letterSpacing: 1 }}>
+                    {isReceipt ? "DEPOSITED TO" : "PAID FROM"}
                   </p>
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                      <Banknote size={20} className="text-emerald-600" />
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, background: partyBg, border: `1px solid ${partyBorder}`, borderRadius: 10, padding: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#d1fae5", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <SvgBanknote />
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-900">{accountName}</p>
-                      <p className="text-sm text-gray-500 capitalize">{voucher.accountType || "Account"}</p>
+                      <p style={{ fontSize: 15, fontWeight: 600, color: "#1e293b", margin: 0 }}>{accountName}</p>
+                      <p style={{ fontSize: 12, color: "#64748b", margin: "2px 0 0 0", textTransform: "capitalize" }}>{voucher.accountType || "Account"}</p>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Total Section */}
-            <div className="p-5 bg-gradient-to-r from-blue-50 to-blue-100 border-b">
-              <div className="flex justify-between items-center">
+            {/* ── Total Amount ── */}
+            <div style={{ padding: "20px 24px", background: `linear-gradient(135deg, ${accentBg}, ${isReceipt ? "#dbeafe" : "#ede9fe"})`, borderBottom: "1px solid #e2e8f0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <p className="text-sm text-gray-600">Total Amount {type === "receipt" ? "Received" : "Paid"}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-3xl font-bold text-blue-800">
-                    {formatCurrency(voucher.totalAmount ?? voucher.amount)}
+                  <p style={{ fontSize: 13, color: "#475569", margin: 0 }}>
+                    Total Amount {isReceipt ? "Received" : "Paid"}
                   </p>
-                  <p className="text-sm text-gray-500">AED</p>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <p style={{ fontSize: 30, fontWeight: "bold", color: titleColor, margin: 0 }}>
+                    AED {totalAmount.toLocaleString("en-AE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p style={{ fontSize: 12, color: "#94a3b8", margin: "2px 0 0 0" }}>AED</p>
                 </div>
               </div>
             </div>
 
-            {/* Narration */}
+            {/* ── Narration ── */}
             {voucher.narration && (
-              <div className="p-5 border-b">
-                <p className="text-xs text-gray-500 uppercase font-medium mb-2">Narration / Remarks</p>
-                <p className="text-gray-700 bg-gray-50 p-3 rounded-lg italic">
+              <div style={{ padding: "16px 24px", borderBottom: "1px solid #e2e8f0" }}>
+                <p style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", fontWeight: 600, margin: "0 0 8px 0" }}>Narration / Remarks</p>
+                <p style={{ fontSize: 13, color: "#475569", background: "#f8fafc", padding: "10px 14px", borderRadius: 8, fontStyle: "italic", margin: 0 }}>
                   {voucher.narration}
                 </p>
               </div>
             )}
 
-            {/* Signatures */}
-            <div className="p-6">
-              <div className="grid grid-cols-3 gap-8 mt-8">
-                <div className="text-center">
-                  <div className="h-16 border-b-2 border-gray-300 mb-2"></div>
-                  <p className="text-sm font-medium text-gray-600">Prepared By</p>
+            {/* ── Linked Invoices (if any) ── */}
+            {Array.isArray(voucher.linkedInvoices) && voucher.linkedInvoices.length > 0 && (
+              <div style={{ padding: "16px 24px", borderBottom: "1px solid #e2e8f0" }}>
+                <p style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", fontWeight: 600, margin: "0 0 10px 0" }}>Linked Invoices</p>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: "#f1f5f9" }}>
+                      <th style={{ padding: "8px 10px", textAlign: "left", fontSize: 11, color: "#64748b", borderBottom: "2px solid #e2e8f0" }}>Invoice No</th>
+                      <th style={{ padding: "8px 10px", textAlign: "right", fontSize: 11, color: "#64748b", borderBottom: "2px solid #e2e8f0" }}>Allocated</th>
+                      <th style={{ padding: "8px 10px", textAlign: "right", fontSize: 11, color: "#64748b", borderBottom: "2px solid #e2e8f0" }}>Prev Balance</th>
+                      <th style={{ padding: "8px 10px", textAlign: "right", fontSize: 11, color: "#64748b", borderBottom: "2px solid #e2e8f0" }}>New Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {voucher.linkedInvoices.map((inv, i) => (
+                      <tr key={i}>
+                        <td style={{ padding: "8px 10px", borderBottom: "1px solid #e2e8f0" }}>{inv.invoiceId?.transactionNo || inv.transactionNo || "N/A"}</td>
+                        <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 600, borderBottom: "1px solid #e2e8f0" }}>{Number(inv.allocatedAmount || inv.amount || 0).toFixed(2)}</td>
+                        <td style={{ padding: "8px 10px", textAlign: "right", borderBottom: "1px solid #e2e8f0" }}>{Number(inv.previousBalance || 0).toFixed(2)}</td>
+                        <td style={{ padding: "8px 10px", textAlign: "right", borderBottom: "1px solid #e2e8f0" }}>{Number(inv.newBalance || 0).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* ── Separator ── */}
+            <div style={{ borderBottom: `3px solid ${gradientFrom}`, margin: "0 24px" }} />
+
+            {/* ── Signatures ── */}
+            <div style={{ padding: "24px 24px 16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 40, gap: 30 }}>
+                <div style={{ textAlign: "center", flex: 1 }}>
+                  <div style={{ height: 50, borderBottom: "2px solid #cbd5e1", marginBottom: 8 }} />
+                  <p style={{ fontSize: 12, fontWeight: 500, color: "#475569", margin: 0 }}>Prepared By</p>
                 </div>
-                <div className="text-center">
-                  <div className="h-16 border-b-2 border-gray-300 mb-2"></div>
-                  <p className="text-sm font-medium text-gray-600">Checked By</p>
+                <div style={{ textAlign: "center", flex: 1 }}>
+                  <div style={{ height: 50, borderBottom: "2px solid #cbd5e1", marginBottom: 8 }} />
+                  <p style={{ fontSize: 12, fontWeight: 500, color: "#475569", margin: 0 }}>Checked By</p>
                 </div>
-                <div className="text-center">
-                  <div className="h-16 border-b-2 border-gray-300 mb-2"></div>
-                  <p className="text-sm font-medium text-gray-600">
-                    {type === "receipt" ? "Received By" : "Paid By"}
-                  </p>
+                <div style={{ textAlign: "center", flex: 1 }}>
+                  <div style={{ height: 50, borderBottom: "2px solid #cbd5e1", marginBottom: 8 }} />
+                  <p style={{ fontSize: 12, fontWeight: 500, color: "#475569", margin: 0 }}>{isReceipt ? "Received By" : "Paid By"}</p>
                 </div>
               </div>
 
               {/* Stamp Area */}
-              <div className="mt-8 text-center">
-                <div className="inline-block border-2 border-dashed border-gray-300 px-12 py-6 rounded-lg">
-                  <p className="text-xs text-gray-400 uppercase">Company Stamp</p>
+              <div style={{ textAlign: "center", marginTop: 24 }}>
+                <div style={{ display: "inline-block", border: "2px dashed #cbd5e1", padding: "20px 48px", borderRadius: 8 }}>
+                  <p style={{ fontSize: 11, color: "#94a3b8", textTransform: "uppercase", margin: 0 }}>Company Stamp</p>
                 </div>
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="bg-gray-50 p-4 text-center border-t">
-              <p className="text-xs text-gray-500">
+            {/* ── Footer ── */}
+            <div style={{ background: "#f8fafc", padding: "12px 24px", textAlign: "center", borderTop: "2px solid #e2e8f0" }}>
+              <p style={{ fontSize: 10, color: "#94a3b8", margin: 0 }}>
                 This is a computer-generated document. No signature is required for amounts below AED 10,000.
               </p>
-              <p className="text-xs text-gray-400 mt-1">
+              <p style={{ fontSize: 10, color: "#cbd5e1", marginTop: 4 }}>
                 Generated on {new Date().toLocaleString("en-GB")}
               </p>
             </div>

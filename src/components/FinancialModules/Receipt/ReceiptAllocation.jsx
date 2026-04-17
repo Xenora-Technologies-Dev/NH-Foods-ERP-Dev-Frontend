@@ -35,6 +35,7 @@ const ReceiptAllocation = ({ receipt, onBack, onSuccess, showToast }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [allocationHistory, setAllocationHistory] = useState([]);
+  const [roundoff, setRoundoff] = useState(0);
 
   // Normalized receipt data
   const receiptData = useMemo(() => ({
@@ -111,8 +112,8 @@ const ReceiptAllocation = ({ receipt, onBack, onSuccess, showToast }) => {
   }, [allocations]);
 
   const remainingUnallocated = useMemo(() => {
-    return Math.max(0, receiptData.unallocatedAmount - totalAllocationAmount);
-  }, [receiptData.unallocatedAmount, totalAllocationAmount]);
+    return Math.max(0, receiptData.unallocatedAmount - totalAllocationAmount - Number(roundoff || 0));
+  }, [receiptData.unallocatedAmount, totalAllocationAmount, roundoff]);
 
   // Toggle invoice for allocation
   const toggleInvoice = useCallback((invoice) => {
@@ -138,12 +139,17 @@ const ReceiptAllocation = ({ receipt, onBack, onSuccess, showToast }) => {
     });
   }, [receiptData.unallocatedAmount]);
 
-  // Update allocation amount
+  // Update allocation amount – clamp to outstanding on blur
   const updateAllocationAmount = useCallback((invoiceId, value) => {
     setAllocations((prev) =>
-      prev.map((a) =>
-        a.invoiceId === invoiceId ? { ...a, amount: value } : a
-      )
+      prev.map((a) => {
+        if (a.invoiceId !== invoiceId) return a;
+        const num = Number(value);
+        if (!isNaN(num) && num > a.outstandingAmount) {
+          return { ...a, amount: a.outstandingAmount.toFixed(2) };
+        }
+        return { ...a, amount: value };
+      })
     );
   }, []);
 
@@ -167,8 +173,9 @@ const ReceiptAllocation = ({ receipt, onBack, onSuccess, showToast }) => {
       }
     }
 
-    if (totalAllocationAmount > receiptData.unallocatedAmount + 0.01) {
-      showToast?.("Total allocation exceeds unallocated amount", "error");
+    const effectiveTotal = totalAllocationAmount + Number(roundoff || 0);
+    if (effectiveTotal > receiptData.unallocatedAmount + 0.01) {
+      showToast?.("Total allocation + roundoff exceeds unallocated amount", "error");
       return;
     }
 
@@ -179,6 +186,7 @@ const ReceiptAllocation = ({ receipt, onBack, onSuccess, showToast }) => {
           invoiceId: a.invoiceId,
           amount: Number(a.amount),
         })),
+        ...(Number(roundoff || 0) !== 0 && { roundoff: Number(roundoff) }),
       };
 
       const response = await axios.post(
@@ -268,6 +276,11 @@ const ReceiptAllocation = ({ receipt, onBack, onSuccess, showToast }) => {
               </h1>
               <p className="text-gray-600 text-sm mt-1">
                 {receiptData.partyName} • Stage 2: Invoice Allocation
+                {receipt.reference && (
+                  <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                    Ref: {receipt.reference}
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -281,6 +294,9 @@ const ReceiptAllocation = ({ receipt, onBack, onSuccess, showToast }) => {
           <div className="bg-white rounded-xl shadow-sm border p-4">
             <p className="text-xs text-gray-500 uppercase font-medium">Total Amount</p>
             <p className="text-xl font-bold text-gray-900 mt-1">{formatCurrency(receiptData.totalAmount)}</p>
+            {receipt.reference && (
+              <p className="text-[10px] text-blue-600 mt-1 font-medium">Ref: {receipt.reference}</p>
+            )}
           </div>
           <div className="bg-white rounded-xl shadow-sm border p-4">
             <p className="text-xs text-gray-500 uppercase font-medium">Already Allocated</p>
@@ -299,7 +315,7 @@ const ReceiptAllocation = ({ receipt, onBack, onSuccess, showToast }) => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Available Invoices */}
-          <div className="lg:col-span-2 bg-white rounded-2xl shadow-xl border">
+          <div className="lg:col-span-2 bg-white rounded-2xl shadow-xl border self-start">
             <div className="p-5 border-b">
               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <FileText size={18} /> Outstanding Invoices
@@ -320,7 +336,7 @@ const ReceiptAllocation = ({ receipt, onBack, onSuccess, showToast }) => {
                 )}
               </div>
             </div>
-            <div className="max-h-[400px] overflow-y-auto">
+            <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 380px)" }}>
               {isLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 size={24} className="animate-spin text-purple-500 mr-2" />
@@ -381,6 +397,14 @@ const ReceiptAllocation = ({ receipt, onBack, onSuccess, showToast }) => {
                                 step="0.01"
                                 value={alloc.amount}
                                 onChange={(e) => updateAllocationAmount(inv._id, e.target.value)}
+                                onBlur={(e) => {
+                                  const num = Number(e.target.value);
+                                  if (isNaN(num) || num <= 0) {
+                                    updateAllocationAmount(inv._id, inv.outstandingAmount.toFixed(2));
+                                  } else if (num > inv.outstandingAmount) {
+                                    updateAllocationAmount(inv._id, inv.outstandingAmount.toFixed(2));
+                                  }
+                                }}
                                 className="w-28 px-2 py-1.5 border rounded-lg text-sm text-right focus:ring-2 focus:ring-purple-500"
                               />
                             ) : (
@@ -424,19 +448,52 @@ const ReceiptAllocation = ({ receipt, onBack, onSuccess, showToast }) => {
                 </div>
               )}
 
-              {/* Validation warnings */}
-              {totalAllocationAmount > receiptData.unallocatedAmount + 0.01 && (
+              {/* Round Off Section */}
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-amber-800 flex items-center gap-1">
+                    <AlertTriangle size={12} /> Round Off (+/-)
+                  </label>
+                  {allocations.length > 0 && remainingUnallocated > 0 && remainingUnallocated < 10 && (
+                    <button
+                      onClick={() => setRoundoff(remainingUnallocated.toFixed(2))}
+                      className="px-2 py-1 bg-amber-200 hover:bg-amber-300 text-amber-800 rounded text-[10px] font-semibold whitespace-nowrap transition-colors"
+                    >
+                      Auto Fill ({formatCurrency(remainingUnallocated)})
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={roundoff}
+                  onChange={(e) => setRoundoff(e.target.value)}
+                  className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm text-right focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white"
+                  placeholder="0.00"
+                />
+                <p className="text-[10px] text-amber-600 mt-1.5">
+                  Adjusts remaining balance by +/- amount to account for decimal differences
+                </p>
+                {Number(roundoff || 0) !== 0 && (
+                  <div className="mt-2 flex justify-between text-xs">
+                    <span className="text-amber-700">Remaining after roundoff:</span>
+                    <span className="font-bold text-amber-900">{formatCurrency(remainingUnallocated)}</span>
+                  </div>
+                )}
+              </div>
+
+              {(totalAllocationAmount + Number(roundoff || 0)) > receiptData.unallocatedAmount + 0.01 && (
                 <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg mb-4">
                   <XCircle size={16} className="text-red-500 flex-shrink-0" />
                   <span className="text-xs text-red-700">
-                    Total allocation ({formatCurrency(totalAllocationAmount)}) exceeds unallocated amount ({formatCurrency(receiptData.unallocatedAmount)})
+                    Total allocation + roundoff ({formatCurrency(totalAllocationAmount + Number(roundoff || 0))}) exceeds unallocated amount ({formatCurrency(receiptData.unallocatedAmount)})
                   </span>
                 </div>
               )}
 
               <button
                 onClick={handleSubmit}
-                disabled={isSubmitting || allocations.length === 0 || totalAllocationAmount > receiptData.unallocatedAmount + 0.01}
+                disabled={isSubmitting || allocations.length === 0 || (totalAllocationAmount + Number(roundoff || 0)) > receiptData.unallocatedAmount + 0.01}
                 className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (

@@ -2,7 +2,7 @@ import axios from "axios";
 
 const axiosInstance = axios.create({
     baseURL: "https://nh-foods-erp-dev-backend.onrender.com/api/v1",
-    //https://nh-foods-erp-dev-backend.onrender.com,http://localhost:3000
+    //"http://localhost:3000/api/v1",
   headers: {
     "Content-Type": "application/json",
   },
@@ -33,7 +33,7 @@ axiosInstance.interceptors.response.use(
       try {
         const { data } = await axios.post(
           "https://nh-foods-erp-dev-backend.onrender.com/api/v1/refresh-token",
-          //http://localhost:3000
+          //"http://localhost:3000",
           {},
           { withCredentials: true }
         );

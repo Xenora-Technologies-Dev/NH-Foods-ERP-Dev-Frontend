@@ -473,6 +473,11 @@ const PaymentInvoiceView = ({
               <p style={{ margin: "2px 0" }}>
                 Voucher No: {selectedPayment.voucherNo}
               </p>
+              {selectedPayment.reference && (
+                <p style={{ margin: "2px 0" }}>
+                  Reference: <strong>{selectedPayment.reference}</strong>
+                </p>
+              )}
               {voucherType === "payment" && (
                 <p style={{ margin: "2px 0" }}>
                   Payment Mode: {displayMode(selectedPayment.paymentMode)}
