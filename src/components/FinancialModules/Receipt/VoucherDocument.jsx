@@ -321,33 +321,6 @@ const VoucherDocument = ({ voucher, type = "receipt", onClose }) => {
               </div>
             )}
 
-            {/* ── Linked Invoices (if any) ── */}
-            {Array.isArray(voucher.linkedInvoices) && voucher.linkedInvoices.length > 0 && (
-              <div style={{ padding: "16px 24px", borderBottom: "1px solid #e2e8f0" }}>
-                <p style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", fontWeight: 600, margin: "0 0 10px 0" }}>Linked Invoices</p>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ background: "#f1f5f9" }}>
-                      <th style={{ padding: "8px 10px", textAlign: "left", fontSize: 11, color: "#64748b", borderBottom: "2px solid #e2e8f0" }}>Invoice No</th>
-                      <th style={{ padding: "8px 10px", textAlign: "right", fontSize: 11, color: "#64748b", borderBottom: "2px solid #e2e8f0" }}>Allocated</th>
-                      <th style={{ padding: "8px 10px", textAlign: "right", fontSize: 11, color: "#64748b", borderBottom: "2px solid #e2e8f0" }}>Prev Balance</th>
-                      <th style={{ padding: "8px 10px", textAlign: "right", fontSize: 11, color: "#64748b", borderBottom: "2px solid #e2e8f0" }}>New Balance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {voucher.linkedInvoices.map((inv, i) => (
-                      <tr key={i}>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid #e2e8f0" }}>{inv.invoiceId?.transactionNo || inv.transactionNo || "N/A"}</td>
-                        <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 600, borderBottom: "1px solid #e2e8f0" }}>{Number(inv.allocatedAmount || inv.amount || 0).toFixed(2)}</td>
-                        <td style={{ padding: "8px 10px", textAlign: "right", borderBottom: "1px solid #e2e8f0" }}>{Number(inv.previousBalance || 0).toFixed(2)}</td>
-                        <td style={{ padding: "8px 10px", textAlign: "right", borderBottom: "1px solid #e2e8f0" }}>{Number(inv.newBalance || 0).toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
             {/* ── Separator ── */}
             <div style={{ borderBottom: `3px solid ${gradientFrom}`, margin: "0 24px" }} />
 
